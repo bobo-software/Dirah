@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "schoolos-backend-mcp": {
+      "type": "http",
+      "url": "http://localhost:4003/mcp/protocol",
+      "headers": {
+        "Authorization": "Bearer ${MCP_API_KEY:-dev-mcp-key-change-in-production}"
+      }
+    }
+  }
+}
