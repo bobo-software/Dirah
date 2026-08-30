@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1756536000000,
+      "tag": "0000_phase0_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1756536100000,
+      "tag": "0001_phase1_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1756536200000,
+      "tag": "0002_phase2_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1756536300000,
+      "tag": "0003_phase3_sharing",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1756536400000,
+      "tag": "0004_phase4_workspace_ux",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1756536500000,
+      "tag": "0005_phase5_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1756536600000,
+      "tag": "0006_phase5_collection",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1756536700000,
+      "tag": "0007_phase5_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1756536800000,
+      "tag": "0008_phase5_e2e",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1756536900000,
+      "tag": "0009_phase5_invites",
+      "breakpoints": true
+    }
+  ]
+}

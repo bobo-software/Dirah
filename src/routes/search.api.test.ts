@@ -1,0 +1,129 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import request from 'supertest';
+import type { Express } from 'express';
+import * as Y from 'yjs';
+import { createApp, getDocSync } from '../app';
+import { pool } from '../db';
+import { runPendingMigrations } from '../db/migrationRunner';
+import { db } from '../db';
+
+const stamp = Date.now();
+const ownerEmail = `phase5g-owner-${stamp}@example.com`;
+const viewerEmail = `phase5g-viewer-${stamp}@example.com`;
+const otherEmail = `phase5g-other-${stamp}@example.com`;
+const password = 'password12';
+const BODY_TOKEN = 'xyzzyplughfts';
+
+function blockDocWithText(text: string): Buffer {
+  const doc = new Y.Doc();
+  const blocks = doc.getMap('blocks');
+  const block = new Y.Map();
+  const ytext = new Y.Text();
+  ytext.insert(0, text);
+  block.set('sys:flavour', 'affine:paragraph');
+  block.set('prop:text', ytext);
+  blocks.set('b1', block);
+  return Buffer.from(Y.encodeStateAsUpdate(doc));
+}
+
+describe('full-text search API', () => {
+  let app: Express;
+  let dbReady = false;
+
+  beforeAll(async () => {
+    try {
+      await pool.query('SELECT 1');
+      await runPendingMigrations(db, pool);
+      dbReady = true;
+    } catch (error) {
+      console.warn('Skipping search API tests: database unavailable', error);
+    }
+    process.env.MCP_API_KEY ??= 'test-mcp-api-key';
+    app = await createApp();
+  });
+
+  it('indexes pushed body text and finds it with ?q=; title search still works', async () => {
+    if (!dbReady) {
+      return;
+    }
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: ownerEmail, password });
+    expect(owner.status).toBe(201);
+    const ownerToken = owner.body.data.tokens.accessToken as string;
+    const ownerId = owner.body.data.user.id as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    const other = await request(app)
+      .post('/api/auth/register')
+      .send({ email: otherEmail, password });
+    expect(other.status).toBe(201);
+    const otherToken = other.body.data.tokens.accessToken as string;
+    const otherWorkspaceId = other.body.data.workspace.id as string;
+
+    const viewer = await request(app)
+      .post('/api/auth/register')
+      .send({ email: viewerEmail, password });
+    expect(viewer.status).toBe(201);
+    const viewerToken = viewer.body.data.tokens.accessToken as string;
+    const invited = await request(app)
+      .post(`/api/workspaces/${workspaceId}/members`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email: viewerEmail, role: 'viewer' });
+    expect(invited.status).toBe(201);
+
+    const page = await request(app)
+      .post(`/api/workspaces/${workspaceId}/pages`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: 'Quiet Title' });
+    expect(page.status).toBe(201);
+    const pageId = page.body.data.page.id as string;
+
+    const decoy = await request(app)
+      .post(`/api/workspaces/${workspaceId}/pages`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: 'Other Page' });
+    expect(decoy.status).toBe(201);
+
+    await getDocSync(app).push(ownerId, pageId, blockDocWithText(`hello ${BODY_TOKEN} world`));
+
+    const byBody = await request(app)
+      .get(`/api/workspaces/${workspaceId}/pages`)
+      .query({ q: BODY_TOKEN })
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(byBody.status).toBe(200);
+    expect(byBody.body.data.pages).toHaveLength(1);
+    expect(byBody.body.data.pages[0].id).toBe(pageId);
+
+    const viewerSearch = await request(app)
+      .get(`/api/workspaces/${workspaceId}/pages`)
+      .query({ q: BODY_TOKEN })
+      .set('Authorization', `Bearer ${viewerToken}`);
+    expect(viewerSearch.status).toBe(200);
+    expect(viewerSearch.body.data.pages).toHaveLength(1);
+
+    const otherSearch = await request(app)
+      .get(`/api/workspaces/${otherWorkspaceId}/pages`)
+      .query({ q: BODY_TOKEN })
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(otherSearch.status).toBe(200);
+    expect(otherSearch.body.data.pages).toHaveLength(0);
+
+    const byTitle = await request(app)
+      .get(`/api/workspaces/${workspaceId}/pages`)
+      .query({ q: 'Quiet Title' })
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(byTitle.body.data.pages).toHaveLength(1);
+    expect(byTitle.body.data.pages[0].id).toBe(pageId);
+
+    await request(app)
+      .delete(`/api/pages/${pageId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    const trashed = await request(app)
+      .get(`/api/workspaces/${workspaceId}/pages`)
+      .query({ q: BODY_TOKEN })
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(trashed.body.data.pages).toHaveLength(0);
+  });
+});

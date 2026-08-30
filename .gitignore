@@ -40,5 +40,8 @@ jspm_packages/
 /.envrc
 /.run
 *.swp
+*.code-workspace
+uploads/
+.tmp-blobs/
 
 CLAUDE.local.md

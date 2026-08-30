@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "dira-postgres": {
+      "url": "http://127.0.0.1:4006/mcp/protocol",
+      "headers": {
+        "Authorization": "Bearer ${env:MCP_API_KEY}"
+      }
+    }
+  }
+}
