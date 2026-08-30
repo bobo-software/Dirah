@@ -1,17 +1,16 @@
 services:
-  mysql:
-    image: mysql:8.4
+  postgres:
+    image: postgres:16-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: schoolos
-      MYSQL_USER: schoolos
-      MYSQL_PASSWORD: schoolos
+      POSTGRES_USER: dira
+      POSTGRES_PASSWORD: dira
+      POSTGRES_DB: dira
     ports:
-      - '3307:3307'
+      - '5432:5432'
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      test: ['CMD-SHELL', 'pg_isready -U dira -d dira']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -21,5 +20,19 @@ services:
     ports:
       - '6379:6379'
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ':9001'
+    # Optional. Point MINIO_ENDPOINT at http://localhost:9000 and keys at MINIO_ROOT_* below.
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio_data:/data
+
 volumes:
-  mysql_data:
+  postgres_data:
+  minio_data:
