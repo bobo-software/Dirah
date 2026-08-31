@@ -27,6 +27,7 @@ export interface PublicWorkspace {
   name: string;
   role: string;
   encrypted: boolean;
+  mcpEnabled: boolean;
 }
 
 function normalizeEmail(email: string): string {
@@ -69,7 +70,12 @@ export class AuthService {
         const [workspace] = await tx
           .insert(workspaces)
           .values({ name: 'My workspace' })
-          .returning({ id: workspaces.id, name: workspaces.name, encrypted: workspaces.encrypted });
+          .returning({
+            id: workspaces.id,
+            name: workspaces.name,
+            encrypted: workspaces.encrypted,
+            mcpEnabled: workspaces.mcpEnabled,
+          });
 
         await tx.insert(workspaceMembers).values({
           workspaceId: workspace.id,
@@ -183,6 +189,7 @@ export class AuthService {
         id: workspaces.id,
         name: workspaces.name,
         encrypted: workspaces.encrypted,
+        mcpEnabled: workspaces.mcpEnabled,
         role: workspaceMembers.role,
       })
       .from(workspaceMembers)
@@ -202,7 +209,12 @@ export class AuthService {
       const [workspace] = await tx
         .insert(workspaces)
         .values({ name })
-        .returning({ id: workspaces.id, name: workspaces.name, encrypted: workspaces.encrypted });
+        .returning({
+          id: workspaces.id,
+          name: workspaces.name,
+          encrypted: workspaces.encrypted,
+          mcpEnabled: workspaces.mcpEnabled,
+        });
 
       await tx.insert(workspaceMembers).values({
         workspaceId: workspace.id,
@@ -220,6 +232,7 @@ export class AuthService {
         id: workspaces.id,
         name: workspaces.name,
         encrypted: workspaces.encrypted,
+        mcpEnabled: workspaces.mcpEnabled,
         role: workspaceMembers.role,
       })
       .from(workspaceMembers)

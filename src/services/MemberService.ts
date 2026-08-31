@@ -259,6 +259,7 @@ export class MemberService {
             id: invite.workspaceId,
             name: invite.workspaceName,
             encrypted: invite.encrypted,
+            mcpEnabled: invite.mcpEnabled ?? true,
             role: invite.role,
           },
         };
@@ -282,6 +283,7 @@ export class MemberService {
     workspaceId: string;
     workspaceName: string;
     encrypted: boolean;
+    mcpEnabled: boolean;
     email: string;
     role: string;
     expiresAt: Date;
@@ -296,6 +298,7 @@ export class MemberService {
         workspaceId: workspaceInvites.workspaceId,
         workspaceName: workspaces.name,
         encrypted: workspaces.encrypted,
+        mcpEnabled: workspaces.mcpEnabled,
         email: workspaceInvites.email,
         role: workspaceInvites.role,
         expiresAt: workspaceInvites.expiresAt,

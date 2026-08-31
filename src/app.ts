@@ -19,6 +19,13 @@ import { ShareService } from './services/ShareService';
 import { AiService } from './services/AiService';
 import { CryptoService } from './services/CryptoService';
 import { OAuthService } from './services/OAuthService';
+import { McpTokenService } from './services/McpTokenService';
+import { DocsMcpService } from './services/DocsMcpService';
+import { createDocsMcpExpressHandler } from './mcp/docs/createDocsMcpExpressHandler';
+import { createDocsMcpAuthMiddleware } from './middlewares/docsMcpAuth';
+import { docsMcpRateLimit } from './middlewares/docsMcpRateLimit';
+import { McpOAuthService } from './services/McpOAuthService';
+import { createMcpOAuthPublicRouter } from './routes/mcpOAuth.routes';
 import { defaultOAuthExchanger, type OAuthExchanger } from './oauth/providers';
 
 export interface CreateAppOptions {
@@ -41,7 +48,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       allowedHeaders: 'Content-Type,Authorization,Accept,MCP-Protocol-Version,X-Dira-Blob-Id',
     })
   );
-  app.use(express.json());
+  app.use(express.json({ limit: '1.5mb' }));
   app.use(express.urlencoded({ extended: true }));
 
   const authService = options.authService ?? new AuthService(db);
@@ -55,6 +62,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
     authService,
     options.oauthExchanger ?? defaultOAuthExchanger
   );
+  const mcpTokenService = new McpTokenService(db, authService);
+  const docsMcpService = new DocsMcpService(pageService, mcpTokenService);
+  const apiPublicUrl =
+    (process.env.API_PUBLIC_URL ?? '').trim().replace(/\/$/, '') || `http://localhost:${env.port}`;
+  const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl);
   const shareService = new ShareService(db, authService, pageService);
   const docSyncService =
     options.docSyncService ??
@@ -81,9 +93,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       shareService,
       aiService,
       cryptoService,
-      oauthService
+      oauthService,
+      mcpTokenService,
+      mcpOAuthService
     )
   );
+
+  app.use(createMcpOAuthPublicRouter(mcpOAuthService));
 
   const pgMcpService =
     options.pgMcpService ??
@@ -94,6 +110,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
 
   const mcpHandler = await createDiraMcpExpressHandler({ pg: pgMcpService });
   app.all('/mcp/protocol', mcpApiKeyMiddleware, mcpHandler);
+
+  const docsMcpHandler = await createDocsMcpExpressHandler(docsMcpService);
+  app.all(
+    '/mcp',
+    createDocsMcpAuthMiddleware({ tokens: mcpTokenService, apiPublicUrl }),
+    docsMcpRateLimit,
+    docsMcpHandler
+  );
 
   app.use(notFound);
   app.use(errorHandler);

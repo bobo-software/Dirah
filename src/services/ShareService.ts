@@ -30,6 +30,7 @@ export class ShareService {
       throw new HttpError('Only view links are supported', 400, 'INVALID_PERMISSION');
     }
     const page = await this.pages.requireMemberPage(userId, pageId);
+    await this.pages.requireBlockPage(page);
     await this.auth.requireWorkspaceOwner(userId, page.workspaceId);
     const [ws] = await this.database
       .select({ encrypted: workspaces.encrypted })
@@ -92,6 +93,8 @@ export class ShareService {
         position: pages.position,
         deletedAt: pages.deletedAt,
         status: pages.status,
+        kind: pages.kind,
+        slug: pages.slug,
       })
       .from(pages)
       .where(eq(pages.id, link.pageId))
@@ -99,7 +102,15 @@ export class ShareService {
     if (!page || page.deletedAt) {
       throw new HttpError('Share link not found', 404, 'SHARE_NOT_FOUND');
     }
-    return { ...page, status: page.status as PublicPage['status'], favorited: false, token: link.token };
+    const kind = page.kind === 'folder' || page.kind === 'markdown' ? page.kind : 'page';
+    return {
+      ...page,
+      status: page.status as PublicPage['status'],
+      kind,
+      slug: page.slug,
+      favorited: false,
+      token: link.token,
+    };
   }
 
   async requireWorkspace(token: string, workspaceId: string): Promise<PublicPage & { token: string }> {

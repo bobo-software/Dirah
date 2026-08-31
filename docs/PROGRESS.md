@@ -4,7 +4,7 @@ Living status for Dira across chat sessions. **Update this file at the end of ev
 
 ## Now
 
-**Phase 5o — Google / GitHub OAuth is implemented.** Remaining product work is in [plans/backlog.md](./plans/backlog.md). Do not start the next item unless asked.
+**Phase 6 — public docs MCP + first-class markdown is implemented.** Remaining product work is in [plans/backlog.md](./plans/backlog.md).
 
 ## Local run
 
@@ -12,7 +12,8 @@ Living status for Dira across chat sessions. **Update this file at the end of ev
 |---------|---------|-----|
 | API | `cd dira_backend && npm run dev` | http://localhost:4006 |
 | Web | `cd dira_web && npm run dev` | http://localhost:5181 |
-| MCP | same API process | http://localhost:4006/mcp/protocol |
+| Docs MCP | same API process, PAT in Settings | http://localhost:4006/mcp |
+| Postgres MCP | same API process | http://localhost:4006/mcp/protocol |
 | Postgres | already running locally (`.env` user `postgres`); or `docker compose up` (user `dira` — see [debt/config.md](./debt/config.md)) | localhost:5432 |
 
 Web `.env`: `VITE_API_URL=http://localhost:4006`. CORS: `http://localhost:5181`.
@@ -50,6 +51,7 @@ From this repo root, `npm run dev` in `dira_web` can pick up the backend package
 - Phase 5m: optional end-to-end encryption of Yjs updates. Owner **Encrypt pages**; clients seal AES-256-GCM envelopes; DEK wrapped to each member’s ECDH P-256 key. Server stores opaque bytes (no merge/search/history/Ask). Public share is 409. Unencrypted workspaces unchanged. **54** backend tests.
 - Phase 5n: email invites for people without an account. Unknown email → pending `workspace_invites` + copyable `/invite/:token` (SMTP optional via `SMTP_URL`). Accept sets a password and joins that workspace only (no extra “My workspace”). Existing-user invite still adds immediately. **55** backend tests.
 - Phase 5o: optional Google / GitHub OAuth. Unset client id+secret hide the buttons; password login still works. First-time OAuth creates the user + “My workspace”; same email links an existing account. Callback lands on `{APP_PUBLIC_URL}/oauth#refreshToken=…`. Migration `0010_phase5_oauth`. **57** backend tests. Enterprise SAML / company OIDC is not this slice.
+- Phase 6: first-class markdown + folders (`pages.kind`, `markdown_bodies`), web editor/preview, per-user docs MCP at `/mcp` (PATs, allowlist, OAuth 2.1). Migrations `0011`–`0014`. Docs: [HOW_TO_USE_DIRA_DOCS_MCP.md](./HOW_TO_USE_DIRA_DOCS_MCP.md). **64** backend tests (plus existing MinIO skip/fail if endpoint unreachable).
 - Product backlog: [plans/backlog.md](./plans/backlog.md) (ordered remaining features). Technical leftovers stay in [debt/](./debt/).
 
 ## Next (in order)
@@ -73,6 +75,12 @@ Pay down [debt/](./debt/) when it blocks a phase (especially PORT/MCP mismatch a
 ## Session log
 
 Add a short entry newest-first.
+
+### 2026-08-31 (phase 6 docs MCP)
+
+- First-class markdown + folders in the page tree (`kind`/`slug`, `markdown_bodies`). REST GET/PUT markdown with hash/etag. Encrypted workspaces 409.
+- Web: unified tree actions, folder landing + `.md` import, CodeMirror + GFM preview, Settings (PATs, allowlist, owner MCP kill switch), OAuth consent at `/settings/mcp-oauth`.
+- Public `/mcp` docs tools (path CRUD, search). Postgres MCP stays at `/mcp/protocol`. Rate limit + `mcp_audit`. OAuth 2.1 DCR + PKCE. Migrations `0011_phase6_markdown` … `0014_phase6_mcp_oauth`.
 
 ### 2026-08-31 (phase 5o + live deploy)
 

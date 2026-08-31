@@ -16,8 +16,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1121.0",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.9",
     "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
+    "@uiw/react-codemirror": "^4.25.11",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -27,7 +31,9 @@
     "node-sql-parser": "^5.4.0",
     "nodemailer": "^9.0.6",
     "pg": "^8.23.0",
+    "react-markdown": "^10.1.0",
     "redis": "^6.2.1",
+    "remark-gfm": "^4.0.1",
     "ws": "^8.21.3",
     "yjs": "^13.6.32",
     "zod": "^4.4.3"

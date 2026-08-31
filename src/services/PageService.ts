@@ -1,10 +1,17 @@
 import { and, asc, eq, ilike, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
-import { pageFavorites, pages, workspaces } from '../db/schemas';
+import { markdownBodies, pageFavorites, pages, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
+import { hashMarkdown, markdownSearchText, slugify } from '../utils/slugify';
 import { type AuthService, type Database } from './AuthService';
 
 export const PAGE_STATUSES = ['', 'todo', 'doing', 'done'] as const;
 export type PageStatus = (typeof PAGE_STATUSES)[number];
+
+export const PAGE_KINDS = ['page', 'folder', 'markdown'] as const;
+export type PageKind = (typeof PAGE_KINDS)[number];
+
+export const MAX_MARKDOWN_BYTES = 1_000_000;
+export const EMPTY_MARKDOWN_HASH = hashMarkdown('');
 
 export interface PublicPage {
   id: string;
@@ -14,7 +21,16 @@ export interface PublicPage {
   position: number;
   deletedAt: Date | null;
   status: PageStatus;
+  kind: PageKind;
+  slug: string | null;
   favorited: boolean;
+}
+
+export interface MarkdownBody {
+  page: PublicPage;
+  content: string;
+  hash: string;
+  updatedAt: Date;
 }
 
 export interface ListPagesQuery {
@@ -33,7 +49,29 @@ const pageColumns = {
   position: pages.position,
   deletedAt: pages.deletedAt,
   status: pages.status,
+  kind: pages.kind,
+  slug: pages.slug,
 };
+
+type PageRow = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  parentId: string | null;
+  position: number;
+  deletedAt: Date | null;
+  status: string;
+  kind: string;
+  slug: string | null;
+};
+
+function asKind(value: string): PageKind {
+  return PAGE_KINDS.includes(value as PageKind) ? (value as PageKind) : 'page';
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
+}
 
 export class PageService {
   constructor(
@@ -87,12 +125,31 @@ export class PageService {
   async create(
     userId: string,
     workspaceId: string,
-    input: { id?: string; title?: string; parentId?: string | null }
+    input: {
+      id?: string;
+      title?: string;
+      parentId?: string | null;
+      kind?: PageKind;
+      slug?: string;
+    }
   ): Promise<PublicPage> {
     await this.auth.requireEditor(userId, workspaceId);
     const title = (input.title ?? 'Untitled').trim() || 'Untitled';
+    const kind = input.kind ?? 'page';
+    if (!PAGE_KINDS.includes(kind)) {
+      throw new HttpError('Invalid page kind', 400, 'INVALID_KIND');
+    }
     if (input.id && !UUID_RE.test(input.id)) {
       throw new HttpError('Invalid page id', 400, 'INVALID_ID');
+    }
+    if (kind === 'folder' || kind === 'markdown') {
+      if (await this.isWorkspaceEncrypted(workspaceId)) {
+        throw new HttpError(
+          'Markdown and folders are unavailable while end-to-end encryption is on',
+          409,
+          'E2E_NO_MARKDOWN'
+        );
+      }
     }
     await this.assertParentInWorkspace(workspaceId, input.parentId);
     const position = await this.nextPosition(workspaceId, input.parentId ?? null);
@@ -107,23 +164,51 @@ export class PageService {
       }
     }
 
-    const [page] = await this.database
-      .insert(pages)
-      .values({
-        ...(input.id ? { id: input.id } : {}),
-        workspaceId,
-        title,
-        parentId: input.parentId ?? null,
-        position,
-      })
-      .returning(pageColumns);
-    return this.toPublic(page, false);
+    const slug =
+      kind === 'page' ? null : await this.allocateSlug(workspaceId, input.parentId ?? null, input.slug || title);
+
+    try {
+      const page = await this.database.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(pages)
+          .values({
+            ...(input.id ? { id: input.id } : {}),
+            workspaceId,
+            title,
+            parentId: input.parentId ?? null,
+            position,
+            kind,
+            slug,
+          })
+          .returning(pageColumns);
+        if (kind === 'markdown') {
+          await tx.insert(markdownBodies).values({
+            pageId: created.id,
+            content: '',
+            contentHash: EMPTY_MARKDOWN_HASH,
+          });
+        }
+        return created;
+      });
+      return this.toPublic(page, false);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new HttpError('A sibling already uses that slug', 409, 'SLUG_TAKEN');
+      }
+      throw error;
+    }
   }
 
   async patch(
     userId: string,
     pageId: string,
-    input: { title?: string; parentId?: string | null; position?: number; status?: PageStatus }
+    input: {
+      title?: string;
+      parentId?: string | null;
+      position?: number;
+      status?: PageStatus;
+      slug?: string;
+    }
   ): Promise<PublicPage> {
     const page = await this.requireEditorPage(userId, pageId);
     if (input.parentId !== undefined) {
@@ -141,18 +226,37 @@ export class PageService {
       input.position ??
       (parentChanged ? await this.nextPosition(page.workspaceId, parentId) : page.position);
     const status = input.status === undefined ? page.status : input.status;
-    const [updated] = await this.database
-      .update(pages)
-      .set({
-        title,
-        parentId,
-        position,
-        status,
-        updatedAt: new Date(),
-      })
-      .where(eq(pages.id, pageId))
-      .returning(pageColumns);
-    return this.withFavorite(userId, updated);
+    let slug = page.slug;
+    if (page.kind !== 'page') {
+      if (input.slug !== undefined || parentChanged) {
+        slug = await this.allocateSlug(
+          page.workspaceId,
+          parentId,
+          input.slug || title,
+          pageId
+        );
+      }
+    }
+    try {
+      const [updated] = await this.database
+        .update(pages)
+        .set({
+          title,
+          parentId,
+          position,
+          status,
+          slug,
+          updatedAt: new Date(),
+        })
+        .where(eq(pages.id, pageId))
+        .returning(pageColumns);
+      return this.withFavorite(userId, updated);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new HttpError('A sibling already uses that slug', 409, 'SLUG_TAKEN');
+      }
+      throw error;
+    }
   }
 
   async trash(userId: string, pageId: string): Promise<void> {
@@ -177,9 +281,13 @@ export class PageService {
         parentId = null;
       }
     }
+    let slug = page.slug;
+    if (page.kind !== 'page') {
+      slug = await this.allocateSlug(page.workspaceId, parentId, page.slug || page.title, pageId);
+    }
     const [restored] = await this.database
       .update(pages)
-      .set({ deletedAt: null, parentId, updatedAt: new Date() })
+      .set({ deletedAt: null, parentId, slug, updatedAt: new Date() })
       .where(eq(pages.id, pageId))
       .returning(pageColumns);
     return this.withFavorite(userId, restored);
@@ -217,6 +325,57 @@ export class PageService {
       .where(eq(pages.id, pageId));
   }
 
+  async getMarkdown(userId: string, pageId: string): Promise<MarkdownBody> {
+    const page = await this.requireMemberPage(userId, pageId);
+    if (page.kind !== 'markdown') {
+      throw new HttpError('Not a markdown document', 400, 'NOT_MARKDOWN');
+    }
+    const [row] = await this.database
+      .select()
+      .from(markdownBodies)
+      .where(eq(markdownBodies.pageId, pageId))
+      .limit(1);
+    if (!row) {
+      throw new HttpError('Markdown body not found', 404, 'MARKDOWN_NOT_FOUND');
+    }
+    return { page, content: row.content, hash: row.contentHash, updatedAt: row.updatedAt };
+  }
+
+  async putMarkdown(
+    userId: string,
+    pageId: string,
+    content: string,
+    expectedHash?: string
+  ): Promise<MarkdownBody> {
+    const page = await this.requireEditorPage(userId, pageId);
+    if (page.kind !== 'markdown') {
+      throw new HttpError('Not a markdown document', 400, 'NOT_MARKDOWN');
+    }
+    if (Buffer.byteLength(content, 'utf8') > MAX_MARKDOWN_BYTES) {
+      throw new HttpError('Markdown is too large', 413, 'MARKDOWN_TOO_LARGE');
+    }
+    const [current] = await this.database
+      .select()
+      .from(markdownBodies)
+      .where(eq(markdownBodies.pageId, pageId))
+      .limit(1);
+    if (!current) {
+      throw new HttpError('Markdown body not found', 404, 'MARKDOWN_NOT_FOUND');
+    }
+    if (expectedHash && expectedHash !== current.contentHash) {
+      throw new HttpError('Markdown was updated elsewhere', 409, 'HASH_MISMATCH');
+    }
+    const hash = hashMarkdown(content);
+    const now = new Date();
+    const [updated] = await this.database
+      .update(markdownBodies)
+      .set({ content, contentHash: hash, updatedAt: now })
+      .where(eq(markdownBodies.pageId, pageId))
+      .returning();
+    await this.setSearchText(pageId, markdownSearchText(content));
+    return { page, content: updated.content, hash: updated.contentHash, updatedAt: updated.updatedAt };
+  }
+
   async requireMemberPage(
     userId: string,
     pageId: string,
@@ -239,6 +398,12 @@ export class PageService {
 
   async requireOwnedPage(userId: string, pageId: string): Promise<PublicPage> {
     return this.requireEditorPage(userId, pageId);
+  }
+
+  async requireBlockPage(page: PublicPage): Promise<void> {
+    if (page.kind !== 'page') {
+      throw new HttpError('This node is not a block page', 400, 'NOT_A_PAGE');
+    }
   }
 
   async isTrashed(pageId: string): Promise<boolean> {
@@ -266,19 +431,7 @@ export class PageService {
     return page ?? null;
   }
 
-  private async withFavorite(
-    userId: string,
-    page: {
-      id: string;
-      workspaceId: string;
-      title: string;
-      parentId: string | null;
-      position: number;
-      deletedAt: Date | null;
-      status: string;
-      favorited?: boolean;
-    }
-  ): Promise<PublicPage> {
+  private async withFavorite(userId: string, page: PageRow | PublicPage): Promise<PublicPage> {
     const [fav] = await this.database
       .select({ userId: pageFavorites.userId })
       .from(pageFavorites)
@@ -287,18 +440,7 @@ export class PageService {
     return this.toPublic(page, Boolean(fav));
   }
 
-  private toPublic(
-    page: {
-      id: string;
-      workspaceId: string;
-      title: string;
-      parentId: string | null;
-      position: number;
-      deletedAt: Date | null;
-      status: string;
-    },
-    favorited: boolean
-  ): PublicPage {
+  private toPublic(page: PageRow | PublicPage, favorited: boolean): PublicPage {
     const status = PAGE_STATUSES.includes(page.status as PageStatus)
       ? (page.status as PageStatus)
       : '';
@@ -310,6 +452,8 @@ export class PageService {
       position: page.position,
       deletedAt: page.deletedAt,
       status,
+      kind: asKind(page.kind),
+      slug: page.slug,
       favorited,
     };
   }
@@ -384,5 +528,36 @@ export class PageService {
     if (!parent || parent.workspaceId !== workspaceId || parent.deletedAt) {
       throw new HttpError('Parent page not found', 400, 'INVALID_PARENT');
     }
+    if (asKind(parent.kind) === 'markdown') {
+      throw new HttpError('Markdown documents cannot have children', 400, 'INVALID_PARENT');
+    }
+  }
+
+  private async allocateSlug(
+    workspaceId: string,
+    parentId: string | null,
+    desiredRaw: string,
+    excludeId?: string
+  ): Promise<string> {
+    const base = slugify(desiredRaw);
+    const siblings = await this.database
+      .select({ id: pages.id, slug: pages.slug })
+      .from(pages)
+      .where(
+        and(
+          eq(pages.workspaceId, workspaceId),
+          parentId ? eq(pages.parentId, parentId) : isNull(pages.parentId),
+          isNull(pages.deletedAt)
+        )
+      );
+    const taken = new Set(
+      siblings.filter((row) => row.id !== excludeId && row.slug).map((row) => row.slug as string)
+    );
+    if (!taken.has(base)) return base;
+    for (let i = 2; i < 500; i += 1) {
+      const candidate = `${base.slice(0, Math.max(1, 80 - String(i).length - 1))}-${i}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+    throw new HttpError('Could not allocate a unique slug', 409, 'SLUG_TAKEN');
   }
 }

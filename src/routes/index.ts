@@ -16,6 +16,10 @@ import type { ShareService } from '../services/ShareService';
 import type { AiService } from '../services/AiService';
 import type { CryptoService } from '../services/CryptoService';
 import type { OAuthService } from '../services/OAuthService';
+import type { McpTokenService } from '../services/McpTokenService';
+import type { McpOAuthService } from '../services/McpOAuthService';
+import { createMcpSettingsRouter } from './mcpSettings.routes';
+import { createMcpOAuthApproveRouter } from './mcpOAuth.routes';
 
 export function createApiRouter(
   authService: AuthService,
@@ -26,16 +30,20 @@ export function createApiRouter(
   shareService: ShareService,
   aiService: AiService,
   cryptoService: CryptoService,
-  oauthService: OAuthService
+  oauthService: OAuthService,
+  mcpTokenService: McpTokenService,
+  mcpOAuthService: McpOAuthService
 ): Router {
   const router = Router();
   router.use('/health', healthRouter);
   router.use('/auth', createAuthRouter(authService, cryptoService, oauthService));
-  router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService));
+  router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, mcpTokenService));
   router.use('/pages', createPageRouter(pageService, sync, shareService));
   router.use('/blobs', createBlobRouter(blobService));
   router.use('/public', createPublicRouter(shareService, sync, blobService));
   router.use('/invites', createInviteRouter(memberService));
   router.use('/ai', createAiRouter(aiService));
+  router.use('/mcp', createMcpSettingsRouter(mcpTokenService));
+  router.use('/mcp', createMcpOAuthApproveRouter(mcpOAuthService));
   return router;
 }

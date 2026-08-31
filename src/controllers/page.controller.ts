@@ -10,6 +10,8 @@ const createSchema = z.object({
   id: uuid.optional(),
   title: z.string().optional(),
   parentId: uuid.nullable().optional(),
+  kind: z.enum(['page', 'folder', 'markdown']).optional(),
+  slug: z.string().optional(),
 });
 
 const patchSchema = z.object({
@@ -17,6 +19,12 @@ const patchSchema = z.object({
   parentId: uuid.nullable().optional(),
   position: z.number().int().optional(),
   status: z.enum(['', 'todo', 'doing', 'done']).optional(),
+  slug: z.string().optional(),
+});
+
+const markdownPutSchema = z.object({
+  content: z.string(),
+  hash: z.string().optional(),
 });
 
 export function createPageController(pageService: PageService) {
@@ -101,6 +109,45 @@ export function createPageController(pageService: PageService) {
       }
       const page = await pageService.setFavorite(req.user!.userId, pageId, false);
       return ResponseUtils.success(res, 'ok', { page });
+    }),
+
+    getMarkdown: asyncHandler(async (req: Request, res: Response) => {
+      const pageId = req.params.id;
+      if (!pageId) {
+        return ResponseUtils.error(res, 'Page id is required', null, 400);
+      }
+      const body = await pageService.getMarkdown(req.user!.userId, pageId);
+      return ResponseUtils.success(res, 'ok', {
+        page: body.page,
+        content: body.content,
+        hash: body.hash,
+        updatedAt: body.updatedAt,
+      });
+    }),
+
+    putMarkdown: asyncHandler(async (req: Request, res: Response) => {
+      const pageId = req.params.id;
+      if (!pageId) {
+        return ResponseUtils.error(res, 'Page id is required', null, 400);
+      }
+      const parsed = markdownPutSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid markdown payload', parsed.error.flatten(), 400);
+      }
+      const ifMatch = req.header('if-match')?.replace(/^"|"$/g, '').trim();
+      const expectedHash = parsed.data.hash ?? (ifMatch || undefined);
+      const body = await pageService.putMarkdown(
+        req.user!.userId,
+        pageId,
+        parsed.data.content,
+        expectedHash
+      );
+      return ResponseUtils.success(res, 'ok', {
+        page: body.page,
+        content: body.content,
+        hash: body.hash,
+        updatedAt: body.updatedAt,
+      });
     }),
   };
 }
