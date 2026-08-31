@@ -11,6 +11,8 @@ export const pages = pgTable('pages', {
   position: integer('position').notNull().default(0),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   status: text('status').notNull().default(''),
+  kind: text('kind').notNull().default('page'),
+  slug: text('slug'),
   searchText: text('search_text').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

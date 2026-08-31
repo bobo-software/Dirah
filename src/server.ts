@@ -12,6 +12,7 @@ async function main(): Promise<void> {
 
   server.listen(env.port, () => {
     console.log(`Dira API listening on http://localhost:${env.port}`);
+    console.log(`MCP docs at http://localhost:${env.port}/mcp`);
     console.log(`MCP protocol at http://localhost:${env.port}/mcp/protocol`);
     console.log(`Sync websocket at ws://localhost:${env.port}/sync`);
     console.log(bus ? 'Sync fan-out via Redis' : 'Sync fan-out in-process');

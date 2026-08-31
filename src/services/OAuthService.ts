@@ -155,6 +155,7 @@ export class OAuthService {
               id: workspaces.id,
               name: workspaces.name,
               encrypted: workspaces.encrypted,
+              mcpEnabled: workspaces.mcpEnabled,
             });
           await tx.insert(workspaceMembers).values({
             workspaceId: workspace.id,

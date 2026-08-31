@@ -45,6 +45,7 @@ export class DocSyncService {
     workspaceId?: string
   ): Promise<{ page: PublicPage; canPush: boolean }> {
     const page = await this.pages.requireMemberPage(userId, docId);
+    await this.pages.requireBlockPage(page);
     if (workspaceId && page.workspaceId !== workspaceId) {
       throw new HttpError('Forbidden', 403, 'FORBIDDEN');
     }
@@ -65,7 +66,8 @@ export class DocSyncService {
   }
 
   async catchup(userId: string, docId: string, clock: number): Promise<DocCatchup> {
-    await this.pages.requireMemberPage(userId, docId);
+    const page = await this.pages.requireMemberPage(userId, docId);
+    await this.pages.requireBlockPage(page);
     return this.catchupAuthorized(docId, clock);
   }
 
@@ -76,6 +78,7 @@ export class DocSyncService {
 
   async push(userId: string, docId: string, update: Buffer): Promise<DocUpdateRow> {
     const page = await this.pages.requireEditorPage(userId, docId);
+    await this.pages.requireBlockPage(page);
     if (!update.length) {
       throw new HttpError('Empty update', 400, 'EMPTY_UPDATE');
     }
@@ -182,7 +185,8 @@ export class DocSyncService {
   }
 
   async listRevisions(userId: string, docId: string): Promise<DocRevisionInfo[]> {
-    await this.pages.requireMemberPage(userId, docId);
+    const page = await this.pages.requireMemberPage(userId, docId);
+    await this.pages.requireBlockPage(page);
     const rows = await this.database
       .select({
         id: docRevisions.id,
@@ -213,7 +217,8 @@ export class DocSyncService {
     docId: string,
     revisionId: number
   ): Promise<DocRevisionInfo> {
-    await this.pages.requireMemberPage(userId, docId);
+    const page = await this.pages.requireMemberPage(userId, docId);
+    await this.pages.requireBlockPage(page);
     const row = await this.findRevision(docId, revisionId);
     return {
       id: row.id,
@@ -226,7 +231,8 @@ export class DocSyncService {
   }
 
   async saveRevision(userId: string, docId: string): Promise<DocRevisionInfo> {
-    await this.pages.requireEditorPage(userId, docId);
+    const page = await this.pages.requireEditorPage(userId, docId);
+    await this.pages.requireBlockPage(page);
     if (await this.isEncryptedDoc(docId)) {
       throw new HttpError(
         'History save is unavailable while end-to-end encryption is on',
@@ -253,7 +259,8 @@ export class DocSyncService {
   }
 
   async restoreRevision(userId: string, docId: string, revisionId: number): Promise<void> {
-    await this.pages.requireEditorPage(userId, docId);
+    const page = await this.pages.requireEditorPage(userId, docId);
+    await this.pages.requireBlockPage(page);
     const row = await this.findRevision(docId, revisionId);
     await this.database.delete(docUpdates).where(eq(docUpdates.docId, docId));
     await this.database

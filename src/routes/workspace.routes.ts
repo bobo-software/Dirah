@@ -9,6 +9,7 @@ import type { PageService } from '../services/PageService';
 import type { BlobService } from '../services/BlobService';
 import type { MemberService } from '../services/MemberService';
 import type { CryptoService } from '../services/CryptoService';
+import type { McpTokenService } from '../services/McpTokenService';
 import { requireAuth } from '../middlewares/auth';
 
 export function createWorkspaceRouter(
@@ -16,10 +17,11 @@ export function createWorkspaceRouter(
   pageService: PageService,
   blobService: BlobService,
   memberService: MemberService,
-  cryptoService: CryptoService
+  cryptoService: CryptoService,
+  mcpTokenService?: McpTokenService
 ): Router {
   const router = Router();
-  const controller = createWorkspaceController(authService);
+  const controller = createWorkspaceController(authService, mcpTokenService);
   const pages = createPageController(pageService);
   const blobs = createBlobController(blobService);
   const members = createMemberController(memberService);
@@ -41,6 +43,7 @@ export function createWorkspaceRouter(
   router.put('/:id/crypto/keys', crypto.putMemberKey);
   router.post('/:id/crypto/enable', crypto.enable);
   router.get('/:id', controller.get);
+  router.patch('/:id', controller.patch);
 
   return router;
 }

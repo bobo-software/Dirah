@@ -18,6 +18,8 @@ export function createPageRouter(
   const share = createShareController(shares);
 
   router.use(requireAuth);
+  router.get('/:id/markdown', controller.getMarkdown);
+  router.put('/:id/markdown', controller.putMarkdown);
   router.get('/:id/updates', docs.updates);
   router.get('/:id/snapshots/:snapshotId', docs.getSnapshot);
   router.post('/:id/snapshots/:snapshotId/restore', docs.restoreSnapshot);
