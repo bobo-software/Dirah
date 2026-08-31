@@ -8,7 +8,7 @@ import {
   patchPage,
   setPageFavorite,
 } from '../api/pages';
-import type { PublicPage, PublicWorkspace } from '../api/client';
+import type { PageKind, PublicPage, PublicWorkspace } from '../api/client';
 import { EmptyEditorPane } from './EmptyEditorPane';
 import { MembersPanel } from './MembersPanel';
 import { PresencePanel } from './PresencePanel';
@@ -84,16 +84,22 @@ export function WorkspaceShellPage() {
     };
   }, [sidebarOpen]);
 
-  async function onCreatePage(parentId?: string | null) {
+  async function onCreateNode(kind: PageKind = 'page', parentId?: string | null) {
     if (!accessToken || !workspaceId) return;
+    if ((kind === 'folder' || kind === 'markdown') && workspace?.encrypted) {
+      setMessage('Markdown and folders are unavailable while encryption is on');
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
       const id = crypto.randomUUID();
+      const title = kind === 'folder' ? 'Folder' : 'Untitled';
       const page = await createPage(accessToken, workspaceId, {
         id,
-        title: 'Untitled',
+        title,
         parentId: parentId ?? null,
+        kind,
       });
       await refreshPages();
       navigate(`/w/${workspaceId}/p/${page.id}`);
@@ -188,7 +194,7 @@ export function WorkspaceShellPage() {
       setRenameValue(page.title);
     },
     onCommitRename: (page: PublicPage) => void commitRename(page),
-    onCreateChild: (parent: PublicPage) => void onCreatePage(parent.id),
+    onCreateChild: (parent: PublicPage, kind: PageKind) => void onCreateNode(kind, parent.id),
     onTrash: (page: PublicPage) => void onTrash(page),
     onFavorite: (page: PublicPage) => void onFavorite(page),
     onMove,
@@ -268,9 +274,31 @@ export function WorkspaceShellPage() {
         >
           <p className="sidebar-label">Pages</p>
           {editable ? (
-            <button type="button" className="linkish" onClick={() => void onCreatePage()} disabled={busy}>
-              New
-            </button>
+            <span className="header-creates">
+              <button type="button" className="linkish" onClick={() => void onCreateNode('page')} disabled={busy}>
+                Page
+              </button>
+              {!workspace.encrypted ? (
+                <>
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => void onCreateNode('folder')}
+                    disabled={busy}
+                  >
+                    Folder
+                  </button>
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => void onCreateNode('markdown')}
+                    disabled={busy}
+                  >
+                    MD
+                  </button>
+                </>
+              ) : null}
+            </span>
           ) : null}
         </div>
         {pages.length === 0 ? (
@@ -331,14 +359,16 @@ export function WorkspaceShellPage() {
               refreshPages,
               pages,
               encrypted: Boolean(workspace.encrypted),
+              onCreateNode: (kind: PageKind, parentId?: string | null) => void onCreateNode(kind, parentId),
             }}
           />
         ) : (
           <EmptyEditorPane
-            onCreate={() => void onCreatePage()}
+            onCreate={(kind) => void onCreateNode(kind)}
             busy={busy}
             hasPages={pages.length > 0}
             allowCreate={editable}
+            allowDocs={!workspace.encrypted}
           />
         )}
       </section>

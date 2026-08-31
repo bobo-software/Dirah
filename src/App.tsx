@@ -7,12 +7,14 @@ import { RegisterPage } from './pages/RegisterPage';
 import { InvitePage } from './pages/InvitePage';
 import { OAuthCatchPage } from './pages/OAuthCatchPage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { McpOAuthConsentPage } from './pages/McpOAuthConsentPage';
 import { WorkspaceShellPage } from './pages/WorkspaceShellPage';
 import { SyncProvider } from './sync/SyncProvider';
 
 const PageEditorPage = lazy(async () => {
-  const mod = await import('./pages/PageEditorPage');
-  return { default: mod.PageEditorPage };
+  const mod = await import('./pages/WorkspaceNodePage');
+  return { default: mod.WorkspaceNodePage };
 });
 
 const PublicSharePage = lazy(async () => {
@@ -51,6 +53,8 @@ export default function App() {
             <Route element={<RequireAuth />}>
               <Route element={<AppFrame />}>
                 <Route path="/" element={<WorkspacesPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/mcp-oauth" element={<McpOAuthConsentPage />} />
                 <Route path="/w/:workspaceId" element={<WorkspaceShellPage />}>
                   <Route
                     path="p/:pageId"

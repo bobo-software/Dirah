@@ -1,4 +1,4 @@
-import type { PublicPage } from '../api/client';
+import type { PageKind, PublicPage } from '../api/client';
 
 export type WorkspaceOutlet = {
   role: string;
@@ -7,6 +7,7 @@ export type WorkspaceOutlet = {
   refreshPages: () => Promise<void>;
   pages: PublicPage[];
   encrypted: boolean;
+  onCreateNode: (kind: PageKind, parentId?: string | null) => void;
 };
 
 export function canEdit(role: string): boolean {

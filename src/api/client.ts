@@ -10,7 +10,10 @@ export type PublicWorkspace = {
   name: string;
   role: string;
   encrypted: boolean;
+  mcpEnabled?: boolean;
 };
+
+export type PageKind = 'page' | 'folder' | 'markdown';
 
 export type PublicPage = {
   id: string;
@@ -20,6 +23,8 @@ export type PublicPage = {
   position: number;
   deletedAt: string | null;
   status: string;
+  kind: PageKind;
+  slug: string | null;
   favorited: boolean;
 };
 

@@ -1,4 +1,4 @@
-import { apiRequest, type PublicPage } from './client';
+import { apiRequest, type PageKind, type PublicPage } from './client';
 
 export type ListPagesQuery = {
   trashed?: boolean;
@@ -24,7 +24,13 @@ export async function listPages(
 export async function createPage(
   accessToken: string,
   workspaceId: string,
-  input: { id?: string; title?: string; parentId?: string | null } = {}
+  input: {
+    id?: string;
+    title?: string;
+    parentId?: string | null;
+    kind?: PageKind;
+    slug?: string;
+  } = {}
 ): Promise<PublicPage> {
   const data = await apiRequest<{ page: PublicPage }>(`/api/workspaces/${workspaceId}/pages`, {
     method: 'POST',
@@ -80,4 +86,28 @@ export async function setPageFavorite(
     accessToken,
   });
   return data.page;
+}
+
+export type MarkdownBody = {
+  page: PublicPage;
+  content: string;
+  hash: string;
+  updatedAt: string;
+};
+
+export async function getMarkdown(accessToken: string, pageId: string): Promise<MarkdownBody> {
+  return apiRequest<MarkdownBody>(`/api/pages/${pageId}/markdown`, { accessToken });
+}
+
+export async function putMarkdown(
+  accessToken: string,
+  pageId: string,
+  content: string,
+  hash?: string
+): Promise<MarkdownBody> {
+  return apiRequest<MarkdownBody>(`/api/pages/${pageId}/markdown`, {
+    method: 'PUT',
+    accessToken,
+    body: JSON.stringify({ content, hash }),
+  });
 }

@@ -37,6 +37,7 @@ export function CollectionPage() {
   const grouped = useMemo(() => {
     const buckets: Record<PageStatus, PublicPage[]> = { '': [], todo: [], doing: [], done: [] };
     for (const page of pages) {
+      if (page.kind === 'folder' || page.kind === 'markdown') continue;
       buckets[parsePageStatus(page.status)].push(page);
     }
     return buckets;

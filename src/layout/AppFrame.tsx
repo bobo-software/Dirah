@@ -27,6 +27,7 @@ export function AppFrame() {
           <NavLink to="/" end>
             Workspaces
           </NavLink>
+          <NavLink to="/settings">Settings</NavLink>
         </nav>
         <div className="topbar-user">
           <span className={`sync-status ${status}`}>{status}</span>

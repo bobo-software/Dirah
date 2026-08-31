@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import type { DragEvent } from 'react';
-import type { PublicPage } from '../api/client';
+import type { PageKind, PublicPage } from '../api/client';
 import { ShareDialog } from './ShareDialog';
+import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
 
 export type PageNode = {
   page: PublicPage;
@@ -57,7 +58,7 @@ export function PageTree({
   onRenameValue: (value: string) => void;
   onStartRename: (page: PublicPage) => void;
   onCommitRename: (page: PublicPage) => void;
-  onCreateChild: (parent: PublicPage) => void;
+  onCreateChild: (parent: PublicPage, kind: PageKind) => void;
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
@@ -119,14 +120,16 @@ function PageTreeItem({
   onRenameValue: (value: string) => void;
   onStartRename: (page: PublicPage) => void;
   onCommitRename: (page: PublicPage) => void;
-  onCreateChild: (parent: PublicPage) => void;
+  onCreateChild: (parent: PublicPage, kind: PageKind) => void;
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
   encrypted: boolean;
 }) {
   const page = node.page;
+  const kind = pageKind(page);
   const active = page.id === pageId;
+  const nestable = canHaveChildren(kind);
 
   function onDragStart(event: DragEvent) {
     event.dataTransfer.setData('text/page-id', page.id);
@@ -134,13 +137,13 @@ function PageTreeItem({
   }
 
   function onDragOver(event: DragEvent) {
-    if (!editable) return;
+    if (!editable || !nestable) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }
 
   function onDrop(event: DragEvent) {
-    if (!editable) return;
+    if (!editable || !nestable) return;
     event.preventDefault();
     event.stopPropagation();
     const dragged = event.dataTransfer.getData('text/page-id');
@@ -175,6 +178,9 @@ function PageTreeItem({
       ) : (
         <>
           <div className="page-row">
+            <span className="kind-glyph" title={kind}>
+              {kindGlyph(kind)}
+            </span>
             <NavLink to={`/w/${workspaceId}/p/${page.id}`}>{page.title}</NavLink>
             <button
               type="button"
@@ -187,9 +193,23 @@ function PageTreeItem({
           </div>
           {editable ? (
             <span className="page-actions">
-              <button type="button" className="linkish" onClick={() => onCreateChild(page)}>
-                Child
-              </button>
+              {nestable ? (
+                <>
+                  <button type="button" className="linkish" onClick={() => onCreateChild(page, 'page')}>
+                    Page
+                  </button>
+                  {!encrypted ? (
+                    <>
+                      <button type="button" className="linkish" onClick={() => onCreateChild(page, 'folder')}>
+                        Folder
+                      </button>
+                      <button type="button" className="linkish" onClick={() => onCreateChild(page, 'markdown')}>
+                        MD
+                      </button>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
               <button type="button" className="linkish" onClick={() => onStartRename(page)}>
                 Rename
               </button>
@@ -200,7 +220,7 @@ function PageTreeItem({
           ) : (
             <span className="page-actions" />
           )}
-          {admin && active && accessToken ? (
+          {admin && active && accessToken && kind === 'page' ? (
             <ShareDialog pageId={page.id} accessToken={accessToken} encrypted={encrypted} />
           ) : null}
         </>
