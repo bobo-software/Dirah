@@ -13,7 +13,7 @@ import { Sidebar, WorkspacesModal } from '../components/ComponentsIndex';
 import { clearLastWorkspaceId, setLastWorkspaceId } from '../components/lastWorkspace';
 import { useSidebarDrawer } from '../components/Sidebar';
 import { EmptyEditorPane } from './EmptyEditorPane';
-import { buildPageTree, PageTree } from './PageTree';
+import { buildPageTree, draggedPageId, PageTree } from './PageTree';
 import { canEdit } from './workspaceContext';
 
 export function WorkspaceShellPage() {
@@ -34,6 +34,7 @@ export function WorkspaceShellPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
+  const [rootOver, setRootOver] = useState(false);
   const { open: sidebarOpen, setOpen: setSidebarOpen, narrow } = useSidebarDrawer();
 
   useEffect(() => {
@@ -125,6 +126,8 @@ export function WorkspaceShellPage() {
 
   async function onMove(draggedId: string, parentId: string | null) {
     if (!accessToken) return;
+    const current = pages.find((page) => page.id === draggedId);
+    if (current && current.parentId === parentId) return;
     try {
       await patchPage(accessToken, draggedId, { parentId });
       await refreshPages();
@@ -144,7 +147,7 @@ export function WorkspaceShellPage() {
     );
   }
 
-  if (!workspace || !workspaceId) {
+  if (!workspaceId || !workspace || workspace.id !== workspaceId) {
     return <p className="muted">Loading workspace…</p>;
   }
 
@@ -202,15 +205,23 @@ export function WorkspaceShellPage() {
           </>
         ) : null}
         <div
-          className="sidebar-pages-header"
+          className={rootOver ? 'sidebar-pages-header drop-target' : 'sidebar-pages-header'}
           onDragOver={(event) => {
             if (!editable) return;
             event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            setRootOver(true);
+          }}
+          onDragLeave={(event) => {
+            const related = event.relatedTarget as Node | null;
+            if (related && event.currentTarget.contains(related)) return;
+            setRootOver(false);
           }}
           onDrop={(event) => {
             if (!editable) return;
             event.preventDefault();
-            const dragged = event.dataTransfer.getData('text/page-id');
+            setRootOver(false);
+            const dragged = draggedPageId(event.dataTransfer);
             if (dragged) void onMove(dragged, null);
           }}
         >

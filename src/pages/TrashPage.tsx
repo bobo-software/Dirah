@@ -41,9 +41,7 @@ export function TrashPage() {
       return;
     }
     try {
-      const ids = await deletePagePermanent(accessToken, page.id);
-      const { deletePagePersistence } = await import('../editor');
-      await Promise.all(ids.map((id) => deletePagePersistence(workspaceId, id)));
+      await deletePagePermanent(accessToken, page.id);
       await refresh();
       await refreshPages();
     } catch (error) {

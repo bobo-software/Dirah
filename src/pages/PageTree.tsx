@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import type { DragEvent } from 'react';
+import { useState, type DragEvent } from 'react';
 import type { PageKind, PublicPage } from '../api/client';
 import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
 
@@ -49,6 +49,10 @@ export function buildPageTree(pages: PublicPage[]): PageNode[] {
   return nest(null);
 }
 
+export function draggedPageId(data: DataTransfer): string {
+  return data.getData('text/page-id') || data.getData('text/plain');
+}
+
 type PageTreeProps = {
   nodes: PageNode[];
   workspaceId: string;
@@ -63,13 +67,15 @@ type PageTreeProps = {
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
+  ancestorIds?: string[];
 };
 
 export function PageTree(props: PageTreeProps) {
+  const ancestorIds = props.ancestorIds ?? [];
   return (
     <ul className="page-tree">
       {props.nodes.map((node) => (
-        <PageTreeItem key={node.page.id} node={node} {...props} />
+        <PageTreeItem key={node.page.id} node={node} {...props} ancestorIds={ancestorIds} />
       ))}
     </ul>
   );
@@ -89,40 +95,73 @@ function PageTreeItem({
   onTrash,
   onFavorite,
   onMove,
+  ancestorIds = [],
 }: PageTreeProps & { node: PageNode }) {
   const page = node.page;
   const kind = pageKind(page);
   const active = page.id === pageId;
   const nestable = canHaveChildren(kind);
+  const [dragging, setDragging] = useState(false);
+  const [over, setOver] = useState(false);
+
+  function canAccept(dragged: string): boolean {
+    if (!editable || !nestable || !dragged) return false;
+    if (dragged === page.id) return false;
+    if (ancestorIds.includes(dragged)) return false;
+    if (node.children.some((child) => child.page.id === dragged)) return false;
+    return true;
+  }
 
   function onDragStart(event: DragEvent) {
+    if ((event.target as HTMLElement).closest('button, input')) {
+      event.preventDefault();
+      return;
+    }
+    event.stopPropagation();
     event.dataTransfer.setData('text/page-id', page.id);
+    event.dataTransfer.setData('text/plain', page.id);
     event.dataTransfer.effectAllowed = 'move';
+    setDragging(true);
+  }
+
+  function onDragEnd() {
+    setDragging(false);
+    setOver(false);
   }
 
   function onDragOver(event: DragEvent) {
-    if (!editable || !nestable) return;
+    if (!editable || !nestable || dragging) return;
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
+    setOver(true);
+  }
+
+  function onDragLeave(event: DragEvent) {
+    const related = event.relatedTarget as Node | null;
+    if (related && event.currentTarget.contains(related)) return;
+    setOver(false);
   }
 
   function onDrop(event: DragEvent) {
-    if (!editable || !nestable) return;
     event.preventDefault();
     event.stopPropagation();
-    const dragged = event.dataTransfer.getData('text/page-id');
-    if (!dragged || dragged === page.id) return;
+    setOver(false);
+    const dragged = draggedPageId(event.dataTransfer);
+    if (!canAccept(dragged)) return;
     onMove(dragged, page.id);
   }
 
+  const rowClass = [
+    'page-row',
+    dragging ? 'dragging' : '',
+    over && nestable ? 'drop-target' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <li
-      className={active ? 'active' : undefined}
-      draggable={editable && renamingId !== page.id}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
+    <li className={active ? 'active' : undefined}>
       {renamingId === page.id ? (
         <form
           className="rename-form"
@@ -141,11 +180,22 @@ function PageTreeItem({
         </form>
       ) : (
         <>
-          <div className="page-row">
+          <div
+            className={rowClass}
+            draggable={editable && renamingId !== page.id}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            title={nestable && editable ? 'Drop a file here to move it into this folder' : undefined}
+          >
             <span className="kind-glyph" title={kind}>
               {kindGlyph(kind)}
             </span>
-            <NavLink to={`/w/${workspaceId}/p/${page.id}`}>{page.title}</NavLink>
+            <NavLink draggable={false} to={`/w/${workspaceId}/p/${page.id}`}>
+              {page.title}
+            </NavLink>
             <button
               type="button"
               className={page.favorited ? 'linkish star on' : 'linkish star'}
@@ -204,6 +254,7 @@ function PageTreeItem({
           onTrash={onTrash}
           onFavorite={onFavorite}
           onMove={onMove}
+          ancestorIds={[...ancestorIds, page.id]}
         />
       ) : null}
     </li>

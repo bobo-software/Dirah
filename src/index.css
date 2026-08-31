@@ -673,6 +673,26 @@ select {
   border-radius: 5px;
 }
 
+.page-row[draggable='true'] {
+  cursor: grab;
+}
+
+.page-row.dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.page-row.drop-target {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.sidebar-pages-header.drop-target {
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--accent-soft);
+}
+
 .page-tree li:hover > .page-row {
   background: var(--bg);
 }
