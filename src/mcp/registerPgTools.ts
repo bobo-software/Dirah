@@ -10,9 +10,9 @@ export interface PgMcpServerHost {
   ) => unknown;
   registerResource: (
     name: string,
-    uriOrTemplate: string,
+    uriOrTemplate: string | unknown,
     config: Record<string, unknown>,
-    readCallback: (uri: URL) => unknown
+    readCallback: (uri: URL, variables?: Record<string, string | string[]>) => unknown
   ) => unknown;
 }
 

@@ -9,6 +9,7 @@ export function createMcpSettingsRouter(tokens: McpTokenService): Router {
   router.use(requireAuth);
   router.get('/tokens', controller.listTokens);
   router.post('/tokens', controller.createToken);
+  router.patch('/tokens/:id', controller.updateToken);
   router.delete('/tokens/:id', controller.revokeToken);
   router.get('/access', controller.getAccess);
   router.put('/access', controller.setAccess);

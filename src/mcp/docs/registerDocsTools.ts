@@ -3,7 +3,7 @@ import { HttpError } from '../../utils/HttpError';
 import type { DocsMcpService } from '../../services/DocsMcpService';
 import type { PgMcpServerHost } from '../registerPgTools';
 import { currentDocsAuth } from './authContext';
-import { DIRA_DOCS_INSTRUCTIONS } from './instructions';
+import { buildDynamicInstructions } from './instructions';
 
 const workspaceFields = {
   workspaceId: z.string().uuid().optional(),
@@ -14,10 +14,22 @@ function workspaceRef(args: { workspaceId?: string; workspace?: string }): strin
   return args.workspaceId ?? args.workspace;
 }
 
-function asToolContent(data: unknown, error?: { message: string; code?: string }) {
+function asToolContent(
+  data: unknown,
+  error?: { message: string; code?: string; details?: Record<string, unknown> }
+) {
   if (error) {
     return {
-      content: [{ type: 'text' as const, text: JSON.stringify({ success: false, message: error.message, error: error.code }, null, 2) }],
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            { success: false, message: error.message, error: error.code, details: error.details },
+            null,
+            2
+          ),
+        },
+      ],
       isError: true,
     };
   }
@@ -41,6 +53,7 @@ async function run<T>(tool: string, fn: () => Promise<T>, workspaceId?: string |
   } catch (error) {
     const message = error instanceof HttpError ? error.message : error instanceof Error ? error.message : 'MCP tool failed';
     const code = error instanceof HttpError ? error.code : undefined;
+    const details = error instanceof HttpError ? error.details : undefined;
     void serviceRef?.recordAudit({
       userId: auth.userId,
       tokenId: auth.tokenId,
@@ -48,15 +61,24 @@ async function run<T>(tool: string, fn: () => Promise<T>, workspaceId?: string |
       tool,
       outcome: code ?? 'error',
     });
-    return asToolContent(null, { message, code });
+    return asToolContent(null, { message, code, details });
   }
 }
 
 let serviceRef: DocsMcpService | null = null;
 
-async function requireWorkspace(args: { workspaceId?: string; workspace?: string }) {
+async function requireWorkspace(
+  args: { workspaceId?: string; workspace?: string; path?: string },
+  options: { resolveByPath?: boolean } = {}
+) {
   const auth = currentDocsAuth();
-  const resolved = await serviceRef!.resolveWorkspace(auth.userId, workspaceRef(args));
+  const ref = workspaceRef(args);
+  if (!ref && options.resolveByPath && args.path) {
+    return serviceRef!.resolveWorkspaceForPath(auth.userId, args.path, auth.defaultWorkspaceId);
+  }
+  const resolved = await serviceRef!.resolveWorkspace(auth.userId, ref, {
+    defaultWorkspaceId: auth.defaultWorkspaceId,
+  });
   if (!resolved) {
     throw new HttpError('workspace or workspaceId is required', 400, 'WORKSPACE_REQUIRED');
   }
@@ -65,11 +87,12 @@ async function requireWorkspace(args: { workspaceId?: string; workspace?: string
 
 function inWorkspace<T>(
   tool: string,
-  args: { workspaceId?: string; workspace?: string },
-  fn: (workspaceId: string) => Promise<T>
+  args: { workspaceId?: string; workspace?: string; path?: string },
+  fn: (workspaceId: string) => Promise<T>,
+  options: { resolveByPath?: boolean } = {}
 ) {
   return run(tool, async () => {
-    const ws = await requireWorkspace(args);
+    const ws = await requireWorkspace(args, options);
     return fn(ws.workspaceId);
   });
 }
@@ -83,7 +106,12 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       description: 'Short instructions for coding agents: search first, omit workspace when the token has one workspace, pass hash on writes.',
       inputSchema: z.object({}),
     },
-    (async () => run('dira_guide', async () => ({ instructions: DIRA_DOCS_INSTRUCTIONS }))) as never
+    (async () =>
+      run('dira_guide', async () => {
+        const auth = currentDocsAuth();
+        const guide = await serviceRef!.buildGuide(auth.userId, auth.defaultWorkspaceId);
+        return { instructions: buildDynamicInstructions(guide), workspaces: guide.workspaces };
+      })) as never
   );
 
   server.registerTool(
@@ -100,16 +128,28 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'list_tree',
     {
       title: 'List docs tree',
-      description: 'List markdown files and folders. Optional prefix (e.g. docs/api) and depth. Omit workspace when the token has one workspace.',
+      description:
+        'List markdown files and folders, sorted by path with titles/headings. Optional prefix (e.g. docs/api), depth (default 2), and kind filter (markdown or folder). Omit workspace when the token has one workspace.',
       inputSchema: z.object({
         ...workspaceFields,
         prefix: z.string().optional(),
         depth: z.number().int().min(1).optional(),
+        kind: z.enum(['markdown', 'folder']).optional(),
       }),
     },
-    (async (args: { workspaceId?: string; workspace?: string; prefix?: string; depth?: number }) =>
+    (async (args: {
+      workspaceId?: string;
+      workspace?: string;
+      prefix?: string;
+      depth?: number;
+      kind?: 'markdown' | 'folder';
+    }) =>
       inWorkspace('list_tree', args, (workspaceId) =>
-        service.listTree(currentDocsAuth().userId, workspaceId, { prefix: args.prefix, depth: args.depth })
+        service.listTree(currentDocsAuth().userId, workspaceId, {
+          prefix: args.prefix,
+          depth: args.depth,
+          kind: args.kind,
+        })
       )) as never
   );
 
@@ -147,8 +187,11 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       startLine?: number;
       maxLines?: number;
     }) =>
-      inWorkspace('read_file', args, (workspaceId) =>
-        service.readFile(currentDocsAuth().userId, workspaceId, args)
+      inWorkspace(
+        'read_file',
+        args,
+        (workspaceId) => service.readFile(currentDocsAuth().userId, workspaceId, args),
+        { resolveByPath: true }
       )) as never
   );
 
@@ -182,7 +225,8 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'edit_file',
     {
       title: 'Patch markdown file',
-      description: 'Replace the first occurrence of oldString with newString. Include hash from read_file.',
+      description:
+        'Replace oldString with newString. Include hash from read_file. If oldString occurs more than once, this fails with PATCH_AMBIGUOUS unless replaceAll is set.',
       inputSchema: z.object({
         ...workspaceFields,
         path: z.string().optional(),
@@ -190,6 +234,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
         oldString: z.string().min(1),
         newString: z.string(),
         hash: z.string().optional(),
+        replaceAll: z.boolean().optional(),
       }),
     },
     (async (args: {
@@ -200,9 +245,13 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       oldString: string;
       newString: string;
       hash?: string;
+      replaceAll?: boolean;
     }) =>
-      inWorkspace('edit_file', args, (workspaceId) =>
-        service.editFile(currentDocsAuth().userId, workspaceId, args)
+      inWorkspace(
+        'edit_file',
+        args,
+        (workspaceId) => service.editFile(currentDocsAuth().userId, workspaceId, args),
+        { resolveByPath: true }
       )) as never
   );
 
@@ -240,8 +289,11 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       title?: string;
       slug?: string;
     }) =>
-      inWorkspace('rename', args, (workspaceId) =>
-        service.rename(currentDocsAuth().userId, workspaceId, args)
+      inWorkspace(
+        'rename',
+        args,
+        (workspaceId) => service.rename(currentDocsAuth().userId, workspaceId, args),
+        { resolveByPath: true }
       )) as never
   );
 
@@ -266,8 +318,11 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       parentPath?: string;
       parentId?: string | null;
     }) =>
-      inWorkspace('move', args, (workspaceId) =>
-        service.move(currentDocsAuth().userId, workspaceId, args)
+      inWorkspace(
+        'move',
+        args,
+        (workspaceId) => service.move(currentDocsAuth().userId, workspaceId, args),
+        { resolveByPath: true }
       )) as never
   );
 
@@ -283,8 +338,11 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       }),
     },
     (async (args: { workspaceId?: string; workspace?: string; path?: string; nodeId?: string }) =>
-      inWorkspace('delete', args, (workspaceId) =>
-        service.delete(currentDocsAuth().userId, workspaceId, args)
+      inWorkspace(
+        'delete',
+        args,
+        (workspaceId) => service.delete(currentDocsAuth().userId, workspaceId, args),
+        { resolveByPath: true }
       )) as never
   );
 
@@ -293,16 +351,27 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     {
       title: 'Search markdown docs',
       description:
-        'Full-text search with snippets and app URLs. Omit workspace to search all allowlisted workspaces. Omit workspaceId when the token has one workspace.',
+        'Full-text search with snippets, readWhen hints, and app URLs. Accepts q or query. Omit workspace to search all allowlisted workspaces. Omit workspaceId when the token has one workspace.',
       inputSchema: z.object({
         ...workspaceFields,
-        q: z.string().min(1),
+        q: z.string().min(1).optional(),
+        query: z.string().min(1).optional(),
         limit: z.number().int().min(1).max(50).optional(),
       }),
     },
-    (async (args: { workspaceId?: string; workspace?: string; q: string; limit?: number }) =>
-      run('search_docs', () =>
-        service.searchDocs(currentDocsAuth().userId, workspaceRef(args), args.q, args.limit)
-      )) as never
+    (async (args: {
+      workspaceId?: string;
+      workspace?: string;
+      q?: string;
+      query?: string;
+      limit?: number;
+    }) =>
+      run('search_docs', async () => {
+        const term = args.q ?? args.query;
+        if (!term) {
+          throw new HttpError('q or query is required', 400, 'INVALID_ARGS');
+        }
+        return service.searchDocs(currentDocsAuth().userId, workspaceRef(args), term, args.limit);
+      })) as never
   );
 }

@@ -4,6 +4,8 @@ import {
   parseDocsPath,
   slugify,
 } from '../utils/slugify';
+import { parseFrontmatter } from '../utils/frontmatter';
+import { extractMarkdownLinks } from '../utils/markdownLinks';
 import type { PageKind, PageService, PublicPage } from './PageService';
 import type { McpTokenService } from './McpTokenService';
 
@@ -23,13 +25,34 @@ export interface CompactTreeNode {
   id: string;
   path: string;
   kind: PageKind;
+  title?: string;
+  heading?: string;
 }
+
+const DEFAULT_LIST_TREE_DEPTH = 2;
 
 export interface ResolvedWorkspace {
   workspaceId: string;
   name: string;
   slug: string;
 }
+
+export interface GuideWorkspace {
+  workspaceId: string;
+  slug: string;
+  name: string;
+  canWrite: boolean;
+  default: boolean;
+  startAt: string | null;
+}
+
+export interface DocsGuide {
+  workspaces: GuideWorkspace[];
+}
+
+// Markdown paths in this system are always lowercased by slugify(), so an
+// "AGENTS.md" candidate would never match a stored path — only lowercase forms are useful here.
+const AGENT_INDEX_FALLBACK_CHAIN = ['readme.md', 'docs/agents.md', 'agents.md'];
 
 function isDocsKind(kind: PageKind): boolean {
   return kind === 'folder' || kind === 'markdown';
@@ -47,6 +70,48 @@ function normalizePrefix(prefix?: string): string {
 
 function pathDepth(path: string): number {
   return path.split('/').filter(Boolean).length;
+}
+
+function firstParagraph(body: string): string | null {
+  const paragraph = body
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .find((part) => part.length > 0);
+  if (!paragraph) return null;
+  const flat = paragraph.replace(/^#+\s*/, '').replace(/\s+/g, ' ').trim();
+  return flat ? flat.slice(0, 120) : null;
+}
+
+function firstHeadingLine(content: string): string | undefined {
+  const line = content.split('\n').find((l) => l.trim().length > 0);
+  if (!line) return undefined;
+  const flat = line.replace(/^#+\s*/, '').trim();
+  return flat ? flat.slice(0, 80) : undefined;
+}
+
+function resolveLinkTarget(fileDir: string, target: string): string {
+  if (target.startsWith('/')) return normalizePrefix(target);
+  const base = fileDir ? fileDir.split('/') : [];
+  for (const seg of target.split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') {
+      base.pop();
+      continue;
+    }
+    base.push(seg);
+  }
+  return base.join('/');
+}
+
+function isAgentIndexPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return lower === 'readme.md' || lower === 'docs/agents.md' || lower === 'agents.md';
+}
+
+function boostAgentIndexHits<T extends { path: string }>(hits: T[]): T[] {
+  const boosted = hits.filter((hit) => isAgentIndexPath(hit.path));
+  const rest = hits.filter((hit) => !isAgentIndexPath(hit.path));
+  return [...boosted, ...rest];
 }
 
 export class DocsMcpService {
@@ -74,23 +139,53 @@ export class DocsMcpService {
     }));
   }
 
+  async buildGuide(userId: string, tokenDefaultWorkspaceId?: string | null): Promise<DocsGuide> {
+    const rows = await this.allowlisted(userId);
+    const only = rows.length === 1;
+    const agentIndexPaths = await this.tokens.getAgentIndexPaths(rows.map((row) => row.workspaceId));
+    const workspaces = await Promise.all(
+      rows.map(async (row) => {
+        const override = agentIndexPaths.get(row.workspaceId);
+        const candidates = override ? [normalizePrefix(override).toLowerCase()] : AGENT_INDEX_FALLBACK_CHAIN;
+        const tree = await this.loadTree(userId, row.workspaceId);
+        const paths = new Set(tree.map((node) => node.path));
+        const startAt = candidates.find((candidate) => paths.has(candidate)) ?? null;
+        return {
+          workspaceId: row.workspaceId,
+          slug: row.slug,
+          name: row.name,
+          canWrite: row.canWrite,
+          default: only || row.workspaceId === tokenDefaultWorkspaceId,
+          startAt,
+        };
+      })
+    );
+    return { workspaces };
+  }
+
   async resolveWorkspace(
     userId: string,
     ref?: string | null,
-    options: { optional?: boolean } = {}
+    options: { optional?: boolean; defaultWorkspaceId?: string | null } = {}
   ): Promise<ResolvedWorkspace | null> {
     const allowed = await this.allowlisted(userId);
     const raw = (ref ?? '').trim();
     if (!raw) {
-      if (options.optional) return null;
       if (allowed.length === 1) return allowed[0];
       if (allowed.length === 0) {
+        if (options.optional) return null;
         throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
       }
+      if (options.defaultWorkspaceId) {
+        const fromDefault = allowed.find((row) => row.workspaceId === options.defaultWorkspaceId);
+        if (fromDefault) return fromDefault;
+      }
+      if (options.optional) return null;
       throw new HttpError(
-        'workspace or workspaceId is required when more than one workspace is allowlisted',
+        `workspace or workspaceId is required — pass one of: ${allowed.map((row) => row.slug).join(', ')}`,
         400,
-        'WORKSPACE_REQUIRED'
+        'WORKSPACE_REQUIRED',
+        { candidates: allowed.map((row) => row.slug) }
       );
     }
     if (UUID_RE.test(raw)) {
@@ -115,10 +210,44 @@ export class DocsMcpService {
     throw new HttpError('Workspace not found', 404, 'WORKSPACE_NOT_FOUND');
   }
 
+  async resolveWorkspaceForPath(
+    userId: string,
+    path: string,
+    defaultWorkspaceId?: string | null
+  ): Promise<ResolvedWorkspace> {
+    const allowed = await this.allowlisted(userId);
+    if (allowed.length === 1) return allowed[0];
+    if (allowed.length === 0) {
+      throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
+    }
+    if (defaultWorkspaceId) {
+      const fromDefault = allowed.find((row) => row.workspaceId === defaultWorkspaceId);
+      if (fromDefault) return fromDefault;
+    }
+    const normalized = normalizePrefix(path);
+    const matches: ResolvedWorkspace[] = [];
+    for (const workspace of allowed) {
+      const tree = await this.loadTree(userId, workspace.workspaceId);
+      if (tree.some((node) => node.path === normalized)) {
+        matches.push(workspace);
+      }
+    }
+    if (matches.length === 1) return matches[0];
+    if (matches.length === 0) {
+      throw new HttpError(`Not found: ${normalized}`, 404, 'DOCS_NOT_FOUND');
+    }
+    throw new HttpError(
+      `path exists in multiple allowlisted workspaces — pass workspace: ${matches.map((row) => row.slug).join(' or ')}`,
+      409,
+      'PATH_AMBIGUOUS',
+      { candidates: matches.map((row) => row.slug) }
+    );
+  }
+
   async listTree(
     userId: string,
     workspaceId: string,
-    options: { prefix?: string; depth?: number } = {}
+    options: { prefix?: string; depth?: number; kind?: PageKind } = {}
   ): Promise<CompactTreeNode[]> {
     const tree = await this.loadTree(userId, workspaceId);
     const prefix = normalizePrefix(options.prefix);
@@ -126,15 +255,34 @@ export class DocsMcpService {
       ? tree.filter((node) => node.path === prefix || node.path.startsWith(`${prefix}/`))
       : tree;
     const baseDepth = prefix ? pathDepth(prefix) : 0;
-    const withDepth =
-      options.depth == null
-        ? filtered
-        : filtered.filter((node) => {
-            const extra = pathDepth(node.path) - baseDepth;
-            if (prefix && node.path === prefix) return true;
-            return extra >= 1 && extra <= options.depth!;
-          });
-    return withDepth.map((node) => ({ id: node.id, path: node.path, kind: node.kind }));
+    const depth = options.depth ?? DEFAULT_LIST_TREE_DEPTH;
+    const withDepth = filtered.filter((node) => {
+      const extra = pathDepth(node.path) - baseDepth;
+      if (prefix && node.path === prefix) return true;
+      return extra >= 1 && extra <= depth;
+    });
+    const withKind = options.kind ? withDepth.filter((node) => node.kind === options.kind) : withDepth;
+    const sorted = [...withKind].sort((a, b) => a.path.localeCompare(b.path));
+    const headings = await this.loadHeadings(
+      sorted.filter((node) => node.kind === 'markdown').map((node) => node.id)
+    );
+    return sorted.map((node) => ({
+      id: node.id,
+      path: node.path,
+      kind: node.kind,
+      title: node.title,
+      heading: node.kind === 'markdown' ? headings.get(node.id) : undefined,
+    }));
+  }
+
+  private async loadHeadings(pageIds: string[]): Promise<Map<string, string | undefined>> {
+    const entries = await Promise.all(
+      pageIds.map(async (id) => {
+        const body = await this.pages.loadMarkdownBody(id);
+        return [id, body ? firstHeadingLine(body.content) : undefined] as const;
+      })
+    );
+    return new Map(entries);
   }
 
   async getNode(userId: string, workspaceId: string, nodeId: string) {
@@ -215,6 +363,7 @@ export class DocsMcpService {
       }));
     const body = await this.pages.putMarkdown(userId, page.id, input.content, input.hash);
     const path = segments.join('/');
+    const warnings = await this.checkLinks(userId, workspaceId, path, input.content);
     return {
       id: page.id,
       title: page.title,
@@ -222,7 +371,29 @@ export class DocsMcpService {
       hash: body.hash,
       created: !existing,
       url: this.pageUrl(workspaceId, page.id),
+      ...(warnings.length ? { warnings } : {}),
     };
+  }
+
+  private async checkLinks(
+    userId: string,
+    workspaceId: string,
+    filePath: string,
+    content: string
+  ): Promise<string[]> {
+    const links = extractMarkdownLinks(content);
+    if (!links.length) return [];
+    const tree = await this.loadTree(userId, workspaceId);
+    const known = new Set(tree.map((node) => node.path));
+    const fileDir = filePath.split('/').slice(0, -1).join('/');
+    const warnings: string[] = [];
+    for (const link of links) {
+      const resolved = resolveLinkTarget(fileDir, link.target);
+      if (!known.has(resolved)) {
+        warnings.push(`Link to '${link.target}' does not resolve to an existing path (${resolved})`);
+      }
+    }
+    return warnings;
   }
 
   async editFile(
@@ -234,6 +405,7 @@ export class DocsMcpService {
       oldString: string;
       newString: string;
       hash?: string;
+      replaceAll?: boolean;
     }
   ) {
     await this.tokens.requireAllowlist(userId, workspaceId, true);
@@ -241,16 +413,29 @@ export class DocsMcpService {
       throw new HttpError('oldString is required', 400, 'INVALID_PATCH');
     }
     const current = await this.readFile(userId, workspaceId, input);
-    if (!current.content.includes(input.oldString)) {
+    const occurrences = current.content.split(input.oldString).length - 1;
+    if (occurrences === 0) {
       throw new HttpError('oldString was not found', 400, 'PATCH_NOT_FOUND');
     }
-    const next = current.content.replace(input.oldString, input.newString);
+    if (occurrences > 1 && !input.replaceAll) {
+      throw new HttpError(
+        `oldString occurs ${occurrences} times — pass replaceAll: true or narrow oldString to a unique match`,
+        400,
+        'PATCH_AMBIGUOUS',
+        { occurrences }
+      );
+    }
+    const next = input.replaceAll
+      ? current.content.split(input.oldString).join(input.newString)
+      : current.content.replace(input.oldString, input.newString);
     const body = await this.pages.putMarkdown(userId, current.id, next, input.hash ?? current.hash);
+    const warnings = await this.checkLinks(userId, workspaceId, current.path, next);
     return {
       id: current.id,
       path: current.path,
       hash: body.hash,
       url: this.pageUrl(workspaceId, current.id),
+      ...(warnings.length ? { warnings } : {}),
     };
   }
 
@@ -317,6 +502,9 @@ export class DocsMcpService {
     q: string,
     limit = 20
   ) {
+    // Deliberately does not fall back to the token's default workspace: omitting
+    // `workspace` here means "search everywhere allowlisted," which is the point
+    // of this tool. The default is only for tools that need a single target.
     const cap = Math.min(50, Math.max(1, limit));
     const resolved = await this.resolveWorkspace(userId, ref, { optional: true });
     const targets = resolved ? [resolved] : await this.allowlisted(userId);
@@ -330,27 +518,36 @@ export class DocsMcpService {
       workspaceId: string;
       workspace: string;
       snippet: string;
+      readWhen: string | null;
+      topics?: string[];
+      repos?: string[];
       url: string;
     }> = [];
-    for (const workspace of targets) {
+    outer: for (const workspace of targets) {
       await this.tokens.requireAllowlist(userId, workspace.workspaceId, false);
       const found = await this.pages.searchMarkdown(userId, workspace.workspaceId, q, cap);
       const tree = await this.loadTree(userId, workspace.workspaceId);
       const pathById = new Map(tree.map((node) => [node.id, node.path]));
       for (const hit of found) {
+        const path = pathById.get(hit.page.id) ?? `${hit.page.slug ?? 'untitled'}.md`;
+        const body = await this.pages.loadMarkdownBody(hit.page.id);
+        const { data, body: bodyText } = body ? parseFrontmatter(body.content) : { data: {}, body: '' };
         hits.push({
           id: hit.page.id,
           title: hit.page.title,
-          path: pathById.get(hit.page.id) ?? `${hit.page.slug ?? 'untitled'}.md`,
+          path,
           workspaceId: workspace.workspaceId,
           workspace: workspace.slug,
           snippet: hit.snippet,
+          readWhen: data.when ?? firstParagraph(bodyText),
+          topics: data.topics,
+          repos: data.repos,
           url: this.pageUrl(workspace.workspaceId, hit.page.id),
         });
-        if (hits.length >= cap) return hits;
+        if (hits.length >= cap) break outer;
       }
     }
-    return hits;
+    return boostAgentIndexHits(hits);
   }
 
   recordAudit(entry: Parameters<McpTokenService['recordAudit']>[0]): Promise<void> {

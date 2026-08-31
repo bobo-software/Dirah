@@ -1,24 +1,27 @@
 import type { RequestHandler } from 'express';
 import type { DocsMcpService } from '../../services/DocsMcpService';
 import { registerDocsTools } from './registerDocsTools';
-import { docsMcpAuth } from './authContext';
+import { registerDocsResources } from './registerDocsResources';
+import { currentDocsAuth, docsMcpAuth } from './authContext';
 import type { PgMcpServerHost } from '../registerPgTools';
-import { DIRA_DOCS_INSTRUCTIONS } from './instructions';
+import { buildDynamicInstructions } from './instructions';
 
 export async function createDocsMcpExpressHandler(service: DocsMcpService): Promise<RequestHandler> {
-  const [{ createMcpHandler, McpServer }, { toNodeHandler }] = await Promise.all([
+  const [{ createMcpHandler, McpServer, ResourceTemplate }, { toNodeHandler }] = await Promise.all([
     import('@modelcontextprotocol/server'),
     import('@modelcontextprotocol/node'),
   ]);
 
   const handler = createMcpHandler(
-    () => {
-      const server = new McpServer({
-        name: 'dira-docs',
-        version: '1.0.0',
-        instructions: DIRA_DOCS_INSTRUCTIONS,
-      } as { name: string; version: string; instructions?: string });
+    async () => {
+      const auth = currentDocsAuth();
+      const guide = await service.buildGuide(auth.userId, auth.defaultWorkspaceId);
+      const server = new McpServer(
+        { name: 'dira-docs', version: '1.0.0' },
+        { instructions: buildDynamicInstructions(guide) } as { instructions?: string }
+      );
       registerDocsTools(server as unknown as PgMcpServerHost, service);
+      registerDocsResources(server as unknown as PgMcpServerHost, service, ResourceTemplate as never);
       return server;
     },
     {

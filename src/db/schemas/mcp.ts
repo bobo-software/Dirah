@@ -10,6 +10,9 @@ export const mcpTokens = pgTable('mcp_tokens', {
   name: text('name').notNull(),
   tokenHash: text('token_hash').notNull(),
   tokenPrefix: text('token_prefix').notNull(),
+  defaultWorkspaceId: uuid('default_workspace_id').references(() => workspaces.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
