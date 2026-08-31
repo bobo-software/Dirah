@@ -27,13 +27,12 @@ describe('MCP PAT and allowlist API', () => {
     app = await createApp();
   });
 
-  it('issues hashed tokens, empty allowlist by default, and rejects encrypted workspaces', async () => {
+  it('issues hashed tokens, empty allowlist by default, and viewers cannot grant write', async () => {
     if (!dbReady) return;
 
     const owner = await request(app).post('/api/auth/register').send({ email: ownerEmail, password });
     expect(owner.status).toBe(201);
     const ownerToken = owner.body.data.tokens.accessToken as string;
-    const ownerId = owner.body.data.user.id as string;
     const workspaceId = owner.body.data.workspace.id as string;
 
     const created = await request(app)
@@ -83,26 +82,6 @@ describe('MCP PAT and allowlist API', () => {
       (item: { workspaceId: string }) => item.workspaceId === workspaceId
     );
     expect(row.canWrite).toBe(false);
-
-    await request(app).put('/api/auth/crypto').set('Authorization', `Bearer ${ownerToken}`).send({
-      publicKey: JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'a', y: 'b' }),
-      wrappedPrivateKey: 'dGVzdA==',
-      kdfSalt: 'c2FsdA==',
-      kdfIterations: 210000,
-    });
-    await request(app)
-      .put(`/api/workspaces/${workspaceId}/crypto/keys`)
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ userId: ownerId, wrappedDek: 'wrapped' });
-    await request(app)
-      .post(`/api/workspaces/${workspaceId}/crypto/enable`)
-      .set('Authorization', `Bearer ${ownerToken}`);
-
-    const encrypted = await request(app)
-      .put('/api/mcp/access')
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ workspaces: [{ workspaceId, canWrite: true }] });
-    expect(encrypted.status).toBe(409);
 
     const revoked = await request(app)
       .delete(`/api/mcp/tokens/${created.body.data.token.id}`)

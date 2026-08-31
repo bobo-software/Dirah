@@ -58,14 +58,5 @@ export function createCryptoController(crypto: CryptoService) {
       );
       return ResponseUtils.success(res, 'Workspace key stored');
     }),
-
-    enable: asyncHandler(async (req: Request, res: Response) => {
-      const workspaceId = req.params.id;
-      if (!workspaceId) {
-        return ResponseUtils.error(res, 'Workspace id is required', null, 400);
-      }
-      const result = await crypto.enable(req.user!.userId, workspaceId);
-      return ResponseUtils.success(res, 'End-to-end encryption enabled', result);
-    }),
   };
 }

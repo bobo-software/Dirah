@@ -62,14 +62,14 @@ describe('workspace UX API', () => {
     const parent = await request(app)
       .post(`/api/workspaces/${workspaceId}/pages`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'Parent Alpha' });
+      .send({ title: 'Parent Alpha', kind: 'folder' });
     expect(parent.status).toBe(201);
     const parentId = parent.body.data.page.id as string;
 
     const child = await request(app)
       .post(`/api/workspaces/${workspaceId}/pages`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'Child Beta', parentId });
+      .send({ title: 'Child Beta', parentId, kind: 'markdown' });
     expect(child.status).toBe(201);
     expect(child.body.data.page.parentId).toBe(parentId);
     const childId = child.body.data.page.id as string;
@@ -154,10 +154,10 @@ describe('workspace UX API', () => {
     expect(bin.body.data.pages).toHaveLength(2);
     expect(bin.body.data.pages.every((p: { deletedAt: string | null }) => p.deletedAt)).toBe(true);
 
-    const updates = await request(app)
-      .get(`/api/pages/${parentId}/updates`)
+    const trashedMarkdown = await request(app)
+      .get(`/api/pages/${childId}/markdown`)
       .set('Authorization', `Bearer ${ownerToken}`);
-    expect(updates.status).toBe(404);
+    expect(trashedMarkdown.status).toBe(404);
 
     const restored = await request(app)
       .post(`/api/pages/${parentId}/restore`)

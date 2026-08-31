@@ -33,6 +33,7 @@ export function createWorkspaceRouter(
   router.get('/:id/pages', pages.list);
   router.post('/:id/pages', pages.create);
   router.get('/:id/blobs', blobs.list);
+  router.get('/:id/blobs/:blobId', blobs.downloadInWorkspace);
   router.post('/:id/blobs', raw({ type: '*/*', limit: '12mb' }), blobs.upload);
   router.get('/:id/members', members.list);
   router.post('/:id/members', members.invite);
@@ -41,7 +42,6 @@ export function createWorkspaceRouter(
   router.delete('/:id/members/:userId', members.remove);
   router.get('/:id/crypto', crypto.getWorkspace);
   router.put('/:id/crypto/keys', crypto.putMemberKey);
-  router.post('/:id/crypto/enable', crypto.enable);
   router.get('/:id', controller.get);
   router.patch('/:id', controller.patch);
 

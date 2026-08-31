@@ -7,7 +7,7 @@ import { type AuthService, type Database } from './AuthService';
 export const PAGE_STATUSES = ['', 'todo', 'doing', 'done'] as const;
 export type PageStatus = (typeof PAGE_STATUSES)[number];
 
-export const PAGE_KINDS = ['page', 'folder', 'markdown'] as const;
+export const PAGE_KINDS = ['folder', 'markdown'] as const;
 export type PageKind = (typeof PAGE_KINDS)[number];
 
 export const MAX_MARKDOWN_BYTES = 1_000_000;
@@ -38,6 +38,11 @@ export interface ListPagesQuery {
   q?: string;
 }
 
+export interface MarkdownSearchHit {
+  page: PublicPage;
+  snippet: string;
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -66,7 +71,7 @@ type PageRow = {
 };
 
 function asKind(value: string): PageKind {
-  return PAGE_KINDS.includes(value as PageKind) ? (value as PageKind) : 'page';
+  return PAGE_KINDS.includes(value as PageKind) ? (value as PageKind) : 'markdown';
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -122,6 +127,46 @@ export class PageService {
     return rows.map((row) => this.toPublic(row, row.favoriteUserId != null));
   }
 
+  async searchMarkdown(
+    userId: string,
+    workspaceId: string,
+    q: string,
+    limit = 20
+  ): Promise<MarkdownSearchHit[]> {
+    await this.auth.requireMember(userId, workspaceId);
+    const safe = q.replace(/[%_]/g, '').slice(0, 100).trim();
+    if (!safe) return [];
+    const cap = Math.min(50, Math.max(1, limit));
+    const titleMatch = ilike(pages.title, `%${safe}%`);
+    const bodyMatch = sql`pages.search_tsv @@ plainto_tsquery('english', ${safe})`;
+    const snippetExpr = sql<string>`ts_headline(
+      'english',
+      coalesce(${pages.searchText}, ''),
+      plainto_tsquery('english', ${safe}),
+      'MaxFragments=2,MaxWords=24,MinWords=5'
+    )`;
+    const rows = await this.database
+      .select({
+        ...pageColumns,
+        snippet: snippetExpr,
+        searchText: pages.searchText,
+      })
+      .from(pages)
+      .where(
+        and(
+          eq(pages.workspaceId, workspaceId),
+          isNull(pages.deletedAt),
+          eq(pages.kind, 'markdown'),
+          or(titleMatch, bodyMatch)!
+        )
+      )
+      .limit(cap);
+    return rows.map((row) => ({
+      page: this.toPublic(row, false),
+      snippet: (row.snippet && row.snippet.trim()) || row.searchText.slice(0, 160) || row.title,
+    }));
+  }
+
   async create(
     userId: string,
     workspaceId: string,
@@ -129,27 +174,21 @@ export class PageService {
       id?: string;
       title?: string;
       parentId?: string | null;
-      kind?: PageKind;
+      kind?: PageKind | 'page';
       slug?: string;
     }
   ): Promise<PublicPage> {
     await this.auth.requireEditor(userId, workspaceId);
     const title = (input.title ?? 'Untitled').trim() || 'Untitled';
-    const kind = input.kind ?? 'page';
+    if (input.kind === 'page') {
+      throw new HttpError('Invalid page kind', 400, 'INVALID_KIND');
+    }
+    const kind = input.kind ?? 'markdown';
     if (!PAGE_KINDS.includes(kind)) {
       throw new HttpError('Invalid page kind', 400, 'INVALID_KIND');
     }
     if (input.id && !UUID_RE.test(input.id)) {
       throw new HttpError('Invalid page id', 400, 'INVALID_ID');
-    }
-    if (kind === 'folder' || kind === 'markdown') {
-      if (await this.isWorkspaceEncrypted(workspaceId)) {
-        throw new HttpError(
-          'Markdown and folders are unavailable while end-to-end encryption is on',
-          409,
-          'E2E_NO_MARKDOWN'
-        );
-      }
     }
     await this.assertParentInWorkspace(workspaceId, input.parentId);
     const position = await this.nextPosition(workspaceId, input.parentId ?? null);
@@ -164,8 +203,7 @@ export class PageService {
       }
     }
 
-    const slug =
-      kind === 'page' ? null : await this.allocateSlug(workspaceId, input.parentId ?? null, input.slug || title);
+    const slug = await this.allocateSlug(workspaceId, input.parentId ?? null, input.slug || title);
 
     try {
       const page = await this.database.transaction(async (tx) => {
@@ -227,15 +265,13 @@ export class PageService {
       (parentChanged ? await this.nextPosition(page.workspaceId, parentId) : page.position);
     const status = input.status === undefined ? page.status : input.status;
     let slug = page.slug;
-    if (page.kind !== 'page') {
-      if (input.slug !== undefined || parentChanged) {
-        slug = await this.allocateSlug(
-          page.workspaceId,
-          parentId,
-          input.slug || title,
-          pageId
-        );
-      }
+    if (input.slug !== undefined || parentChanged) {
+      slug = await this.allocateSlug(
+        page.workspaceId,
+        parentId,
+        input.slug || title,
+        pageId
+      );
     }
     try {
       const [updated] = await this.database
@@ -281,10 +317,7 @@ export class PageService {
         parentId = null;
       }
     }
-    let slug = page.slug;
-    if (page.kind !== 'page') {
-      slug = await this.allocateSlug(page.workspaceId, parentId, page.slug || page.title, pageId);
-    }
+    const slug = await this.allocateSlug(page.workspaceId, parentId, page.slug || page.title, pageId);
     const [restored] = await this.database
       .update(pages)
       .set({ deletedAt: null, parentId, slug, updatedAt: new Date() })
@@ -400,10 +433,20 @@ export class PageService {
     return this.requireEditorPage(userId, pageId);
   }
 
-  async requireBlockPage(page: PublicPage): Promise<void> {
-    if (page.kind !== 'page') {
-      throw new HttpError('This node is not a block page', 400, 'NOT_A_PAGE');
+  async requireMarkdownPage(page: PublicPage): Promise<void> {
+    if (page.kind !== 'markdown') {
+      throw new HttpError('Not a markdown document', 400, 'NOT_MARKDOWN');
     }
+  }
+
+  async loadMarkdownBody(pageId: string): Promise<{ content: string; hash: string; updatedAt: Date } | null> {
+    const [row] = await this.database
+      .select()
+      .from(markdownBodies)
+      .where(eq(markdownBodies.pageId, pageId))
+      .limit(1);
+    if (!row) return null;
+    return { content: row.content, hash: row.contentHash, updatedAt: row.updatedAt };
   }
 
   async isTrashed(pageId: string): Promise<boolean> {

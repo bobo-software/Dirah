@@ -1,6 +1,6 @@
 # Dira product plans
 
-Phased program to build Dira as a **local-first knowledge workspace** inspired by [AFFiNE](https://affine.pro/): workspaces, pages, a block editor, then sharing. Documents are Yjs CRDTs. Whiteboard, databases, and AI are later.
+Phased program that built Dira as a knowledge workspace. The current product is **folders + markdown files** (Postgres `markdown_bodies`, last-write-wins). BlockSuite / Yjs were removed in Phase 7. Remaining work is in [backlog.md](./backlog.md).
 
 These files are the source of truth for *what to build next*. They are not implementation.
 
@@ -8,7 +8,7 @@ These files are the source of truth for *what to build next*. They are not imple
 
 See **[PROGRESS.md](../PROGRESS.md)** for live status across sessions.
 
-**Phase 5o — Google / GitHub OAuth is implemented.** Remaining work: [backlog.md](./backlog.md).
+**Phase 7 — markdown-only catalog is implemented.** Remaining work: [backlog.md](./backlog.md). Historical phase files below describe what shipped then, including the old BlockSuite/Yjs stack.
 
 ## Reading order
 
@@ -61,11 +61,11 @@ In scope across phases 0–4:
 | Layer | Choice |
 |-------|--------|
 | Web | Vite, React 19 (`dira_web`) |
-| Editor | BlockSuite `PageEditor` + Yjs |
+| Editor | CodeMirror + GFM preview (markdown files) |
 | API | Express, Drizzle, PostgreSQL (`dira_backend`) |
 | Auth | JWT (helpers already in `src/utils/jwt.ts`) |
-| Realtime | WebSocket (phase 2) |
-| Agent access | Existing MCP `/mcp/protocol` |
+| Concurrency | Markdown content hash / 409 (no live CRDT) |
+| Agent access | Docs MCP `/mcp` + Postgres MCP `/mcp/protocol` |
 
 ## How to use these docs
 

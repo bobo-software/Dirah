@@ -56,6 +56,7 @@ describe('page collection status API', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ title: 'Ship it' });
     expect(created.status).toBe(201);
+    expect(created.body.data.page.kind).toBe('markdown');
     expect(created.body.data.page.status).toBe('');
     const pageId = created.body.data.page.id as string;
 

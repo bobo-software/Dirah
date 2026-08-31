@@ -10,7 +10,6 @@ import { createAiRouter } from './ai.routes';
 import type { AuthService } from '../services/AuthService';
 import type { PageService } from '../services/PageService';
 import type { BlobService } from '../services/BlobService';
-import type { DocSyncService } from '../services/DocSyncService';
 import type { MemberService } from '../services/MemberService';
 import type { ShareService } from '../services/ShareService';
 import type { AiService } from '../services/AiService';
@@ -25,7 +24,6 @@ export function createApiRouter(
   authService: AuthService,
   pageService: PageService,
   blobService: BlobService,
-  sync: DocSyncService,
   memberService: MemberService,
   shareService: ShareService,
   aiService: AiService,
@@ -38,9 +36,9 @@ export function createApiRouter(
   router.use('/health', healthRouter);
   router.use('/auth', createAuthRouter(authService, cryptoService, oauthService));
   router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, mcpTokenService));
-  router.use('/pages', createPageRouter(pageService, sync, shareService));
+  router.use('/pages', createPageRouter(pageService, shareService));
   router.use('/blobs', createBlobRouter(blobService));
-  router.use('/public', createPublicRouter(shareService, sync, blobService));
+  router.use('/public', createPublicRouter(shareService, blobService));
   router.use('/invites', createInviteRouter(memberService));
   router.use('/ai', createAiRouter(aiService));
   router.use('/mcp', createMcpSettingsRouter(mcpTokenService));

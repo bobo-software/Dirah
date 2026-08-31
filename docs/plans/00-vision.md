@@ -1,52 +1,40 @@
 # 00 — Vision
 
-Dira is a **local-first knowledge workspace**: people write in pages, organize them in workspaces, and keep working when the network is gone. Sync and sharing come after the editor feels like a real product.
+Dira is a **markdown knowledge workspace**: people write `.md` documents, organize them in folders and workspaces, and reach the same tree from the web app or a docs MCP.
 
-It is **inspired by AFFiNE** (docs + workspace + eventual canvas), not a source fork.
+It started as an AFFiNE-inspired clone (BlockSuite + Yjs). The product is now **markdown files and folders only**. Bodies live in Postgres (`markdown_bodies`); MCP paths like `docs/api/auth.md` are virtual slug paths, not a git working tree.
 
 ## Product promise
 
 A signed-in user can:
 
 1. Own one or more workspaces
-2. Create pages and edit them as blocks (paragraphs, headings, lists, code, images)
-3. Keep those pages on the device (IndexedDB) so refresh and offline still work
-4. Later: sync the same pages to the server and share them with others
+2. Create folders and markdown documents (GFM source + preview)
+3. Search titles and body text, nest folders, trash, favorites, collection status
+4. Share a markdown document with a public view link
+5. Connect a coding agent via the docs MCP
 
-The signature AFFiNE feeling we *do* chase in the core clone: **one workspace of pages, edited as blocks, that survive offline**. The signature we *defer*: merging those pages onto an infinite whiteboard.
+Edits are last-write-wins (content hash / 409). There is no live CRDT merge, presence, whiteboard, or page E2E encryption.
 
-## In scope (phases 0–4)
+## In scope
 
-- Accounts and sessions
+- Accounts, sessions, OAuth, invites
 - Workspaces as the top-level container
-- Page list and a BlockSuite page editor
-- Yjs as the document body (not JSON blobs of blocks in Postgres)
-- Sync of CRDT updates and file blobs
-- Member roles and public share links
-- Basic workspace UX: nesting, trash, title search, favorites, markdown export
-
-## Out of scope until phase 5
-
-- Edgeless / whiteboard UI (even though BlockSuite ships `EdgelessEditor`)
-- Database blocks as a product surface (linked databases, kanban, etc.)
-- AI / copilot
-- Electron, iOS, Android
-- Payments, public cloud multi-tenant billing
-- Full-text search across block content (title search is phase 4)
+- Folder + markdown catalog (`pages.kind`)
+- REST GET/PUT markdown with hash concurrency
+- Member roles and public share of markdown
+- Full-text search over markdown bodies
+- Docs MCP at `/mcp`
 
 ## What we are not doing
 
-**Not a pixel clone.** Dira’s chrome (sidebar, settings, empty states) is original. Do not lift AFFiNE CSS, assets, or React trees.
+**Not a pixel clone of AFFiNE.** Chrome is original.
 
-**Not a Nest/GraphQL rewrite.** AFFiNE’s server is Nest + Prisma + GraphQL + Socket.io. Dira already has Express + Drizzle + Postgres + JWT. Map the *ideas* (metadata in SQL, CRDT on the wire, blobs on disk/S3) onto that stack.
+**Not BlockSuite / Yjs.** Those were removed in the markdown-only cutover.
 
-**Not vendoring AFFiNE.** AFFiNE is MPL-2.0. We implement Dira ourselves. We **may** depend on BlockSuite and Yjs as libraries (BlockSuite is to AFFiNE as Monaco is to VS Code).
-
-## Success for the core clone
-
-A small team can self-host Dira, create a workspace, write pages that work offline, invite a teammate, and see concurrent edits merge without a lock. Canvas, databases, and AI are optional later — not required to call the core clone done.
+**Not vendoring AFFiNE.**
 
 ## Related
 
-- Architecture: [01-architecture.md](./01-architecture.md)
-- First build slice: [phase-0-foundation.md](./phase-0-foundation.md)
+- Architecture notes in [01-architecture.md](./01-architecture.md) describe the old Yjs split; treat Phase 7 (markdown-only) as the current product.
+- Docs MCP: [phase-6-docs-mcp.md](./phase-6-docs-mcp.md), [HOW_TO_USE_DIRA_DOCS_MCP.md](../HOW_TO_USE_DIRA_DOCS_MCP.md)

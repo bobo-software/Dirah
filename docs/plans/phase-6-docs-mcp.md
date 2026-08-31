@@ -4,17 +4,17 @@
 
 ## Decision
 
-Markdown documents and folders are a first-class catalog kind beside BlockSuite pages. Coding agents reach them through a **per-user** Streamable HTTP MCP at `/mcp` (personal access tokens now, OAuth 2.1 Connect as well). The developer Postgres MCP stays at `/mcp/protocol`.
+Markdown documents and folders are the catalog. Coding agents reach them through a **per-user** Streamable HTTP MCP at `/mcp` (personal access tokens now, OAuth 2.1 Connect as well). The developer Postgres MCP stays at `/mcp/protocol`.
 
 ## User-visible outcome
 
-- Unified sidebar: folders, markdown files, and block pages as siblings
+- Unified sidebar: folders and markdown files
 - Markdown editor (source + GFM preview), folder landing, import/download `.md`
 - Settings: MCP tokens, workspace allowlist, owner kill switch
 - Cursor / Claude Code connect with a Bearer PAT or OAuth
 
 ## Not in this slice
 
-- Writing BlockSuite pages as markdown
+- BlockSuite / Yjs pages (removed in Phase 7; leftover pages convert to markdown)
 - Git sync / webhooks
 - Collaborative CRDT on markdown

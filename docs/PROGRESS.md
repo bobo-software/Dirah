@@ -4,7 +4,7 @@ Living status for Dira across chat sessions. **Update this file at the end of ev
 
 ## Now
 
-**Phase 6 — public docs MCP + first-class markdown is implemented.** Remaining product work is in [plans/backlog.md](./plans/backlog.md).
+**Docs MCP is agent-ergonomic.** Omit `workspace` when a PAT has one allowlisted workspace; `search_docs` returns snippets and app URLs. Remaining product work is in [plans/backlog.md](./plans/backlog.md).
 
 ## Local run
 
@@ -53,6 +53,8 @@ From this repo root, `npm run dev` in `dira_web` can pick up the backend package
 - Phase 5o: optional Google / GitHub OAuth. Unset client id+secret hide the buttons; password login still works. First-time OAuth creates the user + “My workspace”; same email links an existing account. Callback lands on `{APP_PUBLIC_URL}/oauth#refreshToken=…`. Migration `0010_phase5_oauth`. **57** backend tests. Enterprise SAML / company OIDC is not this slice.
 - Phase 6: first-class markdown + folders (`pages.kind`, `markdown_bodies`), web editor/preview, per-user docs MCP at `/mcp` (PATs, allowlist, OAuth 2.1). Migrations `0011`–`0014`. Docs: [HOW_TO_USE_DIRA_DOCS_MCP.md](./HOW_TO_USE_DIRA_DOCS_MCP.md). **64** backend tests (plus existing MinIO skip/fail if endpoint unreachable).
 - Product backlog: [plans/backlog.md](./plans/backlog.md) (ordered remaining features). Technical leftovers stay in [debt/](./debt/).
+- Phase 7: markdown-only. Convert remaining BlockSuite pages to markdown (parents with children become folders + `index.md`). Default `kind=markdown`. Drop `/sync`, Yjs tables, history, presence, follow, edgeless, page E2E. Public share + Ask + collection work on markdown. Migration `0015_phase7_markdown_only`.
+- Docs MCP agent UX: optional workspace slug/name/UUID (omit when one allowlisted), search snippets + app URLs, compact `list_tree`, sliced `read_file`, `dira_guide`.
 
 ## Next (in order)
 
@@ -65,16 +67,26 @@ Pay down [debt/](./debt/) when it blocks a phase (especially PORT/MCP mismatch a
 - `.mcp.json` still points at port **4000**; the API is on **4006**. Cursor project MCP: `.cursor/mcp.json` and `cursor/mcp.json` use 4006. Pointing the API `.env` at live Postgres does not retarget those MCP URLs.
 - `drizzle-kit generate` fails on `target: ES2023` — migrations are hand-written until kit is upgraded or given its own tsconfig.
 - Auth API tests soft-skip if Postgres is missing; they are not a substitute for a real CI DB.
-- BlockSuite 0.19.5 + Vite 8: see [debt/web.md](./debt/web.md) (icon typo rewrite, prebundle, no StrictMode). Docker `npm ci` needs the React `overrides` pin (npm 10 vs npm 12 lockfile).
-- After join, the client pushes a full `Y.encodeStateAsUpdate` so first-load local IDB content uploads. `doc_updates` grows until `DOC_SNAPSHOT_EVERY` (default 50) compact into `doc_snapshots`.
-- Backend is CJS; `yjs` is ESM — snapshot merge uses dynamic `import('yjs')`.
+- Backend is CJS; `yjs` is ESM — the one-shot page converter uses dynamic `import('yjs')`.
 - ts-node cannot type-resolve `@aws-sdk/client-s3` (tsc can). Blob store loads the SDK with `createRequire`.
-- Live Google / GitHub click-through was not finished in the browser this session (API tests use a stub exchanger). Encrypted workspaces still need a password-derived account key after OAuth.
+- Live Google / GitHub click-through was not finished in the browser this session (API tests use a stub exchanger).
 - Leftover GitHub repo `GiftSibiya/src` (nested `src/.git` accident) still exists; deleting it needs a token with `delete_repo`.
 
 ## Session log
 
 Add a short entry newest-first.
+
+### 2026-08-31 (docs MCP agent UX)
+
+- Docs MCP: omit `workspace`/`workspaceId` when the token has one allowlisted workspace; otherwise pass slug or name from `list_workspaces`.
+- `search_docs` returns path, snippet (`ts_headline`), and `{APP_PUBLIC_URL}/w/:id/p/:pageId`. Omit workspace to search all allowlisted.
+- `list_tree` accepts `prefix`/`depth`; `read_file` accepts `startLine`/`maxLines`. `dira_guide` plus server `instructions`.
+
+### 2026-08-31 (markdown-only)
+
+- Catalog is folders + markdown only. Create rejects `kind=page`. Converter walks leftover Yjs pages into `markdown_bodies` (nested parents → folder + `index.md`; encrypted pages get a notice). Then drops `doc_updates` / `doc_snapshots` / `doc_revisions`.
+- Web: CodeMirror + GFM is the editor. Ask and public share work on markdown. BlockSuite, `/sync`, presence, history, and Encrypt pages are removed.
+- Migration `0015_phase7_markdown_only`. Search/collection/share tests use markdown bodies.
 
 ### 2026-08-31 (phase 6 docs MCP)
 

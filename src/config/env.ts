@@ -19,7 +19,6 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET ?? 'dev-jwt-secret-change-me',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'dev-jwt-refresh-secret-change-me',
   blobDir: path.resolve(process.env.BLOB_DIR ?? 'uploads'),
-  snapshotEvery: Number(process.env.DOC_SNAPSHOT_EVERY ?? 50),
   ai: {
     apiKey: process.env.AI_API_KEY ?? '',
     baseUrl: (process.env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, ''),
@@ -32,7 +31,6 @@ export const env = {
     password: process.env.DB_PASSWORD ?? 'dira',
     database: process.env.DB_DATABASE ?? 'dira',
   },
-  redisUrl: process.env.REDIS_URL ?? '',
   minio: {
     endpoint: process.env.MINIO_ENDPOINT ?? '',
     accessKey: process.env.MINIO_ACCESS_KEY ?? '',
