@@ -13,6 +13,16 @@ export type PageKind = (typeof PAGE_KINDS)[number];
 export const MAX_MARKDOWN_BYTES = 1_000_000;
 export const EMPTY_MARKDOWN_HASH = hashMarkdown('');
 
+function diffPreview(current: string, attempted: string): string {
+  const a = current.split('\n');
+  const b = attempted.split('\n');
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+  const start = Math.max(0, i - 2);
+  const end = Math.min(a.length, i + 3);
+  return a.slice(start, end).join('\n').slice(0, 300);
+}
+
 export interface PublicPage {
   id: string;
   workspaceId: string;
@@ -396,7 +406,11 @@ export class PageService {
       throw new HttpError('Markdown body not found', 404, 'MARKDOWN_NOT_FOUND');
     }
     if (expectedHash && expectedHash !== current.contentHash) {
-      throw new HttpError('Markdown was updated elsewhere', 409, 'HASH_MISMATCH');
+      throw new HttpError('Markdown was updated elsewhere', 409, 'HASH_MISMATCH', {
+        currentHash: current.contentHash,
+        diffPreview: diffPreview(current.content, content),
+        hint: 'Re-read this path with read_file and retry your edit against the fresh hash.',
+      });
     }
     const hash = hashMarkdown(content);
     const now = new Date();

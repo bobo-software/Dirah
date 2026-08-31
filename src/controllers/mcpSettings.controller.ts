@@ -6,6 +6,12 @@ import { asyncHandler } from '../utils/asyncHandler';
 
 const createSchema = z.object({
   name: z.string().max(80).optional(),
+  defaultWorkspaceId: z.uuid().optional(),
+});
+
+const updateSchema = z.object({
+  name: z.string().max(80).optional(),
+  defaultWorkspaceId: z.uuid().nullable().optional(),
 });
 
 const accessSchema = z.object({
@@ -29,8 +35,23 @@ export function createMcpSettingsController(tokens: McpTokenService) {
       if (!parsed.success) {
         return ResponseUtils.error(res, 'Invalid token payload', parsed.error.flatten(), 400);
       }
-      const token = await tokens.createToken(req.user!.userId, parsed.data.name ?? 'MCP token');
+      const token = await tokens.createToken(req.user!.userId, parsed.data.name ?? 'MCP token', {
+        defaultWorkspaceId: parsed.data.defaultWorkspaceId,
+      });
       return ResponseUtils.success(res, 'Token created', { token }, 201);
+    }),
+
+    updateToken: asyncHandler(async (req: Request, res: Response) => {
+      const id = req.params.id;
+      if (!id) {
+        return ResponseUtils.error(res, 'Token id is required', null, 400);
+      }
+      const parsed = updateSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid token payload', parsed.error.flatten(), 400);
+      }
+      const token = await tokens.updateToken(req.user!.userId, id, parsed.data);
+      return ResponseUtils.success(res, 'Token updated', { token });
     }),
 
     revokeToken: asyncHandler(async (req: Request, res: Response) => {

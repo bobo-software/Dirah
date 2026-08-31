@@ -113,6 +113,13 @@
       "when": 1756537500000,
       "tag": "0015_phase7_markdown_only",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1756537600000,
+      "tag": "0016_phase8_mcp_agent_context",
+      "breakpoints": true
     }
   ]
 }

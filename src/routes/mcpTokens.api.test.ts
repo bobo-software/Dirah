@@ -128,4 +128,51 @@ describe('MCP PAT and allowlist API', () => {
     const text = JSON.stringify(listed.body ?? listed.text);
     expect(text.includes('MCP_DISABLED') || text.includes('disabled')).toBe(true);
   });
+
+  it('sets, updates, and clears a token default workspace', async () => {
+    if (!dbReady) return;
+    const email = `phase8-default-ws-${Date.now()}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    const secondWs = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Second Workspace' });
+    const otherOwnerWsId = secondWs.body.data.workspace.id as string;
+
+    const foreignOwner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-default-ws-foreign-${Date.now()}@example.com`, password });
+    const foreignWorkspaceId = foreignOwner.body.data.workspace.id as string;
+
+    const created = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent', defaultWorkspaceId: workspaceId });
+    expect(created.status).toBe(201);
+    expect(created.body.data.token.defaultWorkspaceId).toBe(workspaceId);
+    const tokenId = created.body.data.token.id as string;
+
+    const patched = await request(app)
+      .patch(`/api/mcp/tokens/${tokenId}`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ defaultWorkspaceId: otherOwnerWsId });
+    expect(patched.status).toBe(200);
+    expect(patched.body.data.token.defaultWorkspaceId).toBe(otherOwnerWsId);
+
+    const cleared = await request(app)
+      .patch(`/api/mcp/tokens/${tokenId}`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ defaultWorkspaceId: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data.token.defaultWorkspaceId).toBeNull();
+
+    const rejected = await request(app)
+      .patch(`/api/mcp/tokens/${tokenId}`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ defaultWorkspaceId: foreignWorkspaceId });
+    expect(rejected.status).toBe(404);
+  });
 });

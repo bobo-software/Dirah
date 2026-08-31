@@ -346,6 +346,12 @@ describe('docs MCP protocol', () => {
     });
     expect(toolResult(missing).success).toBe(false);
     expect(toolResult(missing).error).toBe('WORKSPACE_REQUIRED');
+    const missingResult = toolResult(missing);
+    expect(missingResult.message).toContain('my-workspace');
+    expect(missingResult.message).toContain('acme-docs');
+    expect((missingResult.details as { candidates: string[] }).candidates).toEqual(
+      expect.arrayContaining(['my-workspace', 'acme-docs'])
+    );
 
     const bySlug = await mcpPost(app, secret, {
       jsonrpc: '2.0',
@@ -364,6 +370,491 @@ describe('docs MCP protocol', () => {
       method: 'tools/call',
       params: { name: 'dira_guide', arguments: {} },
     });
-    expect((toolResult(guide).data as { instructions: string }).instructions).toContain('search_docs');
+    const guideData = toolResult(guide).data as {
+      instructions: string;
+      workspaces: Array<{ slug: string; startAt: string | null; default: boolean }>;
+    };
+    expect(guideData.instructions).toContain('search_docs');
+    expect(guideData.instructions).toContain('my-workspace');
+    expect(guideData.instructions).toContain('acme-docs');
+    const acmeEntry = guideData.workspaces.find((ws) => ws.slug === 'acme-docs');
+    expect(acmeEntry?.startAt).toBe('readme.md');
+    const myWorkspaceEntry = guideData.workspaces.find((ws) => ws.slug === 'my-workspace');
+    expect(myWorkspaceEntry?.startAt).toBeNull();
+
+    const init = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 30,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'dira-tests', version: '1.0.0' },
+      },
+    });
+    const initBody = parseMcpBody(init.body?.result ? init.body : init.text);
+    const initResult = (initBody.result ?? initBody) as { instructions?: string };
+    expect(initResult.instructions).toContain('acme-docs');
+  });
+
+  it('resolves an omitted workspace via the token default when multiple are allowlisted', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-default-ws-mcp-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    const second = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Second Workspace' });
+    const secondId = second.body.data.workspace.id as string;
+
+    await request(app)
+      .put('/api/mcp/access')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({
+        workspaces: [
+          { workspaceId, canWrite: true },
+          { workspaceId: secondId, canWrite: true },
+        ],
+      });
+
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-default', defaultWorkspaceId: secondId });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    const written = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 30,
+      method: 'tools/call',
+      params: { name: 'write_file', arguments: { path: 'via-default.md', content: '# Default\n' } },
+    });
+    const writeData = toolResult(written).data as { url: string };
+    expect(toolResult(written).success).toBe(true);
+    expect(writeData.url).toContain(`/w/${secondId}/p/`);
+
+    const read = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 31,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { path: 'via-default.md' } },
+    });
+    expect((toolResult(read).data as { content: string }).content).toContain('# Default');
+  });
+
+  it('search_docs accepts query as an alias for q, boosts readme.md, and surfaces frontmatter', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-search-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    await request(app)
+      .put('/api/mcp/access')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-search' });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 40,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: {
+          path: 'docs/deep/conventions.md',
+          content: '# Conventions\n\nzzflavortoken guidance lives here.\n',
+        },
+      },
+    });
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 41,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: {
+          path: 'readme.md',
+          content:
+            '---\nwhen: looking for zzflavortoken guidance\ntopics: [rest, conventions]\nrepos: [schoolos-backend]\n---\n# Readme\n\nzzflavortoken pointer.\n',
+        },
+      },
+    });
+
+    const byQuery = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 42,
+      method: 'tools/call',
+      params: { name: 'search_docs', arguments: { query: 'zzflavortoken' } },
+    });
+    const hits = toolResult(byQuery).data as Array<{
+      path: string;
+      readWhen: string | null;
+      topics?: string[];
+      repos?: string[];
+    }>;
+    expect(toolResult(byQuery).success).toBe(true);
+    expect(hits.length).toBeGreaterThanOrEqual(2);
+    expect(hits[0].path).toBe('readme.md');
+    expect(hits[0].readWhen).toBe('looking for zzflavortoken guidance');
+    expect(hits[0].topics).toEqual(['rest', 'conventions']);
+    expect(hits[0].repos).toEqual(['schoolos-backend']);
+    const otherHit = hits.find((hit) => hit.path === 'docs/deep/conventions.md');
+    expect(otherHit?.readWhen).toBe('Conventions');
+
+    const neitherArg = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 43,
+      method: 'tools/call',
+      params: { name: 'search_docs', arguments: {} },
+    });
+    expect(toolResult(neitherArg).success).toBe(false);
+  });
+
+  it('edit_file refuses ambiguous oldString and applies replaceAll; HASH_MISMATCH carries a diff hint', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-edit-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    await request(app)
+      .put('/api/mcp/access')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-edit' });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 50,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { path: 'dup.md', content: 'foo bar\nfoo baz\n' },
+      },
+    });
+
+    const ambiguous = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 51,
+      method: 'tools/call',
+      params: {
+        name: 'edit_file',
+        arguments: { path: 'dup.md', oldString: 'foo', newString: 'qux' },
+      },
+    });
+    const ambiguousResult = toolResult(ambiguous);
+    expect(ambiguousResult.success).toBe(false);
+    expect(ambiguousResult.error).toBe('PATCH_AMBIGUOUS');
+    expect((ambiguousResult.details as { occurrences: number }).occurrences).toBe(2);
+
+    const replaced = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 52,
+      method: 'tools/call',
+      params: {
+        name: 'edit_file',
+        arguments: { path: 'dup.md', oldString: 'foo', newString: 'qux', replaceAll: true },
+      },
+    });
+    expect(toolResult(replaced).success).toBe(true);
+
+    const readBack = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 53,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { path: 'dup.md' } },
+    });
+    const readData = toolResult(readBack).data as { content: string; hash: string };
+    expect(readData.content).toBe('qux bar\nqux baz\n');
+
+    const stale = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 54,
+      method: 'tools/call',
+      params: {
+        name: 'edit_file',
+        arguments: { path: 'dup.md', oldString: 'qux bar', newString: 'clobber', hash: 'stale-hash' },
+      },
+    });
+    const staleResult = toolResult(stale);
+    expect(staleResult.success).toBe(false);
+    expect(staleResult.error).toBe('HASH_MISMATCH');
+    const staleDetails = staleResult.details as { currentHash: string; diffPreview: string; hint: string };
+    expect(staleDetails.currentHash).toBe(readData.hash);
+    expect(staleDetails.diffPreview).toContain('qux bar');
+    expect(staleDetails.hint).toContain('read_file');
+  });
+
+  it('list_tree sorts by path, defaults depth to 2, supports a kind filter, and surfaces headings', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-tree-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    await request(app)
+      .put('/api/mcp/access')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-tree' });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    for (const [path, content] of [
+      ['zeta.md', '# Zeta Heading\n\nBody.\n'],
+      ['alpha.md', '# Alpha Heading\n\nBody.\n'],
+      ['b/c.md', '# C Heading\n\nBody.\n'],
+      ['b/d/e.md', '# E Heading\n\nBody.\n'],
+    ] as const) {
+      await mcpPost(app, secret, {
+        jsonrpc: '2.0',
+        id: 60,
+        method: 'tools/call',
+        params: { name: 'write_file', arguments: { path, content } },
+      });
+    }
+
+    const tree = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 61,
+      method: 'tools/call',
+      params: { name: 'list_tree', arguments: {} },
+    });
+    const nodes = toolResult(tree).data as Array<{ path: string; kind: string; heading?: string }>;
+    // b/d/e.md is at depth 3 and should be excluded by the default depth of 2.
+    expect(nodes.some((node) => node.path === 'b/d/e.md')).toBe(false);
+    const paths = nodes.map((node) => node.path);
+    expect(paths).toEqual([...paths].sort((a, b) => a.localeCompare(b)));
+    const alpha = nodes.find((node) => node.path === 'alpha.md');
+    expect(alpha?.heading).toBe('Alpha Heading');
+
+    const deep = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 62,
+      method: 'tools/call',
+      params: { name: 'list_tree', arguments: { depth: 5 } },
+    });
+    const deepNodes = toolResult(deep).data as Array<{ path: string }>;
+    expect(deepNodes.some((node) => node.path === 'b/d/e.md')).toBe(true);
+
+    const foldersOnly = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 63,
+      method: 'tools/call',
+      params: { name: 'list_tree', arguments: { kind: 'folder', depth: 5 } },
+    });
+    const folderNodes = toolResult(foldersOnly).data as Array<{ path: string; kind: string }>;
+    expect(folderNodes.every((node) => node.kind === 'folder')).toBe(true);
+    expect(folderNodes.some((node) => node.path === 'b')).toBe(true);
+  });
+
+  it('exposes dira://guide and per-workspace readme resources', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-resources-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    await request(app)
+      .put('/api/mcp/access')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-resources' });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 70,
+      method: 'tools/call',
+      params: { name: 'write_file', arguments: { path: 'readme.md', content: '# Readme\n\nHello.\n' } },
+    });
+
+    const list = await mcpPost(app, secret, { jsonrpc: '2.0', id: 71, method: 'resources/list', params: {} });
+    const listBody = parseMcpBody(list.body?.result ? list.body : list.text);
+    const listResult = (listBody.result ?? listBody) as { resources: Array<{ uri: string }> };
+    expect(listResult.resources.some((r) => r.uri === 'dira://guide')).toBe(true);
+    expect(listResult.resources.some((r) => r.uri === 'dira://my-workspace/readme.md')).toBe(true);
+
+    const guideRead = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 72,
+      method: 'resources/read',
+      params: { uri: 'dira://guide' },
+    });
+    const guideBody = parseMcpBody(guideRead.body?.result ? guideRead.body : guideRead.text);
+    const guideResult = (guideBody.result ?? guideBody) as { contents: Array<{ text: string }> };
+    expect(guideResult.contents[0].text).toContain('my-workspace');
+
+    const docRead = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 73,
+      method: 'resources/read',
+      params: { uri: 'dira://my-workspace/readme.md' },
+    });
+    const docBody = parseMcpBody(docRead.body?.result ? docRead.body : docRead.text);
+    const docResult = (docBody.result ?? docBody) as { contents: Array<{ text: string }> };
+    expect(docResult.contents[0].text).toContain('# Readme');
+  });
+
+  it('resolves an unambiguous path across workspaces without workspace, and rejects a colliding one', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-path-resolve-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    const second = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Second Path Workspace' });
+    const secondId = second.body.data.workspace.id as string;
+    await request(app)
+      .put('/api/mcp/access')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({
+        workspaces: [
+          { workspaceId, canWrite: true },
+          { workspaceId: secondId, canWrite: true },
+        ],
+      });
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-path-resolve' });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 80,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId, path: 'docs/backend/conventions.md', content: '# Conventions\n' },
+      },
+    });
+
+    const uniqueRead = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 81,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { path: 'docs/backend/conventions.md' } },
+    });
+    expect(toolResult(uniqueRead).success).toBe(true);
+    expect((toolResult(uniqueRead).data as { content: string }).content).toContain('# Conventions');
+
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 82,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId: secondId, path: 'docs/backend/conventions.md', content: '# Other\n' },
+      },
+    });
+
+    const ambiguousRead = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 83,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { path: 'docs/backend/conventions.md' } },
+    });
+    const ambiguousResult = toolResult(ambiguousRead);
+    expect(ambiguousResult.success).toBe(false);
+    expect(ambiguousResult.error).toBe('PATH_AMBIGUOUS');
+    expect((ambiguousResult.details as { candidates: string[] }).candidates).toHaveLength(2);
+
+    const notFound = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 84,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { path: 'nowhere.md' } },
+    });
+    const notFoundResult = toolResult(notFound);
+    expect(notFoundResult.success).toBe(false);
+    expect(notFoundResult.error).toBe('DOCS_NOT_FOUND');
+  });
+
+  it('warns about dangling markdown links on write without failing the write', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-links-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    await request(app)
+      .put('/api/mcp/access')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-links' });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 90,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { path: 'docs/plans/foo.md', content: '# Foo\n' },
+      },
+    });
+
+    const withDangling = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 91,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: {
+          path: 'docs/plans/bar.md',
+          content: '# Bar\n\nSee [missing](nope.md) and [foo](foo.md).\n',
+        },
+      },
+    });
+    const withDanglingResult = toolResult(withDangling);
+    expect(withDanglingResult.success).toBe(true);
+    const warnings = (withDanglingResult.data as { warnings?: string[] }).warnings ?? [];
+    expect(warnings.some((w) => w.includes('nope.md'))).toBe(true);
+    expect(warnings.some((w) => w.includes('foo.md'))).toBe(false);
+
+    const clean = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 92,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { path: 'docs/plans/baz.md', content: '# Baz\n\nSee [foo](foo.md).\n' },
+      },
+    });
+    const cleanResult = toolResult(clean);
+    expect(cleanResult.success).toBe(true);
+    expect((cleanResult.data as { warnings?: string[] }).warnings).toBeUndefined();
   });
 });

@@ -6,6 +6,7 @@ export const workspaces = pgTable('workspaces', {
   name: text('name').notNull(),
   encrypted: boolean('encrypted').notNull().default(false),
   mcpEnabled: boolean('mcp_enabled').notNull().default(true),
+  agentIndexPath: text('agent_index_path'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

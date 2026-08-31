@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { mcpAudit, mcpTokens, mcpWorkspaceAccess, workspaces } from '../db/schemas';
 import { canEdit } from '../authz/roles';
 import { HttpError } from '../utils/HttpError';
+import { slugify } from '../utils/slugify';
 import { type AuthService, type Database, type PublicWorkspace } from './AuthService';
 
 const TOKEN_PREFIX = 'dira_mcp_';
@@ -11,6 +12,7 @@ export interface PublicMcpToken {
   id: string;
   name: string;
   tokenPrefix: string;
+  defaultWorkspaceId: string | null;
   createdAt: Date;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
@@ -19,6 +21,7 @@ export interface PublicMcpToken {
 export interface McpAccessRow {
   workspaceId: string;
   name: string;
+  slug: string;
   role: string;
   encrypted: boolean;
   mcpEnabled: boolean;
@@ -29,6 +32,7 @@ export interface McpAccessRow {
 export interface ResolvedMcpAuth {
   userId: string;
   tokenId: string | null;
+  defaultWorkspaceId: string | null;
 }
 
 function hashToken(secret: string): string {
@@ -47,6 +51,7 @@ export class McpTokenService {
         id: mcpTokens.id,
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
+        defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
         createdAt: mcpTokens.createdAt,
         lastUsedAt: mcpTokens.lastUsedAt,
         revokedAt: mcpTokens.revokedAt,
@@ -55,23 +60,83 @@ export class McpTokenService {
       .where(and(eq(mcpTokens.userId, userId), isNull(mcpTokens.revokedAt)));
   }
 
-  async createToken(userId: string, nameRaw: string): Promise<PublicMcpToken & { secret: string }> {
+  private async assertUsableDefaultWorkspace(userId: string, workspaceId: string): Promise<void> {
+    const memberships = await this.auth.listWorkspaces(userId);
+    const membership = memberships.find((ws) => ws.id === workspaceId);
+    if (!membership) {
+      throw new HttpError('Workspace not found', 404, 'WORKSPACE_NOT_FOUND');
+    }
+    if (membership.encrypted) {
+      throw new HttpError('Encrypted workspaces cannot be exposed to MCP', 409, 'E2E_NO_MCP');
+    }
+  }
+
+  async createToken(
+    userId: string,
+    nameRaw: string,
+    options: { defaultWorkspaceId?: string } = {}
+  ): Promise<PublicMcpToken & { secret: string }> {
     const name = nameRaw.trim() || 'MCP token';
+    if (options.defaultWorkspaceId) {
+      await this.assertUsableDefaultWorkspace(userId, options.defaultWorkspaceId);
+    }
     const secret = TOKEN_PREFIX + crypto.randomBytes(24).toString('base64url');
     const tokenHash = hashToken(secret);
     const tokenPrefix = secret.slice(0, 16);
     const [row] = await this.database
       .insert(mcpTokens)
-      .values({ userId, name, tokenHash, tokenPrefix })
+      .values({
+        userId,
+        name,
+        tokenHash,
+        tokenPrefix,
+        defaultWorkspaceId: options.defaultWorkspaceId ?? null,
+      })
       .returning({
         id: mcpTokens.id,
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
+        defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
         createdAt: mcpTokens.createdAt,
         lastUsedAt: mcpTokens.lastUsedAt,
         revokedAt: mcpTokens.revokedAt,
       });
     return { ...row, secret };
+  }
+
+  async updateToken(
+    userId: string,
+    tokenId: string,
+    input: { name?: string; defaultWorkspaceId?: string | null }
+  ): Promise<PublicMcpToken> {
+    const [existing] = await this.database
+      .select({ id: mcpTokens.id })
+      .from(mcpTokens)
+      .where(and(eq(mcpTokens.id, tokenId), eq(mcpTokens.userId, userId)))
+      .limit(1);
+    if (!existing) {
+      throw new HttpError('Token not found', 404, 'TOKEN_NOT_FOUND');
+    }
+    if (input.defaultWorkspaceId) {
+      await this.assertUsableDefaultWorkspace(userId, input.defaultWorkspaceId);
+    }
+    const patch: { name?: string; defaultWorkspaceId?: string | null } = {};
+    if (input.name !== undefined) patch.name = input.name.trim() || 'MCP token';
+    if (input.defaultWorkspaceId !== undefined) patch.defaultWorkspaceId = input.defaultWorkspaceId;
+    const [row] = await this.database
+      .update(mcpTokens)
+      .set(patch)
+      .where(eq(mcpTokens.id, tokenId))
+      .returning({
+        id: mcpTokens.id,
+        name: mcpTokens.name,
+        tokenPrefix: mcpTokens.tokenPrefix,
+        defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
+        createdAt: mcpTokens.createdAt,
+        lastUsedAt: mcpTokens.lastUsedAt,
+        revokedAt: mcpTokens.revokedAt,
+      });
+    return row;
   }
 
   async revokeToken(userId: string, tokenId: string): Promise<void> {
@@ -96,6 +161,7 @@ export class McpTokenService {
       .select({
         id: mcpTokens.id,
         userId: mcpTokens.userId,
+        defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
         revokedAt: mcpTokens.revokedAt,
       })
       .from(mcpTokens)
@@ -106,7 +172,7 @@ export class McpTokenService {
       .update(mcpTokens)
       .set({ lastUsedAt: new Date() })
       .where(eq(mcpTokens.id, row.id));
-    return { userId: row.userId, tokenId: row.id };
+    return { userId: row.userId, tokenId: row.id, defaultWorkspaceId: row.defaultWorkspaceId };
   }
 
   async listAccess(userId: string): Promise<McpAccessRow[]> {
@@ -121,6 +187,7 @@ export class McpTokenService {
       return {
         workspaceId: ws.id,
         name: ws.name,
+        slug: slugify(ws.name),
         role: ws.role,
         encrypted: ws.encrypted,
         mcpEnabled: ws.mcpEnabled !== false,
@@ -197,6 +264,15 @@ export class McpTokenService {
       throw new HttpError('MCP write is not allowed for this workspace', 403, 'MCP_READ_ONLY');
     }
     return { workspace, canWrite };
+  }
+
+  async getAgentIndexPaths(workspaceIds: string[]): Promise<Map<string, string | null>> {
+    if (!workspaceIds.length) return new Map();
+    const rows = await this.database
+      .select({ id: workspaces.id, agentIndexPath: workspaces.agentIndexPath })
+      .from(workspaces)
+      .where(inArray(workspaces.id, workspaceIds));
+    return new Map(rows.map((row) => [row.id, row.agentIndexPath]));
   }
 
   async setWorkspaceMcpEnabled(
