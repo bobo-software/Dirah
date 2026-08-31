@@ -1,3 +1,5 @@
+import { cryptoSource } from './bytes';
+
 const KDF_ITERATIONS = 210_000;
 const WRAP_MAGIC = new Uint8Array([0x44, 0x57, 0x31, 0x01]);
 const NONCE_LEN = 12;
@@ -23,13 +25,13 @@ function b64ToBytes(value: string): Uint8Array {
 async function pbkdf2(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey(
     'raw',
-    new TextEncoder().encode(password),
+    cryptoSource(new TextEncoder().encode(password)),
     'PBKDF2',
     false,
     ['deriveKey']
   );
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: cryptoSource(salt), iterations, hash: 'SHA-256' },
     material,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -43,8 +45,8 @@ async function hkdfAes(shared: ArrayBuffer): Promise<CryptoKey> {
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: new Uint8Array(0),
-      info: new TextEncoder().encode('dira-workspace-dek'),
+      salt: cryptoSource(new Uint8Array(0)),
+      info: cryptoSource(new TextEncoder().encode('dira-workspace-dek')),
     },
     hkdf,
     { name: 'AES-GCM', length: 256 },
@@ -81,7 +83,7 @@ export async function wrapPrivateKey(
   const kek = await pbkdf2(password, salt, KDF_ITERATIONS);
   const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', privateKey));
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, kek, pkcs8));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: cryptoSource(nonce) }, kek, cryptoSource(pkcs8)));
   const blob = new Uint8Array(nonce.length + ct.length);
   blob.set(nonce, 0);
   blob.set(ct, nonce.length);
@@ -102,7 +104,7 @@ export async function unwrapPrivateKey(
   const blob = b64ToBytes(wrappedPrivateKey);
   const nonce = blob.subarray(0, NONCE_LEN);
   const ct = blob.subarray(NONCE_LEN);
-  const pkcs8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, kek, ct);
+  const pkcs8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: cryptoSource(nonce) }, kek, cryptoSource(ct));
   return crypto.subtle.importKey('pkcs8', pkcs8, { name: 'ECDH', namedCurve: 'P-256' }, true, [
     'deriveBits',
   ]);
@@ -123,7 +125,7 @@ export async function wrapDekForPublicJwk(publicJwk: JsonWebKey, dek: CryptoKey)
   const wrapKey = await hkdfAes(shared);
   const rawDek = new Uint8Array(await crypto.subtle.exportKey('raw', dek));
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, wrapKey, rawDek));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: cryptoSource(nonce) }, wrapKey, cryptoSource(rawDek)));
   const ephPub = new Uint8Array(await crypto.subtle.exportKey('raw', ephemeral.publicKey));
   const out = new Uint8Array(WRAP_MAGIC.length + ephPub.length + nonce.length + ct.length);
   out.set(WRAP_MAGIC, 0);
@@ -146,13 +148,13 @@ export async function unwrapDek(privateKey: CryptoKey, wrappedDek: string): Prom
   const ct = blob.subarray(WRAP_MAGIC.length + P256_RAW_LEN + NONCE_LEN);
   const ephPub = await crypto.subtle.importKey(
     'raw',
-    ephRaw,
+    cryptoSource(ephRaw),
     { name: 'ECDH', namedCurve: 'P-256' },
     false,
     []
   );
   const shared = await crypto.subtle.deriveBits({ name: 'ECDH', public: ephPub }, privateKey, 256);
   const wrapKey = await hkdfAes(shared);
-  const rawDek = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, wrapKey, ct);
+  const rawDek = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: cryptoSource(nonce) }, wrapKey, cryptoSource(ct));
   return crypto.subtle.importKey('raw', rawDek, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
 }

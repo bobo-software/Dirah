@@ -14,12 +14,17 @@ ARG VITE_API_URL
 
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN if [ -z "$VITE_API_URL" ]; then \
-      echo "Missing VITE_API_URL build arg."; \
-      exit 1; \
-    fi
-
-RUN npm run build
+RUN set -e; \
+      if [ -z "$VITE_API_URL" ]; then \
+        echo "Missing VITE_API_URL build arg."; \
+        exit 1; \
+      fi; \
+      case "$VITE_API_URL" in \
+        http://*|https://*) ;; \
+        *) VITE_API_URL="https://$VITE_API_URL" ;; \
+      esac; \
+      export VITE_API_URL; \
+      npm run build
 
 FROM nginx:alpine
 

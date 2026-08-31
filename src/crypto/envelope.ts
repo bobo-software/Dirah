@@ -1,3 +1,5 @@
+import { cryptoSource } from './bytes';
+
 const MAGIC = new Uint8Array([0x44, 0x52, 0x31, 0x01]);
 const NONCE_LEN = 12;
 
@@ -10,7 +12,7 @@ export async function sealBytes(key: CryptoKey, plaintext: Uint8Array): Promise<
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_LEN));
   const copy = new Uint8Array(plaintext);
   const sealed = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, copy)
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: cryptoSource(nonce) }, key, cryptoSource(copy))
   );
   const out = new Uint8Array(MAGIC.length + nonce.length + sealed.length);
   out.set(MAGIC, 0);
@@ -26,7 +28,7 @@ export async function openBytes(key: CryptoKey, envelope: Uint8Array): Promise<U
   const nonce = envelope.subarray(MAGIC.length, MAGIC.length + NONCE_LEN);
   const ciphertext = envelope.subarray(MAGIC.length + NONCE_LEN);
   return new Uint8Array(
-    await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, key, ciphertext)
+    await crypto.subtle.decrypt({ name: 'AES-GCM', iv: cryptoSource(nonce) }, key, cryptoSource(ciphertext))
   );
 }
 
