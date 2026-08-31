@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { OAuthButtons } from './OAuthButtons';
 
 export function RegisterPage() {
   const { user, ready, register } = useAuth();
@@ -32,6 +33,7 @@ export function RegisterPage() {
     <main className="auth-card">
       <h1>Create account</h1>
       <p className="muted">A workspace named “My workspace” is created for you.</p>
+      <OAuthButtons />
       <form onSubmit={onSubmit}>
         <label>
           Email

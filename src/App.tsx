@@ -5,6 +5,7 @@ import { AppFrame, RequireAuth } from './layout/AppFrame';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { InvitePage } from './pages/InvitePage';
+import { OAuthCatchPage } from './pages/OAuthCatchPage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
 import { WorkspaceShellPage } from './pages/WorkspaceShellPage';
 import { SyncProvider } from './sync/SyncProvider';
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/invite/:token" element={<InvitePage />} />
+            <Route path="/oauth" element={<OAuthCatchPage />} />
             <Route
               path="/s/:token"
               element={

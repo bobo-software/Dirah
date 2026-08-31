@@ -1,14 +1,16 @@
 import { type FormEvent, useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { OAuthButtons } from './OAuthButtons';
 
 export function LoginPage() {
   const { user, ready, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(searchParams.get('oauth'));
   const [busy, setBusy] = useState(false);
 
   if (!ready) return <p className="muted">Loading…</p>;
@@ -36,6 +38,7 @@ export function LoginPage() {
     <main className="auth-card">
       <h1>Dira</h1>
       <p className="muted">Sign in to your workspace</p>
+      <OAuthButtons />
       <form onSubmit={onSubmit}>
         <label>
           Email

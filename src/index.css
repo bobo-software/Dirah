@@ -147,6 +147,33 @@ form {
   margin: 1rem 0;
 }
 
+.oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+}
+
+.oauth-btn {
+  display: block;
+  text-align: center;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  background: #fff;
+}
+
+.oauth-btn:hover {
+  border-color: var(--text-h);
+}
+
+.oauth-or {
+  text-align: center;
+  margin: 0.25rem 0 0;
+}
+
 label {
   display: flex;
   flex-direction: column;

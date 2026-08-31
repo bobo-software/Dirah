@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { apiRequest, type AuthTokens, type PublicUser, type PublicWorkspace } from '../api/client';
 import { bootstrapAccountKeys, clearAccountKeys, restoreAccountKeys } from '../crypto/vault';
 
-const REFRESH_KEY = 'dira.refreshToken';
+export const REFRESH_KEY = 'dira.refreshToken';
 
 type AuthState = {
   user: PublicUser | null;
