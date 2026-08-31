@@ -3,6 +3,7 @@ import type { DocsMcpService } from '../../services/DocsMcpService';
 import { registerDocsTools } from './registerDocsTools';
 import { docsMcpAuth } from './authContext';
 import type { PgMcpServerHost } from '../registerPgTools';
+import { DIRA_DOCS_INSTRUCTIONS } from './instructions';
 
 export async function createDocsMcpExpressHandler(service: DocsMcpService): Promise<RequestHandler> {
   const [{ createMcpHandler, McpServer }, { toNodeHandler }] = await Promise.all([
@@ -15,7 +16,8 @@ export async function createDocsMcpExpressHandler(service: DocsMcpService): Prom
       const server = new McpServer({
         name: 'dira-docs',
         version: '1.0.0',
-      });
+        instructions: DIRA_DOCS_INSTRUCTIONS,
+      } as { name: string; version: string; instructions?: string });
       registerDocsTools(server as unknown as PgMcpServerHost, service);
       return server;
     },

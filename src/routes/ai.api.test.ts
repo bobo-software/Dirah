@@ -91,6 +91,21 @@ describe('AI copilot API', () => {
     expect(asked.status).toBe(200);
     expect(asked.body.data.reply).toBe('echo:Summarize:Hello page b');
 
+    const emptyMd = await request(appWithAi)
+      .get(`/api/pages/${pageId}/markdown`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(emptyMd.status).toBe(200);
+    await request(appWithAi)
+      .put(`/api/pages/${pageId}/markdown`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ content: 'Filled from stored markdown body.', hash: emptyMd.body.data.hash });
+    const fromBody = await request(appWithAi)
+      .post(`/api/ai/pages/${pageId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ prompt: 'Summarize', context: '' });
+    expect(fromBody.status).toBe(200);
+    expect(fromBody.body.data.reply).toBe('echo:Summarize:Filled from');
+
     const stranger = await request(appWithAi)
       .post(`/api/ai/pages/${pageId}`)
       .set('Authorization', `Bearer ${otherToken}`)

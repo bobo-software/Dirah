@@ -27,7 +27,7 @@ describe('markdown catalog API', () => {
     app = await createApp();
   });
 
-  it('creates folders and markdown, enforces parent/slug rules, indexes body, blocks encrypted workspaces', async () => {
+  it('creates folders and markdown, enforces parent/slug rules, and indexes body', async () => {
     if (!dbReady) {
       return;
     }
@@ -37,7 +37,6 @@ describe('markdown catalog API', () => {
       .send({ email: ownerEmail, password });
     expect(owner.status).toBe(201);
     const ownerToken = owner.body.data.tokens.accessToken as string;
-    const ownerId = owner.body.data.user.id as string;
     const workspaceId = owner.body.data.workspace.id as string;
 
     const other = await request(app)
@@ -136,36 +135,10 @@ describe('markdown catalog API', () => {
       .set('Authorization', `Bearer ${ownerToken}`);
     expect(restored.status).toBe(200);
 
-    const bundle = {
-      publicKey: JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'a', y: 'b' }),
-      wrappedPrivateKey: 'dGVzdA==',
-      kdfSalt: 'c2FsdA==',
-      kdfIterations: 210000,
-    };
-    expect(
-      (await request(app).put('/api/auth/crypto').set('Authorization', `Bearer ${ownerToken}`).send(bundle))
-        .status
-    ).toBe(200);
-    expect(
-      (
-        await request(app)
-          .put(`/api/workspaces/${workspaceId}/crypto/keys`)
-          .set('Authorization', `Bearer ${ownerToken}`)
-          .send({ userId: ownerId, wrappedDek: 'wrapped-dek-owner' })
-      ).status
-    ).toBe(200);
-    expect(
-      (
-        await request(app)
-          .post(`/api/workspaces/${workspaceId}/crypto/enable`)
-          .set('Authorization', `Bearer ${ownerToken}`)
-      ).status
-    ).toBe(200);
-
-    const blocked = await request(app)
+    const rejectedPage = await request(app)
       .post(`/api/workspaces/${workspaceId}/pages`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'Secret docs', kind: 'folder' });
-    expect(blocked.status).toBe(409);
+      .send({ title: 'Legacy', kind: 'page' });
+    expect(rejectedPage.status).toBe(400);
   });
 });

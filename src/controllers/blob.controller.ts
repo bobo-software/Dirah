@@ -43,6 +43,21 @@ export function createBlobController(blobs: BlobService) {
       return res.send(body);
     }),
 
+    downloadInWorkspace: asyncHandler(async (req: Request, res: Response) => {
+      const workspaceId = req.params.id;
+      const blobId = req.params.blobId;
+      if (!workspaceId || !blobId) {
+        return ResponseUtils.error(res, 'Workspace id and blob id are required', null, 400);
+      }
+      const { meta, body } = await blobs.get(req.user!.userId, blobId);
+      if (meta.workspaceId !== workspaceId) {
+        return ResponseUtils.error(res, 'Blob not found', null, 404);
+      }
+      res.setHeader('Content-Type', meta.mime);
+      res.setHeader('Content-Length', String(body.length));
+      return res.send(body);
+    }),
+
     remove: asyncHandler(async (req: Request, res: Response) => {
       const blobId = req.params.id;
       if (!blobId) {

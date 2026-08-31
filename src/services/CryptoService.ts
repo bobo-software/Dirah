@@ -125,25 +125,6 @@ export class CryptoService {
       });
   }
 
-  async enable(userId: string, workspaceId: string): Promise<{ encrypted: boolean }> {
-    await this.auth.requireWorkspaceOwner(userId, workspaceId);
-    const [mine] = await this.database
-      .select({ wrappedDek: workspaceMemberKeys.wrappedDek })
-      .from(workspaceMemberKeys)
-      .where(
-        and(eq(workspaceMemberKeys.workspaceId, workspaceId), eq(workspaceMemberKeys.userId, userId))
-      )
-      .limit(1);
-    if (!mine) {
-      throw new HttpError('Upload a wrapped workspace key first', 400, 'DEK_REQUIRED');
-    }
-    await this.database
-      .update(workspaces)
-      .set({ encrypted: true, updatedAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
-    return { encrypted: true };
-  }
-
   async isWorkspaceEncrypted(workspaceId: string): Promise<boolean> {
     const [row] = await this.database
       .select({ encrypted: workspaces.encrypted })

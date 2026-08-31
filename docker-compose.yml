@@ -15,11 +15,6 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - '6379:6379'
-
   minio:
     image: minio/minio:latest
     command: server /data --console-address ':9001'

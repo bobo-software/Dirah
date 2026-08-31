@@ -76,6 +76,7 @@ describe('pages API', () => {
     expect(created.status).toBe(201);
     expect(created.body.data.page.id).toBe(clientId);
     expect(created.body.data.page.title).toBe('First page');
+    expect(created.body.data.page.kind).toBe('markdown');
     expect(created.body.data.page).not.toHaveProperty('yjs');
     expect(created.body.data.page).not.toHaveProperty('update');
 

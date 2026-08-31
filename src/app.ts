@@ -13,7 +13,6 @@ import { AuthService } from './services/AuthService';
 import { PageService } from './services/PageService';
 import { BlobService } from './services/BlobService';
 import { createBlobStore } from './blobs/blobStore';
-import { DocSyncService } from './services/DocSyncService';
 import { MemberService } from './services/MemberService';
 import { ShareService } from './services/ShareService';
 import { AiService } from './services/AiService';
@@ -27,13 +26,13 @@ import { docsMcpRateLimit } from './middlewares/docsMcpRateLimit';
 import { McpOAuthService } from './services/McpOAuthService';
 import { createMcpOAuthPublicRouter } from './routes/mcpOAuth.routes';
 import { defaultOAuthExchanger, type OAuthExchanger } from './oauth/providers';
+import { convertBlockPagesIfNeeded } from './convert/convertBlockPages';
 
 export interface CreateAppOptions {
   pgMcpService?: PgMcpService;
   authService?: AuthService;
   pageService?: PageService;
   blobService?: BlobService;
-  docSyncService?: DocSyncService;
   aiService?: AiService;
   oauthExchanger?: OAuthExchanger;
 }
@@ -51,6 +50,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   app.use(express.json({ limit: '1.5mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  try {
+    await convertBlockPagesIfNeeded(db, pool);
+  } catch (error) {
+    console.warn('Block page conversion skipped', error);
+  }
+
   const authService = options.authService ?? new AuthService(db);
   const pageService = options.pageService ?? new PageService(db, authService);
   const blobService =
@@ -63,14 +68,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
     options.oauthExchanger ?? defaultOAuthExchanger
   );
   const mcpTokenService = new McpTokenService(db, authService);
-  const docsMcpService = new DocsMcpService(pageService, mcpTokenService);
+  const docsMcpService = new DocsMcpService(pageService, mcpTokenService, {
+    appPublicUrl: env.appPublicUrl,
+  });
   const apiPublicUrl =
     (process.env.API_PUBLIC_URL ?? '').trim().replace(/\/$/, '') || `http://localhost:${env.port}`;
   const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl);
   const shareService = new ShareService(db, authService, pageService);
-  const docSyncService =
-    options.docSyncService ??
-    new DocSyncService(db, pageService, env.snapshotEvery, authService, shareService);
   const aiService =
     options.aiService ??
     new AiService(pageService, {
@@ -79,8 +83,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       model: env.ai.model,
     });
 
-  app.set('docSync', docSyncService);
-
   app.get('/health', getHealth);
   app.use(
     '/api',
@@ -88,7 +90,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       authService,
       pageService,
       blobService,
-      docSyncService,
       memberService,
       shareService,
       aiService,
@@ -123,8 +124,4 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   app.use(errorHandler);
 
   return app;
-}
-
-export function getDocSync(app: Express): DocSyncService {
-  return app.get('docSync') as DocSyncService;
 }

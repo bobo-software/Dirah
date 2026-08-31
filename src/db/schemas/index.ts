@@ -5,7 +5,7 @@ export { userCrypto, workspaceMemberKeys } from './crypto';
 export { pages } from './pages';
 export { markdownBodies } from './markdown';
 export { pageFavorites } from './pageFavorites';
-export { docUpdates, docSnapshots, docRevisions, blobs } from './docs';
+export { blobs } from './docs';
 export { shareLinks } from './shareLinks';
 export { workspaceInvites } from './invites';
 export { oauthAccounts } from './oauth';

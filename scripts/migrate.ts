@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { DEFAULT_MIGRATIONS_FOLDER, runPendingMigrations } from '../src/db/migrationRunner';
+import { convertBlockPagesIfNeeded } from '../src/convert/convertBlockPages';
 
 async function main(): Promise<void> {
   const pool = new Pool({
@@ -21,6 +22,12 @@ async function main(): Promise<void> {
       console.log(`Applied: ${result.appliedTags.join(', ')}`);
     } else {
       console.log('No pending migrations');
+    }
+    const converted = await convertBlockPagesIfNeeded(db, pool);
+    if (converted) {
+      console.log(
+        `Converted ${converted.converted} block pages (${converted.folders} folders, ${converted.encryptedNotices} encrypted notices)`
+      );
     }
   } finally {
     await pool.end();

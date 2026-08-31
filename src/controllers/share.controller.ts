@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { ShareService } from '../services/ShareService';
 import { BlobService } from '../services/BlobService';
-import { DocSyncService } from '../services/DocSyncService';
 import ResponseUtils from '../utils/ResponseUtils';
 import { asyncHandler } from '../utils/asyncHandler';
 
@@ -45,7 +44,7 @@ export function createShareController(shares: ShareService) {
   };
 }
 
-export function createPublicController(shares: ShareService, sync: DocSyncService, blobs: BlobService) {
+export function createPublicController(shares: ShareService, blobs: BlobService) {
   return {
     page: asyncHandler(async (req: Request, res: Response) => {
       const token = req.params.token;
@@ -54,26 +53,32 @@ export function createPublicController(shares: ShareService, sync: DocSyncServic
       }
       const page = await shares.requireActive(token);
       return ResponseUtils.success(res, 'ok', {
-        page: { id: page.id, title: page.title, workspaceId: page.workspaceId },
+        page: {
+          id: page.id,
+          title: page.title,
+          workspaceId: page.workspaceId,
+          kind: page.kind,
+        },
         permission: 'view',
       });
     }),
 
-    updates: asyncHandler(async (req: Request, res: Response) => {
+    markdown: asyncHandler(async (req: Request, res: Response) => {
       const token = req.params.token;
       if (!token) {
         return ResponseUtils.error(res, 'Token is required', null, 400);
       }
-      const page = await shares.requireActive(token);
-      const clock = Number(req.query.clock ?? 0);
-      const catchup = await sync.catchupShare(token, page.id, Number.isFinite(clock) ? clock : 0);
+      const body = await shares.getPublicMarkdown(token);
       return ResponseUtils.success(res, 'ok', {
-        clock: catchup.clock,
-        snapshot: catchup.snapshot ? catchup.snapshot.toString('base64') : null,
-        updates: catchup.updates.map((row) => ({
-          id: row.id,
-          update: row.update.toString('base64'),
-        })),
+        page: {
+          id: body.page.id,
+          title: body.page.title,
+          workspaceId: body.page.workspaceId,
+          kind: body.page.kind,
+        },
+        content: body.content,
+        hash: body.hash,
+        updatedAt: body.updatedAt,
       });
     }),
 

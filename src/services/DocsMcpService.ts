@@ -7,6 +7,9 @@ import {
 import type { PageKind, PageService, PublicPage } from './PageService';
 import type { McpTokenService } from './McpTokenService';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export interface DocsTreeNode {
   id: string;
   title: string;
@@ -14,6 +17,18 @@ export interface DocsTreeNode {
   slug: string | null;
   path: string;
   parentId: string | null;
+}
+
+export interface CompactTreeNode {
+  id: string;
+  path: string;
+  kind: PageKind;
+}
+
+export interface ResolvedWorkspace {
+  workspaceId: string;
+  name: string;
+  slug: string;
 }
 
 function isDocsKind(kind: PageKind): boolean {
@@ -25,28 +40,101 @@ function segmentFor(page: PublicPage): string {
   return page.kind === 'markdown' ? `${slug}.md` : slug;
 }
 
+function normalizePrefix(prefix?: string): string {
+  if (!prefix) return '';
+  return parseDocsPath(prefix).join('/');
+}
+
+function pathDepth(path: string): number {
+  return path.split('/').filter(Boolean).length;
+}
+
 export class DocsMcpService {
   constructor(
     private readonly pages: PageService,
-    private readonly tokens: McpTokenService
+    private readonly tokens: McpTokenService,
+    private readonly options: { appPublicUrl?: string } = {}
   ) {}
 
-  async listWorkspaces(userId: string) {
-    const rows = await this.tokens.listAccess(userId);
-    return rows
-      .filter((row) => row.allowlisted && row.mcpEnabled !== false && !row.encrypted)
-      .map((row) => ({
-        workspaceId: row.workspaceId,
-        name: row.name,
-        role: row.role,
-        canWrite: row.canWrite,
-      }));
+  pageUrl(workspaceId: string, pageId: string): string {
+    const origin = (this.options.appPublicUrl ?? '').replace(/\/$/, '') || 'http://localhost:5181';
+    return `${origin}/w/${workspaceId}/p/${pageId}`;
   }
 
-  async listTree(userId: string, workspaceId: string): Promise<DocsTreeNode[]> {
-    await this.tokens.requireAllowlist(userId, workspaceId, false);
-    const pages = await this.pages.list(userId, workspaceId);
-    return this.withPaths(pages.filter((page) => isDocsKind(page.kind)));
+  async listWorkspaces(userId: string) {
+    const rows = await this.allowlisted(userId);
+    const only = rows.length === 1;
+    return rows.map((row) => ({
+      workspaceId: row.workspaceId,
+      name: row.name,
+      slug: row.slug,
+      role: row.role,
+      canWrite: row.canWrite,
+      default: only,
+    }));
+  }
+
+  async resolveWorkspace(
+    userId: string,
+    ref?: string | null,
+    options: { optional?: boolean } = {}
+  ): Promise<ResolvedWorkspace | null> {
+    const allowed = await this.allowlisted(userId);
+    const raw = (ref ?? '').trim();
+    if (!raw) {
+      if (options.optional) return null;
+      if (allowed.length === 1) return allowed[0];
+      if (allowed.length === 0) {
+        throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
+      }
+      throw new HttpError(
+        'workspace or workspaceId is required when more than one workspace is allowlisted',
+        400,
+        'WORKSPACE_REQUIRED'
+      );
+    }
+    if (UUID_RE.test(raw)) {
+      const hit = allowed.find((row) => row.workspaceId === raw);
+      if (!hit) {
+        throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
+      }
+      return hit;
+    }
+    const lower = raw.toLowerCase();
+    const byName = allowed.filter((row) => row.name.toLowerCase() === lower);
+    if (byName.length === 1) return byName[0];
+    if (byName.length > 1) {
+      throw new HttpError('Workspace name is ambiguous', 400, 'WORKSPACE_AMBIGUOUS');
+    }
+    const wantSlug = slugify(raw);
+    const bySlug = allowed.filter((row) => row.slug === wantSlug);
+    if (bySlug.length === 1) return bySlug[0];
+    if (bySlug.length > 1) {
+      throw new HttpError('Workspace slug is ambiguous', 400, 'WORKSPACE_AMBIGUOUS');
+    }
+    throw new HttpError('Workspace not found', 404, 'WORKSPACE_NOT_FOUND');
+  }
+
+  async listTree(
+    userId: string,
+    workspaceId: string,
+    options: { prefix?: string; depth?: number } = {}
+  ): Promise<CompactTreeNode[]> {
+    const tree = await this.loadTree(userId, workspaceId);
+    const prefix = normalizePrefix(options.prefix);
+    const filtered = prefix
+      ? tree.filter((node) => node.path === prefix || node.path.startsWith(`${prefix}/`))
+      : tree;
+    const baseDepth = prefix ? pathDepth(prefix) : 0;
+    const withDepth =
+      options.depth == null
+        ? filtered
+        : filtered.filter((node) => {
+            const extra = pathDepth(node.path) - baseDepth;
+            if (prefix && node.path === prefix) return true;
+            return extra >= 1 && extra <= options.depth!;
+          });
+    return withDepth.map((node) => ({ id: node.id, path: node.path, kind: node.kind }));
   }
 
   async getNode(userId: string, workspaceId: string, nodeId: string) {
@@ -55,21 +143,50 @@ export class DocsMcpService {
     if (page.workspaceId !== workspaceId || !isDocsKind(page.kind)) {
       throw new HttpError('Docs node not found', 404, 'DOCS_NOT_FOUND');
     }
-    const tree = await this.listTree(userId, workspaceId);
-    return tree.find((node) => node.id === nodeId) ?? { ...page, path: segmentFor(page) };
+    const tree = await this.loadTree(userId, workspaceId);
+    const node = tree.find((item) => item.id === nodeId);
+    const path = node?.path ?? segmentFor(page);
+    return {
+      id: page.id,
+      title: page.title,
+      kind: page.kind,
+      slug: page.slug,
+      path,
+      parentId: page.parentId,
+      url: page.kind === 'markdown' ? this.pageUrl(workspaceId, page.id) : undefined,
+    };
   }
 
-  async readFile(userId: string, workspaceId: string, pathOrId: { path?: string; nodeId?: string }) {
+  async readFile(
+    userId: string,
+    workspaceId: string,
+    pathOrId: { path?: string; nodeId?: string; startLine?: number; maxLines?: number }
+  ) {
     await this.tokens.requireAllowlist(userId, workspaceId, false);
     const page = await this.resolveDocsNode(userId, workspaceId, pathOrId, 'markdown');
     const body = await this.pages.getMarkdown(userId, page.id);
+    const lines = body.content.split('\n');
+    const totalLines = lines.length;
+    const startLine = Math.max(1, Math.floor(pathOrId.startLine ?? 1));
+    const maxLines =
+      pathOrId.maxLines != null ? Math.max(1, Math.floor(pathOrId.maxLines)) : undefined;
+    const sliced =
+      pathOrId.startLine != null || maxLines != null
+        ? lines.slice(startLine - 1, maxLines != null ? startLine - 1 + maxLines : undefined)
+        : lines;
+    const content = sliced.join('\n');
+    const endLine = Math.min(totalLines, startLine - 1 + sliced.length);
     return {
       id: page.id,
       title: page.title,
       path: (await this.pathOf(userId, workspaceId, page.id)) ?? `${page.slug ?? 'untitled'}.md`,
-      content: body.content,
+      content,
       hash: body.hash,
       updatedAt: body.updatedAt,
+      url: this.pageUrl(workspaceId, page.id),
+      startLine,
+      endLine: sliced.length ? endLine : startLine - 1,
+      totalLines,
     };
   }
 
@@ -97,12 +214,14 @@ export class DocsMcpService {
         slug,
       }));
     const body = await this.pages.putMarkdown(userId, page.id, input.content, input.hash);
+    const path = segments.join('/');
     return {
       id: page.id,
       title: page.title,
-      path: segments.join('/'),
+      path,
       hash: body.hash,
       created: !existing,
+      url: this.pageUrl(workspaceId, page.id),
     };
   }
 
@@ -127,7 +246,12 @@ export class DocsMcpService {
     }
     const next = current.content.replace(input.oldString, input.newString);
     const body = await this.pages.putMarkdown(userId, current.id, next, input.hash ?? current.hash);
-    return { id: current.id, path: current.path, hash: body.hash };
+    return {
+      id: current.id,
+      path: current.path,
+      hash: body.hash,
+      url: this.pageUrl(workspaceId, current.id),
+    };
   }
 
   async createFolder(userId: string, workspaceId: string, input: { path: string }) {
@@ -187,14 +311,69 @@ export class DocsMcpService {
     return { id: page.id, trashed: true };
   }
 
-  async searchDocs(userId: string, workspaceId: string, q: string) {
-    await this.tokens.requireAllowlist(userId, workspaceId, false);
-    const pages = await this.pages.list(userId, workspaceId, { q });
-    return this.withPaths(pages.filter((page) => page.kind === 'markdown'));
+  async searchDocs(
+    userId: string,
+    ref: string | null | undefined,
+    q: string,
+    limit = 20
+  ) {
+    const cap = Math.min(50, Math.max(1, limit));
+    const resolved = await this.resolveWorkspace(userId, ref, { optional: true });
+    const targets = resolved ? [resolved] : await this.allowlisted(userId);
+    if (!targets.length) {
+      throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
+    }
+    const hits: Array<{
+      id: string;
+      title: string;
+      path: string;
+      workspaceId: string;
+      workspace: string;
+      snippet: string;
+      url: string;
+    }> = [];
+    for (const workspace of targets) {
+      await this.tokens.requireAllowlist(userId, workspace.workspaceId, false);
+      const found = await this.pages.searchMarkdown(userId, workspace.workspaceId, q, cap);
+      const tree = await this.loadTree(userId, workspace.workspaceId);
+      const pathById = new Map(tree.map((node) => [node.id, node.path]));
+      for (const hit of found) {
+        hits.push({
+          id: hit.page.id,
+          title: hit.page.title,
+          path: pathById.get(hit.page.id) ?? `${hit.page.slug ?? 'untitled'}.md`,
+          workspaceId: workspace.workspaceId,
+          workspace: workspace.slug,
+          snippet: hit.snippet,
+          url: this.pageUrl(workspace.workspaceId, hit.page.id),
+        });
+        if (hits.length >= cap) return hits;
+      }
+    }
+    return hits;
   }
 
   recordAudit(entry: Parameters<McpTokenService['recordAudit']>[0]): Promise<void> {
     return this.tokens.recordAudit(entry);
+  }
+
+  private async allowlisted(userId: string): Promise<Array<ResolvedWorkspace & { role: string; canWrite: boolean }>> {
+    const rows = await this.tokens.listAccess(userId);
+    return rows
+      .filter((row) => row.allowlisted && row.mcpEnabled !== false && !row.encrypted)
+      .map((row) => ({
+        workspaceId: row.workspaceId,
+        name: row.name,
+        slug: slugify(row.name),
+        role: row.role,
+        canWrite: row.canWrite,
+      }));
+  }
+
+  private async loadTree(userId: string, workspaceId: string): Promise<DocsTreeNode[]> {
+    await this.tokens.requireAllowlist(userId, workspaceId, false);
+    const pages = await this.pages.list(userId, workspaceId);
+    return this.withPaths(pages.filter((page) => isDocsKind(page.kind)));
   }
 
   private async resolveDocsNode(
@@ -221,7 +400,14 @@ export class DocsMcpService {
     let page: PublicPage | null = null;
     for (let i = 0; i < segments.length; i += 1) {
       const last = i === segments.length - 1;
-      const kind: PageKind = last && expected === 'markdown' ? 'markdown' : last && expected ? expected : last ? 'markdown' : 'folder';
+      const kind: PageKind =
+        last && expected === 'markdown'
+          ? 'markdown'
+          : last && expected
+            ? expected
+            : last
+              ? 'markdown'
+              : 'folder';
       const slug = last && kind === 'markdown' ? markdownSlugFromSegment(segments[i]) : slugify(segments[i]);
       const found = await this.findChild(userId, workspaceId, parentId, slug, last ? undefined : 'folder');
       if (!found) {
@@ -277,16 +463,13 @@ export class DocsMcpService {
     const pages = await this.pages.list(userId, workspaceId);
     return (
       pages.find(
-        (page) =>
-          page.parentId === parentId &&
-          page.slug === slug &&
-          (!kind || page.kind === kind)
+        (page) => page.parentId === parentId && page.slug === slug && (!kind || page.kind === kind)
       ) ?? null
     );
   }
 
   private async pathOf(userId: string, workspaceId: string, nodeId: string): Promise<string | null> {
-    const tree = await this.listTree(userId, workspaceId);
+    const tree = await this.loadTree(userId, workspaceId);
     return tree.find((node) => node.id === nodeId)?.path ?? null;
   }
 

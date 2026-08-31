@@ -23,13 +23,6 @@ export class AiService {
 
   async ask(userId: string, pageId: string, prompt: string, context: string): Promise<string> {
     const page = await this.pages.requireMemberPage(userId, pageId);
-    if (await this.pages.isWorkspaceEncrypted(page.workspaceId)) {
-      throw new HttpError(
-        'Ask is unavailable while end-to-end encryption is on',
-        409,
-        'E2E_NO_SERVER_AI'
-      );
-    }
     if (!this.enabled()) {
       throw new HttpError(
         'AI is not configured. Set AI_API_KEY on the server to enable Ask.',
@@ -37,10 +30,15 @@ export class AiService {
         'AI_UNAVAILABLE'
       );
     }
-    if (this.options.complete) {
-      return this.options.complete({ prompt, context });
+    let ctx = context;
+    if (!ctx.trim() && page.kind === 'markdown') {
+      const body = await this.pages.loadMarkdownBody(pageId);
+      ctx = body?.content ?? '';
     }
-    return this.callProvider(prompt, context);
+    if (this.options.complete) {
+      return this.options.complete({ prompt, context: ctx });
+    }
+    return this.callProvider(prompt, ctx);
   }
 
   private async callProvider(prompt: string, context: string): Promise<string> {

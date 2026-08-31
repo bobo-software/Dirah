@@ -1,11 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { WebSocket } from 'ws';
 import type { Express } from 'express';
-import { createApp, getDocSync } from '../app';
-import { attachDocSync } from '../sync/attachDocSync';
+import { createApp } from '../app';
 import { pool, db } from '../db';
 import { runPendingMigrations } from '../db/migrationRunner';
 
@@ -16,75 +12,9 @@ const viewerEmail = `phase3-viewer-${stamp}@example.com`;
 const strangerEmail = `phase3-stranger-${stamp}@example.com`;
 const password = 'password12';
 
-function waitJson(ws: WebSocket): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const onMessage = (data: WebSocket.RawData) => {
-      cleanup();
-      resolve(JSON.parse(data.toString()) as Record<string, unknown>);
-    };
-    const onClose = (code: number) => {
-      cleanup();
-      reject(new Error(`closed ${code}`));
-    };
-    const cleanup = () => {
-      ws.off('message', onMessage);
-      ws.off('close', onClose);
-    };
-    ws.on('message', onMessage);
-    ws.on('close', onClose);
-  });
-}
-
-function waitForType(
-  ws: WebSocket,
-  type: string,
-  timeoutMs = 4000
-): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error(`timeout waiting for ${type}`));
-    }, timeoutMs);
-    const onMessage = (data: WebSocket.RawData) => {
-      const parsed = JSON.parse(data.toString()) as Record<string, unknown>;
-      if (parsed.type !== type) return;
-      cleanup();
-      resolve(parsed);
-    };
-    const onClose = (code: number) => {
-      cleanup();
-      reject(new Error(`closed ${code}`));
-    };
-    const cleanup = () => {
-      clearTimeout(timer);
-      ws.off('message', onMessage);
-      ws.off('close', onClose);
-    };
-    ws.on('message', onMessage);
-    ws.on('close', onClose);
-  });
-}
-
-async function openSync(port: number, token?: string, share?: string): Promise<WebSocket> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/sync`);
-  await new Promise<void>((resolve, reject) => {
-    ws.once('open', resolve);
-    ws.once('error', reject);
-  });
-  if (share) {
-    ws.send(JSON.stringify({ type: 'auth', share }));
-  } else if (token) {
-    ws.send(JSON.stringify({ type: 'auth', token }));
-  }
-  expect((await waitJson(ws)).type).toBe('ready');
-  return ws;
-}
-
 describe('sharing API', () => {
   let app: Express;
   let dbReady = false;
-  let server: http.Server;
-  let port = 0;
 
   beforeAll(async () => {
     try {
@@ -96,21 +26,9 @@ describe('sharing API', () => {
     }
     process.env.MCP_API_KEY ??= 'test-mcp-api-key';
     app = await createApp();
-    server = http.createServer(app);
-    attachDocSync(server, getDocSync(app));
-    await new Promise<void>((resolve) => {
-      server.listen(0, '127.0.0.1', () => {
-        port = (server.address() as AddressInfo).port;
-        resolve();
-      });
-    });
   });
 
-  afterAll(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  });
-
-  it('members, roles, public share, and sync authz', async () => {
+  it('members, roles, and public markdown share', async () => {
     if (!dbReady) {
       return;
     }
@@ -167,9 +85,19 @@ describe('sharing API', () => {
     const page = await request(app)
       .post(`/api/workspaces/${workspaceId}/pages`)
       .set('Authorization', `Bearer ${editorToken}`)
-      .send({ title: 'Shared' });
+      .send({ title: 'Shared', kind: 'markdown' });
     expect(page.status).toBe(201);
+    expect(page.body.data.page.kind).toBe('markdown');
     const pageId = page.body.data.page.id as string;
+
+    const empty = await request(app)
+      .get(`/api/pages/${pageId}/markdown`)
+      .set('Authorization', `Bearer ${editorToken}`);
+    expect(empty.status).toBe(200);
+    await request(app)
+      .put(`/api/pages/${pageId}/markdown`)
+      .set('Authorization', `Bearer ${editorToken}`)
+      .send({ content: '# Shared\n\nHello public.\n', hash: empty.body.data.hash });
 
     const viewerPatch = await request(app)
       .patch(`/api/pages/${pageId}`)
@@ -188,6 +116,17 @@ describe('sharing API', () => {
       .send({ role: 'viewer' });
     expect(lastOwnerDemote.status).toBe(400);
 
+    const folder = await request(app)
+      .post(`/api/workspaces/${workspaceId}/pages`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: 'Folder', kind: 'folder' });
+    expect(folder.status).toBe(201);
+    const folderShare = await request(app)
+      .post(`/api/pages/${folder.body.data.page.id}/share`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ permission: 'view' });
+    expect(folderShare.status).toBe(400);
+
     const share = await request(app)
       .post(`/api/pages/${pageId}/share`)
       .set('Authorization', `Bearer ${ownerToken}`)
@@ -198,64 +137,16 @@ describe('sharing API', () => {
     const publicPage = await request(app).get(`/api/public/pages/${token}`);
     expect(publicPage.status).toBe(200);
     expect(publicPage.body.data.page.id).toBe(pageId);
-    expect(publicPage.body.data.page).not.toHaveProperty('pages');
+    expect(publicPage.body.data.page.kind).toBe('markdown');
+
+    const publicMd = await request(app).get(`/api/public/pages/${token}/markdown`);
+    expect(publicMd.status).toBe(200);
+    expect(publicMd.body.data.content).toContain('Hello public.');
 
     const publicSiblings = await request(app)
       .get(`/api/workspaces/${workspaceId}/pages`)
       .set('Authorization', `Bearer ${strangerToken}`);
     expect(publicSiblings.status).toBe(403);
-
-    const editorWs = await openSync(port, editorToken);
-    editorWs.send(JSON.stringify({ type: 'join', workspaceId, docId: pageId, clock: 0 }));
-    expect((await waitJson(editorWs)).type).toBe('init');
-    editorWs.send(
-      JSON.stringify({
-        type: 'push',
-        docId: pageId,
-        update: Buffer.from('e30=', 'base64').toString('base64'),
-      })
-    );
-    await new Promise((resolve) => setTimeout(resolve, 80));
-
-    const viewerWs = await openSync(port, viewerToken);
-    viewerWs.send(JSON.stringify({ type: 'join', workspaceId, docId: pageId, clock: 0 }));
-    expect((await waitJson(viewerWs)).type).toBe('init');
-    viewerWs.send(
-      JSON.stringify({
-        type: 'push',
-        docId: pageId,
-        update: Buffer.from('e30=', 'base64').toString('base64'),
-      })
-    );
-    const viewerDenied = await waitJson(viewerWs);
-    expect(viewerDenied.type).toBe('error');
-    expect(viewerDenied.code).toBe('FORBIDDEN');
-
-    const pendingPresence = waitForType(editorWs, 'awareness');
-    viewerWs.send(
-      JSON.stringify({
-        type: 'awareness',
-        docId: pageId,
-        clientId: 99,
-        update: Buffer.from('viewer-aw').toString('base64'),
-      })
-    );
-    const viewerPresence = await pendingPresence;
-    expect(viewerPresence.clientId).toBe(99);
-
-    const publicWs = await openSync(port, undefined, token);
-    publicWs.send(JSON.stringify({ type: 'join', workspaceId, docId: pageId, clock: 0 }));
-    expect((await waitJson(publicWs)).type).toBe('init');
-    publicWs.send(
-      JSON.stringify({
-        type: 'push',
-        docId: pageId,
-        update: Buffer.from('e30=', 'base64').toString('base64'),
-      })
-    );
-    const publicDenied = await waitJson(publicWs);
-    expect(publicDenied.type).toBe('error');
-    expect(publicDenied.code).toBe('FORBIDDEN');
 
     const blobBytes = Buffer.from('share-blob-zymurgy');
     const uploaded = await request(app)
@@ -286,9 +177,5 @@ describe('sharing API', () => {
       .delete(`/api/workspaces/${workspaceId}/members/${editorId}`)
       .set('Authorization', `Bearer ${ownerToken}`);
     expect(removed.status).toBe(200);
-
-    editorWs.close();
-    viewerWs.close();
-    publicWs.close();
   });
 });

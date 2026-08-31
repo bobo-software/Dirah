@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { and, eq, isNull, or, gt } from 'drizzle-orm';
-import { pages, shareLinks, workspaces } from '../db/schemas';
+import { pages, shareLinks } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { type AuthService, type Database } from './AuthService';
 import { type PageService, type PublicPage } from './PageService';
@@ -30,20 +30,8 @@ export class ShareService {
       throw new HttpError('Only view links are supported', 400, 'INVALID_PERMISSION');
     }
     const page = await this.pages.requireMemberPage(userId, pageId);
-    await this.pages.requireBlockPage(page);
+    await this.pages.requireMarkdownPage(page);
     await this.auth.requireWorkspaceOwner(userId, page.workspaceId);
-    const [ws] = await this.database
-      .select({ encrypted: workspaces.encrypted })
-      .from(workspaces)
-      .where(eq(workspaces.id, page.workspaceId))
-      .limit(1);
-    if (ws?.encrypted) {
-      throw new HttpError(
-        'Public share is unavailable while end-to-end encryption is on',
-        409,
-        'E2E_NO_PUBLIC_SHARE'
-      );
-    }
     const existing = await this.activeLink(pageId);
     if (existing) {
       return existing;
@@ -102,7 +90,7 @@ export class ShareService {
     if (!page || page.deletedAt) {
       throw new HttpError('Share link not found', 404, 'SHARE_NOT_FOUND');
     }
-    const kind = page.kind === 'folder' || page.kind === 'markdown' ? page.kind : 'page';
+    const kind: PublicPage['kind'] = page.kind === 'folder' ? 'folder' : 'markdown';
     return {
       ...page,
       status: page.status as PublicPage['status'],
@@ -111,6 +99,21 @@ export class ShareService {
       favorited: false,
       token: link.token,
     };
+  }
+
+  async getPublicMarkdown(token: string): Promise<{
+    page: PublicPage & { token: string };
+    content: string;
+    hash: string;
+    updatedAt: Date;
+  }> {
+    const page = await this.requireActive(token);
+    await this.pages.requireMarkdownPage(page);
+    const body = await this.pages.loadMarkdownBody(page.id);
+    if (!body) {
+      throw new HttpError('Markdown body not found', 404, 'MARKDOWN_NOT_FOUND');
+    }
+    return { page, ...body };
   }
 
   async requireWorkspace(token: string, workspaceId: string): Promise<PublicPage & { token: string }> {
