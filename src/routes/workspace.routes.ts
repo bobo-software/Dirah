@@ -44,6 +44,7 @@ export function createWorkspaceRouter(
   router.put('/:id/crypto/keys', crypto.putMemberKey);
   router.get('/:id', controller.get);
   router.patch('/:id', controller.patch);
+  router.delete('/:id', controller.remove);
 
   return router;
 }

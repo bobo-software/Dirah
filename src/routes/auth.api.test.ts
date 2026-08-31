@@ -98,4 +98,59 @@ describe('auth and workspaces API', () => {
       .send({ refreshToken: refreshed.body.data.tokens.refreshToken });
     expect(afterLogout.status).toBe(401);
   });
+
+  it('owner can rename and delete a workspace', async () => {
+    if (!dbReady) {
+      return;
+    }
+
+    const ownerEmail = `ws-crud-owner-${Date.now()}@example.com`;
+    const editorEmail = `ws-crud-editor-${Date.now()}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email: ownerEmail, password });
+    expect(owner.status).toBe(201);
+    const access = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    const editor = await request(app).post('/api/auth/register').send({ email: editorEmail, password });
+    const editorAccess = editor.body.data.tokens.accessToken as string;
+    await request(app)
+      .post(`/api/workspaces/${workspaceId}/members`)
+      .set('Authorization', `Bearer ${access}`)
+      .send({ email: editorEmail, role: 'editor' });
+
+    const renamed = await request(app)
+      .patch(`/api/workspaces/${workspaceId}`)
+      .set('Authorization', `Bearer ${access}`)
+      .send({ name: 'Renamed workspace' });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.data.workspace.name).toBe('Renamed workspace');
+
+    const editorRename = await request(app)
+      .patch(`/api/workspaces/${workspaceId}`)
+      .set('Authorization', `Bearer ${editorAccess}`)
+      .send({ name: 'Editor rename' });
+    expect(editorRename.status).toBe(403);
+
+    const extra = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${access}`)
+      .send({ name: 'Extra workspace' });
+    expect(extra.status).toBe(201);
+    const extraId = extra.body.data.workspace.id as string;
+
+    const editorDelete = await request(app)
+      .delete(`/api/workspaces/${workspaceId}`)
+      .set('Authorization', `Bearer ${editorAccess}`);
+    expect(editorDelete.status).toBe(403);
+
+    const removed = await request(app)
+      .delete(`/api/workspaces/${extraId}`)
+      .set('Authorization', `Bearer ${access}`);
+    expect(removed.status).toBe(200);
+
+    const gone = await request(app)
+      .get(`/api/workspaces/${extraId}`)
+      .set('Authorization', `Bearer ${access}`);
+    expect(gone.status).toBe(404);
+  });
 });

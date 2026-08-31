@@ -1,6 +1,6 @@
 # Phase 6 — Public docs MCP and first-class markdown
 
-**Shipped.** Native iOS/Android remains next on the product backlog.
+**Shipped.** Remaining product work is on [backlog.md](./backlog.md) (Ask the workspace is next). Native iOS/Android is parked.
 
 ## Decision
 

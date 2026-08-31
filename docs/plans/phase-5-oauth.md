@@ -58,4 +58,4 @@ Unique `(provider, provider_user_id)`.
 
 - Invites: [phase-5-invites.md](./phase-5-invites.md)
 - E2E: [phase-5-e2e.md](./phase-5-e2e.md)
-- Backlog (next is native iOS / Android): [backlog.md](./backlog.md)
+- Backlog: [backlog.md](./backlog.md)
