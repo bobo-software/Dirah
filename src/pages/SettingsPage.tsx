@@ -9,6 +9,7 @@ import {
   revokeMcpToken,
   setMcpAccess,
   setWorkspaceMcpEnabled,
+  updateMcpToken,
   type McpAccessRow,
   type McpToken,
 } from '../api/mcp';
@@ -21,6 +22,7 @@ export function SettingsPage() {
   const [tokens, setTokens] = useState<McpToken[]>([]);
   const [access, setAccess] = useState<McpAccessRow[]>([]);
   const [name, setName] = useState('Cursor');
+  const [newTokenDefaultWorkspaceId, setNewTokenDefaultWorkspaceId] = useState('');
   const [secret, setSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export function SettingsPage() {
     setBusy(true);
     setCopied(false);
     try {
-      const token = await createMcpToken(accessToken, name);
+      const token = await createMcpToken(accessToken, name, newTokenDefaultWorkspaceId || undefined);
       setSecret(token.secret ?? null);
       setMessage(null);
       await refresh();
@@ -75,6 +77,26 @@ export function SettingsPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onSetDefaultWorkspace(tokenId: string, defaultWorkspaceId: string) {
+    if (!accessToken) return;
+    try {
+      await updateMcpToken(accessToken, tokenId, { defaultWorkspaceId: defaultWorkspaceId || null });
+      setMessage(null);
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not update default workspace');
+    }
+  }
+
+  function agentSnippet(token: McpToken): string | null {
+    const allowlisted = access.filter((row) => row.allowlisted);
+    const workspace =
+      allowlisted.find((row) => row.workspaceId === token.defaultWorkspaceId) ??
+      (allowlisted.length === 1 ? allowlisted[0] : undefined);
+    if (!workspace) return null;
+    return `Canonical docs: Dira workspace \`${workspace.slug}\`. Call dira_guide, then search_docs before inventing APIs or duplicating existing docs.`;
   }
 
   async function onRevoke(id: string) {
@@ -132,6 +154,20 @@ export function SettingsPage() {
         <h2>MCP tokens</h2>
         <form className="inline-form" onSubmit={(e) => void onCreate(e)}>
           <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Token name" />
+          <select
+            aria-label="Default workspace"
+            value={newTokenDefaultWorkspaceId}
+            onChange={(e) => setNewTokenDefaultWorkspaceId(e.target.value)}
+          >
+            <option value="">No default workspace</option>
+            {access
+              .filter((row) => row.allowlisted)
+              .map((row) => (
+                <option key={row.workspaceId} value={row.workspaceId}>
+                  {row.name}
+                </option>
+              ))}
+          </select>
           <button type="submit" disabled={busy}>
             {busy ? 'Creating…' : 'Create token'}
           </button>
@@ -152,10 +188,40 @@ export function SettingsPage() {
         ) : null}
         {tokens.length === 0 ? <p className="muted">No active tokens.</p> : null}
         {tokens.map((token) => (
-          <div className="settings-row" key={token.id}>
+          <div className="settings-row settings-row-token" key={token.id}>
             <div>
               <strong>{token.name}</strong>
               <p className="muted">{token.tokenPrefix}…</p>
+              <label className="sidebar-label" htmlFor={`default-ws-${token.id}`}>
+                Default workspace
+              </label>
+              <select
+                id={`default-ws-${token.id}`}
+                value={token.defaultWorkspaceId ?? ''}
+                onChange={(e) => void onSetDefaultWorkspace(token.id, e.target.value)}
+              >
+                <option value="">No default workspace</option>
+                {access
+                  .filter((row) => row.allowlisted)
+                  .map((row) => (
+                    <option key={row.workspaceId} value={row.workspaceId}>
+                      {row.name}
+                    </option>
+                  ))}
+              </select>
+              {agentSnippet(token) ? (
+                <>
+                  <label className="sidebar-label" htmlFor={`agent-snippet-${token.id}`}>
+                    CLAUDE.md / AGENTS.md snippet
+                  </label>
+                  <textarea
+                    id={`agent-snippet-${token.id}`}
+                    className="mcp-snippet"
+                    readOnly
+                    value={agentSnippet(token) ?? ''}
+                  />
+                </>
+              ) : null}
             </div>
             <button type="button" className="linkish danger" onClick={() => void onRevoke(token.id)}>
               Revoke

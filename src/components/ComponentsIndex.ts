@@ -7,6 +7,7 @@ import SettingsRedirect from './SettingsRedirect';
 import ThemeToggle from './ThemeToggle';
 import WorkspacesModal from './WorkspacesModal';
 import ProfileMenu from './ProfileMenu';
+import { Logo, BrandLink } from './Logo';
 
 export {
   Sidebar,
@@ -18,6 +19,8 @@ export {
   ThemeToggle,
   WorkspacesModal,
   ProfileMenu,
+  Logo,
+  BrandLink,
 };
 
 const components = {
@@ -30,6 +33,8 @@ const components = {
   ThemeToggle,
   WorkspacesModal,
   ProfileMenu,
+  Logo,
+  BrandLink,
 };
 
 export default components;

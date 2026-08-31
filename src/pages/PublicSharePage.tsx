@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getPublicMarkdown } from '../api/share';
+import { BrandLink } from '../components/Logo';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 export function PublicSharePage() {
@@ -35,24 +36,39 @@ export function PublicSharePage() {
   if (error) {
     return (
       <div className="public-share">
-        <p className="error" role="alert">
-          {error}
-        </p>
-        <p>
-          <Link to="/login">Sign in</Link>
-        </p>
+        <header className="topbar">
+          <BrandLink />
+          <div className="topbar-user">
+            <ThemeToggle />
+          </div>
+        </header>
+        <div className="public-share-head">
+          <div>
+            <p className="error" role="alert">
+              {error}
+            </p>
+            <p>
+              <Link to="/login">Sign in</Link>
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="public-share">
+      <header className="topbar">
+        <BrandLink />
+        <div className="topbar-user">
+          <ThemeToggle />
+        </div>
+      </header>
       <header className="public-share-head">
         <div>
           <h1>{title}</h1>
           <p className="muted">Shared markdown</p>
         </div>
-        <ThemeToggle />
       </header>
       <div className="markdown-preview public-markdown">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '_Empty document._'}</ReactMarkdown>

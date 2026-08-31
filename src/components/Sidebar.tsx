@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { PublicWorkspace } from '../api/client';
+import { Logo } from './Logo';
 
 export function useSidebarDrawer() {
   const [open, setOpen] = useState(false);
@@ -117,7 +118,9 @@ export default function Sidebar({
         }}
       >
         <div className="sidebar-drawer-head">
-          <span className="sidebar-drawer-title">Menu</span>
+          <span className="sidebar-drawer-title">
+            <Logo size="sm" decorative />
+          </span>
           <button type="button" className="sidebar-close" onClick={onClose} aria-label="Close menu">
             <CloseIcon />
           </button>

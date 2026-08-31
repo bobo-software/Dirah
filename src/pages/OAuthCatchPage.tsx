@@ -1,6 +1,7 @@
 import { useLayoutEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { REFRESH_KEY } from '../auth/AuthContext';
+import { Logo } from '../components/Logo';
 
 export function OAuthCatchPage() {
   useLayoutEffect(() => {
@@ -14,6 +15,9 @@ export function OAuthCatchPage() {
 
   return (
     <main className="auth-card">
+      <div className="auth-brand">
+        <Logo size="lg" decorative />
+      </div>
       <h1>Signing in…</h1>
       <p className="muted">If nothing happens, return to sign in and try again.</p>
       <p>

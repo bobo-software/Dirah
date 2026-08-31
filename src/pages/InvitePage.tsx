@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { Logo } from '../components/Logo';
 import { previewInvite, type InvitePreview } from '../api/members';
 
 export function InvitePage() {
@@ -28,6 +29,9 @@ export function InvitePage() {
   if (missing || !token) {
     return (
       <main className="auth-card">
+        <div className="auth-brand">
+          <Logo size="lg" decorative />
+        </div>
         <h1>Invite not found</h1>
         <p className="muted">This link is invalid, expired, or already used.</p>
         <p>
@@ -55,6 +59,9 @@ export function InvitePage() {
 
   return (
     <main className="auth-card">
+      <div className="auth-brand">
+        <Logo size="lg" decorative />
+      </div>
       <h1>Join {preview.workspaceName}</h1>
       <p className="muted">
         Invited as {preview.role}: {preview.email}

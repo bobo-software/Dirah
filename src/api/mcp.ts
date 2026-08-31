@@ -4,6 +4,7 @@ export type McpToken = {
   id: string;
   name: string;
   tokenPrefix: string;
+  defaultWorkspaceId: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -13,6 +14,7 @@ export type McpToken = {
 export type McpAccessRow = {
   workspaceId: string;
   name: string;
+  slug: string;
   role: string;
   encrypted: boolean;
   mcpEnabled: boolean;
@@ -25,11 +27,28 @@ export async function listMcpTokens(accessToken: string): Promise<McpToken[]> {
   return data.tokens;
 }
 
-export async function createMcpToken(accessToken: string, name: string): Promise<McpToken> {
+export async function createMcpToken(
+  accessToken: string,
+  name: string,
+  defaultWorkspaceId?: string
+): Promise<McpToken> {
   const data = await apiRequest<{ token: McpToken }>('/api/mcp/tokens', {
     method: 'POST',
     accessToken,
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, defaultWorkspaceId }),
+  });
+  return data.token;
+}
+
+export async function updateMcpToken(
+  accessToken: string,
+  id: string,
+  input: { name?: string; defaultWorkspaceId?: string | null }
+): Promise<McpToken> {
+  const data = await apiRequest<{ token: McpToken }>(`/api/mcp/tokens/${id}`, {
+    method: 'PATCH',
+    accessToken,
+    body: JSON.stringify(input),
   });
   return data.token;
 }

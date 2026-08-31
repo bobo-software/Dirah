@@ -1,5 +1,6 @@
-import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { BrandLink } from '../components/Logo';
 import { ProfileMenu } from '../components/ProfileMenu';
 
 export function RequireAuth() {
@@ -17,9 +18,7 @@ export function AppFrame() {
   return (
     <div className="app">
       <header className="topbar">
-        <Link to="/" className="brand">
-          Dira
-        </Link>
+        <BrandLink />
         <div className="topbar-user">
           <ProfileMenu />
         </div>
