@@ -71,6 +71,13 @@
       "when": 1756536900000,
       "tag": "0009_phase5_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1756537000000,
+      "tag": "0010_phase5_oauth",
+      "breakpoints": true
     }
   ]
 }
