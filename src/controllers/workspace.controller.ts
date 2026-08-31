@@ -9,9 +9,14 @@ const createSchema = z.object({
   name: z.string().min(1),
 });
 
-const patchSchema = z.object({
-  mcpEnabled: z.boolean(),
-});
+const patchSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    mcpEnabled: z.boolean().optional(),
+  })
+  .refine((data) => data.name !== undefined || data.mcpEnabled !== undefined, {
+    message: 'Provide a name or mcpEnabled',
+  });
 
 export function createWorkspaceController(authService: AuthService, mcpTokens?: McpTokenService) {
   return {
@@ -44,15 +49,33 @@ export function createWorkspaceController(authService: AuthService, mcpTokens?: 
         return ResponseUtils.error(res, 'Workspace id is required', null, 400);
       }
       const parsed = patchSchema.safeParse(req.body ?? {});
-      if (!parsed.success || !mcpTokens) {
-        return ResponseUtils.error(res, 'Invalid workspace payload', parsed.success ? null : parsed.error.flatten(), 400);
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid workspace payload', parsed.error.flatten(), 400);
       }
-      const workspace = await mcpTokens.setWorkspaceMcpEnabled(
-        req.user!.userId,
-        id,
-        parsed.data.mcpEnabled
-      );
+      let workspace;
+      if (parsed.data.name !== undefined) {
+        workspace = await authService.renameWorkspace(req.user!.userId, id, parsed.data.name);
+      }
+      if (parsed.data.mcpEnabled !== undefined) {
+        if (!mcpTokens) {
+          return ResponseUtils.error(res, 'Invalid workspace payload', null, 400);
+        }
+        workspace = await mcpTokens.setWorkspaceMcpEnabled(
+          req.user!.userId,
+          id,
+          parsed.data.mcpEnabled
+        );
+      }
       return ResponseUtils.success(res, 'ok', { workspace });
+    }),
+
+    remove: asyncHandler(async (req: Request, res: Response) => {
+      const id = req.params.id;
+      if (!id) {
+        return ResponseUtils.error(res, 'Workspace id is required', null, 400);
+      }
+      await authService.deleteWorkspace(req.user!.userId, id);
+      return ResponseUtils.success(res, 'Workspace deleted');
     }),
   };
 }

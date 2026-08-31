@@ -274,6 +274,24 @@ export class AuthService {
     return workspace;
   }
 
+  async renameWorkspace(userId: string, workspaceId: string, nameRaw: string): Promise<PublicWorkspace> {
+    await this.requireWorkspaceOwner(userId, workspaceId);
+    const name = nameRaw.trim();
+    if (!name) {
+      throw new HttpError('Workspace name is required', 400, 'INVALID_NAME');
+    }
+    await this.database
+      .update(workspaces)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
+    return this.getWorkspace(userId, workspaceId);
+  }
+
+  async deleteWorkspace(userId: string, workspaceId: string): Promise<void> {
+    await this.requireWorkspaceOwner(userId, workspaceId);
+    await this.database.delete(workspaces).where(eq(workspaces.id, workspaceId));
+  }
+
   async issueSession(userId: string): Promise<AuthTokens> {
     return this.issueTokens(userId);
   }

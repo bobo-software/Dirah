@@ -12,9 +12,8 @@ _(none — pick the next numbered item when you continue.)_
 
 ## Next (in order)
 
-1. **Native iOS / Android** — true mobile apps. The web reader ([phase-5-mobile.md](./phase-5-mobile.md)) is not this.
-2. **Ask the workspace** — leftover from [phase-5-ai.md](./phase-5-ai.md): embeddings / pgvector over the corpus. **After full-text search.**
-3. **Templates, graph / backlinks, multi-select move** — called out as not-in-phase in workspace UX. Product polish, not platform.
+1. **Ask the workspace** — leftover from [phase-5-ai.md](./phase-5-ai.md): embeddings / pgvector over the corpus. **After full-text search.**
+2. **Templates, graph / backlinks, multi-select move** — called out as not-in-phase in workspace UX. Product polish, not platform.
 
 ## Not without an explicit decision
 
@@ -23,6 +22,7 @@ _(none — pick the next numbered item when you continue.)_
 - Vendor AFFiNE frontend packages or pixel-clone their chrome
 - Payments / public-cloud billing
 - Desktop wrapper (Electron / Tauri) or embedding the API in a native shell
+- Native iOS / Android — phone-width web reader already shipped ([phase-5-mobile.md](./phase-5-mobile.md)); store apps are parked
 
 ## How this relates to other docs
 

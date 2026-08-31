@@ -58,7 +58,7 @@ From this repo root, `npm run dev` in `dira_web` can pick up the backend package
 
 ## Next (in order)
 
-1. Remaining product backlog — native iOS / Android is next ([backlog.md](./plans/backlog.md)).
+1. Remaining product backlog — Ask the workspace is next ([backlog.md](./plans/backlog.md)).
 
 Pay down [debt/](./debt/) when it blocks a phase (especially PORT/MCP mismatch and `drizzle-kit generate`).
 

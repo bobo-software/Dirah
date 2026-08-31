@@ -1,6 +1,6 @@
 # Phase 5f — Mobile readers
 
-First item on [backlog.md](./backlog.md). Copilot is done. Do not pull in native iOS/Android, installers, Redis, S3, or full-text search.
+**Shipped.** Phone-width web reader only. Native iOS/Android is parked (not on [backlog.md](./backlog.md)). Copilot is done. Do not pull in installers, Redis, S3, or full-text search.
 
 ## Decision
 
