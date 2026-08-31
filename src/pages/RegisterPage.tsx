@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { OAuthButtons } from './OAuthButtons';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export function RegisterPage() {
   const { user, ready, register } = useAuth();
@@ -31,6 +32,9 @@ export function RegisterPage() {
 
   return (
     <main className="auth-card">
+      <div className="auth-card-corner">
+        <ThemeToggle />
+      </div>
       <h1>Create account</h1>
       <p className="muted">A workspace named “My workspace” is created for you.</p>
       <OAuthButtons />

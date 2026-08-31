@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Outlet, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { Link, Outlet, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
   createPage,
@@ -9,16 +9,17 @@ import {
   setPageFavorite,
 } from '../api/pages';
 import type { PageKind, PublicPage, PublicWorkspace } from '../api/client';
-import { CreateWorkspaceModal, Sidebar } from '../components/ComponentsIndex';
-import { setLastWorkspaceId } from '../components/lastWorkspace';
+import { Sidebar, WorkspacesModal } from '../components/ComponentsIndex';
+import { clearLastWorkspaceId, setLastWorkspaceId } from '../components/lastWorkspace';
 import { useSidebarDrawer } from '../components/Sidebar';
 import { EmptyEditorPane } from './EmptyEditorPane';
 import { buildPageTree, PageTree } from './PageTree';
-import { canAdmin, canEdit } from './workspaceContext';
+import { canEdit } from './workspaceContext';
 
 export function WorkspaceShellPage() {
   const { workspaceId, pageId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isTrash = Boolean(useMatch('/w/:workspaceId/trash'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
   const isSettings = Boolean(useMatch('/w/:workspaceId/settings'));
@@ -32,7 +33,7 @@ export function WorkspaceShellPage() {
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
+  const [workspacesOpen, setWorkspacesOpen] = useState(false);
   const { open: sidebarOpen, setOpen: setSidebarOpen, narrow } = useSidebarDrawer();
 
   useEffect(() => {
@@ -148,7 +149,6 @@ export function WorkspaceShellPage() {
   }
 
   const editable = canEdit(workspace.role);
-  const admin = canAdmin(workspace.role);
   const searching = Boolean(query);
   const favorites = pages.filter((page) => page.favorited);
   const tree = searching
@@ -160,8 +160,6 @@ export function WorkspaceShellPage() {
     workspaceId,
     pageId,
     editable,
-    admin,
-    accessToken,
     renamingId,
     renameValue,
     onRenameValue: setRenameValue,
@@ -183,8 +181,9 @@ export function WorkspaceShellPage() {
         workspace={workspace}
         open={sidebarOpen}
         narrow={narrow}
+        manageOpen={workspacesOpen}
         onClose={() => setSidebarOpen(false)}
-        onNewWorkspace={() => setCreateOpen(true)}
+        onOpenWorkspaces={() => setWorkspacesOpen(true)}
       >
         <label className="sidebar-label" htmlFor="page-search">
           Search
@@ -248,12 +247,37 @@ export function WorkspaceShellPage() {
           </p>
         ) : null}
       </Sidebar>
-      <CreateWorkspaceModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
+      <WorkspacesModal
+        open={workspacesOpen}
+        onClose={() => setWorkspacesOpen(false)}
+        workspaces={workspaces}
+        currentId={workspace.id}
+        onSelect={(id) => {
+          setLastWorkspaceId(id);
+          const stayOnSettings = /\/settings\/?$/.test(location.pathname);
+          navigate(stayOnSettings ? `/w/${id}/settings` : `/w/${id}`);
+        }}
         onCreated={(created) => {
           setLastWorkspaceId(created.id);
+          setWorkspaces((list) => [...list, created]);
           navigate(`/w/${created.id}`);
+        }}
+        onRenamed={(updated) => {
+          setWorkspaces((list) => list.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+          setWorkspace((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
+        }}
+        onDeleted={(id) => {
+          const remaining = workspaces.filter((item) => item.id !== id);
+          setWorkspaces(remaining);
+          if (workspace.id !== id) return;
+          const next = remaining[0];
+          if (next) {
+            setLastWorkspaceId(next.id);
+            navigate(`/w/${next.id}`);
+            return;
+          }
+          clearLastWorkspaceId();
+          navigate('/');
         }}
       />
       <section className="editor-pane">

@@ -1,7 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import type { DragEvent } from 'react';
 import type { PageKind, PublicPage } from '../api/client';
-import { ShareDialog } from './ShareDialog';
 import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
 
 function RenameIcon() {
@@ -50,29 +49,11 @@ export function buildPageTree(pages: PublicPage[]): PageNode[] {
   return nest(null);
 }
 
-export function PageTree({
-  nodes,
-  workspaceId,
-  pageId,
-  editable,
-  admin,
-  accessToken,
-  renamingId,
-  renameValue,
-  onRenameValue,
-  onStartRename,
-  onCommitRename,
-  onCreateChild,
-  onTrash,
-  onFavorite,
-  onMove,
-}: {
+type PageTreeProps = {
   nodes: PageNode[];
   workspaceId: string;
   pageId?: string;
   editable: boolean;
-  admin: boolean;
-  accessToken: string | null;
   renamingId: string | null;
   renameValue: string;
   onRenameValue: (value: string) => void;
@@ -82,28 +63,13 @@ export function PageTree({
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
-}) {
+};
+
+export function PageTree(props: PageTreeProps) {
   return (
     <ul className="page-tree">
-      {nodes.map((node) => (
-        <PageTreeItem
-          key={node.page.id}
-          node={node}
-          workspaceId={workspaceId}
-          pageId={pageId}
-          editable={editable}
-          admin={admin}
-          accessToken={accessToken}
-          renamingId={renamingId}
-          renameValue={renameValue}
-          onRenameValue={onRenameValue}
-          onStartRename={onStartRename}
-          onCommitRename={onCommitRename}
-          onCreateChild={onCreateChild}
-          onTrash={onTrash}
-          onFavorite={onFavorite}
-          onMove={onMove}
-        />
+      {props.nodes.map((node) => (
+        <PageTreeItem key={node.page.id} node={node} {...props} />
       ))}
     </ul>
   );
@@ -114,8 +80,6 @@ function PageTreeItem({
   workspaceId,
   pageId,
   editable,
-  admin,
-  accessToken,
   renamingId,
   renameValue,
   onRenameValue,
@@ -125,23 +89,7 @@ function PageTreeItem({
   onTrash,
   onFavorite,
   onMove,
-}: {
-  node: PageNode;
-  workspaceId: string;
-  pageId?: string;
-  editable: boolean;
-  admin: boolean;
-  accessToken: string | null;
-  renamingId: string | null;
-  renameValue: string;
-  onRenameValue: (value: string) => void;
-  onStartRename: (page: PublicPage) => void;
-  onCommitRename: (page: PublicPage) => void;
-  onCreateChild: (parent: PublicPage, kind: PageKind) => void;
-  onTrash: (page: PublicPage) => void;
-  onFavorite: (page: PublicPage) => void;
-  onMove: (pageId: string, parentId: string | null) => void;
-}) {
+}: PageTreeProps & { node: PageNode }) {
   const page = node.page;
   const kind = pageKind(page);
   const active = page.id === pageId;
@@ -239,9 +187,6 @@ function PageTreeItem({
           ) : !editable ? (
             <span className="page-actions" />
           ) : null}
-          {admin && active && accessToken && kind === 'markdown' ? (
-            <ShareDialog pageId={page.id} accessToken={accessToken} />
-          ) : null}
         </>
       )}
       {node.children.length > 0 ? (
@@ -250,8 +195,6 @@ function PageTreeItem({
           workspaceId={workspaceId}
           pageId={pageId}
           editable={editable}
-          admin={admin}
-          accessToken={accessToken}
           renamingId={renamingId}
           renameValue={renameValue}
           onRenameValue={onRenameValue}

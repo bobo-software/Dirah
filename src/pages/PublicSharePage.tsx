@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getPublicMarkdown } from '../api/share';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export function PublicSharePage() {
   const { token } = useParams();
@@ -47,8 +48,11 @@ export function PublicSharePage() {
   return (
     <div className="public-share">
       <header className="public-share-head">
-        <h1>{title}</h1>
-        <p className="muted">Shared markdown</p>
+        <div>
+          <h1>{title}</h1>
+          <p className="muted">Shared markdown</p>
+        </div>
+        <ThemeToggle />
       </header>
       <div className="markdown-preview public-markdown">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '_Empty document._'}</ReactMarkdown>

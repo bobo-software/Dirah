@@ -1,5 +1,6 @@
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { ProfileMenu } from '../components/ProfileMenu';
 
 export function RequireAuth() {
   const { user, ready } = useAuth();
@@ -13,8 +14,6 @@ export function RequireAuth() {
 }
 
 export function AppFrame() {
-  const { user, logout } = useAuth();
-
   return (
     <div className="app">
       <header className="topbar">
@@ -22,10 +21,7 @@ export function AppFrame() {
           Dira
         </Link>
         <div className="topbar-user">
-          <span className="topbar-email">{user?.email}</span>
-          <button type="button" className="linkish" onClick={() => void logout()}>
-            Log out
-          </button>
+          <ProfileMenu />
         </div>
       </header>
       <Outlet />

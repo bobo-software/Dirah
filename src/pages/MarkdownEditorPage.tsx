@@ -10,10 +10,12 @@ import { getAiStatus } from '../api/ai';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { pageKind } from './pageKind';
 import { AskPanel } from './AskPanel';
+import { useTheme } from '../theme/ThemeContext';
 
 export function MarkdownEditorPage() {
   const { pageId } = useParams();
   const { role, accessToken, pageTitle, pages, refreshPages } = useOutletContext<WorkspaceOutlet>();
+  const { resolved } = useTheme();
   const editable = canEdit(role);
   const page = pages.find((item) => item.id === pageId);
   const [content, setContent] = useState('');
@@ -145,6 +147,7 @@ export function MarkdownEditorPage() {
           <CodeMirror
             value={content}
             height="100%"
+            theme={resolved}
             extensions={[markdown(), EditorView.lineWrapping]}
             onChange={onChange}
             basicSetup={{ lineNumbers: true, foldGutter: true }}

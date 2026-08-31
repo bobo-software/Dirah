@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { OAuthButtons } from './OAuthButtons';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export function LoginPage() {
   const { user, ready, login } = useAuth();
@@ -36,6 +37,9 @@ export function LoginPage() {
 
   return (
     <main className="auth-card">
+      <div className="auth-card-corner">
+        <ThemeToggle />
+      </div>
       <h1>Dira</h1>
       <p className="muted">Sign in to your workspace</p>
       <OAuthButtons />

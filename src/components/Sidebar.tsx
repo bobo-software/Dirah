@@ -1,7 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import type { PublicWorkspace } from '../api/client';
-import { setLastWorkspaceId } from './lastWorkspace';
 
 export function useSidebarDrawer() {
   const [open, setOpen] = useState(false);
@@ -87,20 +86,20 @@ export default function Sidebar({
   workspace,
   open,
   narrow,
+  manageOpen,
   onClose,
-  onNewWorkspace,
+  onOpenWorkspaces,
   children,
 }: {
   workspaces: PublicWorkspace[];
   workspace: PublicWorkspace | null;
   open: boolean;
   narrow: boolean;
+  manageOpen: boolean;
   onClose: () => void;
-  onNewWorkspace: () => void;
+  onOpenWorkspaces: () => void;
   children?: ReactNode;
 }) {
-  const navigate = useNavigate();
-  const location = useLocation();
   const currentId = workspace?.id ?? '';
   const initial = (workspace?.name ?? '?').trim().charAt(0).toUpperCase() || '?';
 
@@ -125,40 +124,22 @@ export default function Sidebar({
         </div>
         <div className="sidebar-workspace">
           {workspaces.length > 0 ? (
-            <div className="sidebar-workspace-row">
+            <button
+              type="button"
+              className="workspace-switcher"
+              aria-haspopup="dialog"
+              aria-expanded={manageOpen}
+              title="Manage workspaces"
+              onClick={onOpenWorkspaces}
+            >
               <span className="workspace-avatar" aria-hidden="true">
                 {initial}
               </span>
-              <div className="sidebar-workspace-select">
-                <select
-                  id="workspace-switcher"
-                  aria-label="Workspace"
-                  value={currentId}
-                  onChange={(event) => {
-                    const id = event.target.value;
-                    setLastWorkspaceId(id);
-                    const stayOnSettings = /\/settings\/?$/.test(location.pathname);
-                    navigate(stayOnSettings ? `/w/${id}/settings` : `/w/${id}`);
-                  }}
-                >
-                  {!currentId ? (
-                    <option value="" disabled>
-                      Select a workspace
-                    </option>
-                  ) : null}
-                  {workspaces.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button type="button" className="sidebar-add" onClick={onNewWorkspace} aria-label="New workspace">
-                <PlusIcon />
-              </button>
-            </div>
+              <span className="workspace-switcher-name">{workspace?.name ?? 'Workspaces'}</span>
+              <span className="workspace-switcher-caret" aria-hidden="true" />
+            </button>
           ) : (
-            <button type="button" className="sidebar-empty-cta" onClick={onNewWorkspace}>
+            <button type="button" className="sidebar-empty-cta" onClick={onOpenWorkspaces}>
               <PlusIcon />
               New workspace
             </button>

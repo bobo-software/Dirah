@@ -15,6 +15,8 @@ type AuthState = {
   listWorkspaces: () => Promise<PublicWorkspace[]>;
   createWorkspace: (name: string) => Promise<PublicWorkspace>;
   getWorkspace: (id: string) => Promise<PublicWorkspace>;
+  renameWorkspace: (id: string, name: string) => Promise<PublicWorkspace>;
+  deleteWorkspace: (id: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -154,6 +156,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [accessToken]
   );
 
+  const renameWorkspace = useCallback(
+    async (id: string, name: string) => {
+      if (!accessToken) throw new Error('Not signed in');
+      const data = await apiRequest<{ workspace: PublicWorkspace }>(`/api/workspaces/${id}`, {
+        method: 'PATCH',
+        accessToken,
+        body: JSON.stringify({ name }),
+      });
+      return data.workspace;
+    },
+    [accessToken]
+  );
+
+  const deleteWorkspace = useCallback(
+    async (id: string) => {
+      if (!accessToken) throw new Error('Not signed in');
+      await apiRequest(`/api/workspaces/${id}`, {
+        method: 'DELETE',
+        accessToken,
+      });
+    },
+    [accessToken]
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -167,6 +193,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       listWorkspaces,
       createWorkspace,
       getWorkspace,
+      renameWorkspace,
+      deleteWorkspace,
     }),
     [
       user,
@@ -180,6 +208,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       listWorkspaces,
       createWorkspace,
       getWorkspace,
+      renameWorkspace,
+      deleteWorkspace,
     ]
   );
 
