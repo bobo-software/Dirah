@@ -8,9 +8,20 @@ export type PublicShareLink = {
 };
 
 export type PublicSharedPage = {
-  page: { id: string; title: string; workspaceId: string };
+  page: { id: string; title: string; workspaceId: string; kind?: string };
   permission: string;
 };
+
+export type PublicMarkdown = {
+  page: { id: string; title: string; workspaceId: string; kind: string };
+  content: string;
+  hash: string;
+  updatedAt: string;
+};
+
+export async function getPublicMarkdown(token: string): Promise<PublicMarkdown> {
+  return apiRequest<PublicMarkdown>(`/api/public/pages/${encodeURIComponent(token)}/markdown`);
+}
 
 export async function getShare(accessToken: string, pageId: string): Promise<PublicShareLink | null> {
   const data = await apiRequest<{ share: PublicShareLink | null }>(`/api/pages/${pageId}/share`, {

@@ -4,11 +4,9 @@ import { createShare, getShare, revokeShare } from '../api/share';
 export function ShareDialog({
   pageId,
   accessToken,
-  encrypted,
 }: {
   pageId: string;
   accessToken: string;
-  encrypted?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -16,7 +14,7 @@ export function ShareDialog({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open || encrypted) return;
+    if (!open) return;
     void getShare(accessToken, pageId)
       .then((share) => {
         setUrl(share ? `${window.location.origin}/s/${share.token}` : null);
@@ -24,7 +22,7 @@ export function ShareDialog({
       .catch((error: unknown) => {
         setMessage(error instanceof Error ? error.message : 'Could not load share link');
       });
-  }, [accessToken, open, pageId, encrypted]);
+  }, [accessToken, open, pageId]);
 
   async function onCreate() {
     setBusy(true);
@@ -59,9 +57,7 @@ export function ShareDialog({
       </button>
       {open ? (
         <div className="share-pop">
-          {encrypted ? (
-            <p className="muted">Public links are off while this workspace is encrypted.</p>
-          ) : url ? (
+          {url ? (
             <>
               <input aria-label="Share link" readOnly value={url} />
               <button

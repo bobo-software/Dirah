@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiRequest, type AuthTokens, type PublicUser, type PublicWorkspace } from '../api/client';
-import { bootstrapAccountKeys, clearAccountKeys, restoreAccountKeys } from '../crypto/vault';
 
 export const REFRESH_KEY = 'dira.refreshToken';
 
@@ -53,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({ refreshToken: existing }),
         });
         await applyTokens(tokens);
-        await restoreAccountKeys();
       } catch {
         localStorage.removeItem(REFRESH_KEY);
         setUser(null);
@@ -78,7 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(data.tokens.accessToken);
       localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
       setUser(data.user);
-      await bootstrapAccountKeys(password, data.tokens.accessToken).catch(() => undefined);
       return data.workspace;
     },
     []
@@ -97,7 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(data.tokens.accessToken);
     localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
     setUser(data.user);
-    await bootstrapAccountKeys(password, data.tokens.accessToken).catch(() => undefined);
     return data.workspace;
   }, []);
 
@@ -108,7 +104,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     await applyTokens(data.tokens);
-    await bootstrapAccountKeys(password, data.tokens.accessToken).catch(() => undefined);
   }, [applyTokens]);
 
   const logout = useCallback(async () => {
@@ -122,7 +117,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       localStorage.removeItem(REFRESH_KEY);
-      clearAccountKeys();
       setAccessToken(null);
       setUser(null);
     }

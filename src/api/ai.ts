@@ -1,5 +1,10 @@
 import { apiRequest } from './client';
 
+export async function getAiStatus(accessToken: string): Promise<boolean> {
+  const data = await apiRequest<{ enabled: boolean }>('/api/ai/status', { accessToken });
+  return data.enabled;
+}
+
 export async function askPage(
   accessToken: string,
   pageId: string,

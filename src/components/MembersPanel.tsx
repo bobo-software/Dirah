@@ -8,18 +8,13 @@ import {
   type PublicInvite,
   type PublicMember,
 } from '../api/members';
-import { enableEncryption, shareDekWithMember, wrapMissingMemberKeys } from '../crypto/vault';
 
-export function MembersPanel({
+export default function MembersPanel({
   workspaceId,
   accessToken,
-  encrypted,
-  onEncrypted,
 }: {
   workspaceId: string;
   accessToken: string;
-  encrypted: boolean;
-  onEncrypted?: () => void;
 }) {
   const [members, setMembers] = useState<PublicMember[]>([]);
   const [invites, setInvites] = useState<PublicInvite[]>([]);
@@ -33,10 +28,7 @@ export function MembersPanel({
     const data = await listMembers(accessToken, workspaceId);
     setMembers(data.members);
     setInvites(data.invites ?? []);
-    if (encrypted) {
-      await wrapMissingMemberKeys(accessToken, workspaceId).catch(() => undefined);
-    }
-  }, [accessToken, encrypted, workspaceId]);
+  }, [accessToken, workspaceId]);
 
   useEffect(() => {
     void refresh().catch((error: unknown) => {
@@ -62,9 +54,6 @@ export function MembersPanel({
     try {
       const result = await inviteMember(accessToken, workspaceId, email, role);
       if (result.member) {
-        if (encrypted) {
-          await shareDekWithMember(accessToken, workspaceId, result.member.userId);
-        }
         setEmail('');
         await refresh();
       } else if (result.invite) {
@@ -80,33 +69,10 @@ export function MembersPanel({
   }
 
   return (
-    <section className="members-panel">
-      <p className="sidebar-label">Members</p>
-      {encrypted ? (
-        <p className="muted">Pages in this workspace are end-to-end encrypted.</p>
-      ) : (
-        <button
-          type="button"
-          className="linkish"
-          disabled={busy}
-          onClick={() => {
-            void (async () => {
-              setBusy(true);
-              setMessage(null);
-              try {
-                await enableEncryption(accessToken, workspaceId);
-                onEncrypted?.();
-              } catch (error) {
-                setMessage(error instanceof Error ? error.message : 'Could not enable encryption');
-              } finally {
-                setBusy(false);
-              }
-            })();
-          }}
-        >
-          Encrypt pages
-        </button>
-      )}
+    <div className="settings-section">
+      <div className="settings-section-head">
+        <h2>Members</h2>
+      </div>
       <ul className="member-list">
         {members.map((member) => (
           <li key={member.userId}>
@@ -166,7 +132,7 @@ export function MembersPanel({
           </li>
         ))}
       </ul>
-      <form className="invite-form" onSubmit={(event) => void onInvite(event)}>
+      <form className="invite-form inline-form" onSubmit={(event) => void onInvite(event)}>
         <input
           type="email"
           placeholder="email"
@@ -197,6 +163,6 @@ export function MembersPanel({
           {message}
         </p>
       ) : null}
-    </section>
+    </div>
   );
 }

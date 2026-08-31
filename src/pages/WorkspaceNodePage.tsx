@@ -1,5 +1,4 @@
 import { useOutletContext, useParams } from 'react-router-dom';
-import { PageEditorPage } from './PageEditorPage';
 import { MarkdownEditorPage } from './MarkdownEditorPage';
 import { FolderLandingPage } from './FolderLandingPage';
 import { pageKind } from './pageKind';
@@ -16,8 +15,5 @@ export function WorkspaceNodePage() {
   if (kind === 'folder') {
     return <FolderLandingPage onCreate={onCreateNode} />;
   }
-  if (kind === 'markdown') {
-    return <MarkdownEditorPage />;
-  }
-  return <PageEditorPage />;
+  return <MarkdownEditorPage />;
 }

@@ -10,10 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@blocksuite/blocks": "0.19.5",
-    "@blocksuite/presets": "0.19.5",
-    "@blocksuite/store": "0.19.5",
-    "@blocksuite/sync": "0.19.5",
     "@codemirror/lang-markdown": "^6.3.3",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.1",
@@ -22,14 +18,7 @@
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.3",
-    "remark-gfm": "^4.0.1",
-    "y-indexeddb": "^9.0.12",
-    "yjs": "^13.6.32"
-  },
-  "overrides": {
-    "@blocksuite/icons": "2.1.75",
-    "react": "$react",
-    "react-dom": "$react-dom"
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

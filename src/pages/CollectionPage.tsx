@@ -34,14 +34,18 @@ export function CollectionPage() {
     setSearchParams(nextParams, { replace: true });
   }
 
+  const documents = useMemo(
+    () => pages.filter((page) => page.kind !== 'folder'),
+    [pages]
+  );
+
   const grouped = useMemo(() => {
     const buckets: Record<PageStatus, PublicPage[]> = { '': [], todo: [], doing: [], done: [] };
-    for (const page of pages) {
-      if (page.kind === 'folder' || page.kind === 'markdown') continue;
+    for (const page of documents) {
       buckets[parsePageStatus(page.status)].push(page);
     }
     return buckets;
-  }, [pages]);
+  }, [documents]);
 
   if (!workspaceId) {
     return <p className="muted">Missing workspace.</p>;
@@ -70,14 +74,14 @@ export function CollectionPage() {
           </button>
         </div>
       </div>
-      <p className="muted">Live pages in this workspace. Status is shared for every member.</p>
+      <p className="muted">Live markdown files in this workspace. Status is shared for every member.</p>
       {message ? (
         <p className="error" role="alert">
           {message}
         </p>
       ) : null}
-      {pages.length === 0 ? (
-        <p className="muted">No live pages yet.</p>
+      {documents.length === 0 ? (
+        <p className="muted">No live documents yet.</p>
       ) : view === 'table' ? (
         <table className="collection-table">
           <thead>
@@ -87,7 +91,7 @@ export function CollectionPage() {
             </tr>
           </thead>
           <tbody>
-            {pages.map((page) => (
+            {documents.map((page) => (
               <tr key={page.id}>
                 <td>
                   <Link to={`/w/${workspaceId}/p/${page.id}`}>{page.title}</Link>

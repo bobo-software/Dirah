@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { API_URL } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -11,15 +12,20 @@ import {
   type McpAccessRow,
   type McpToken,
 } from '../api/mcp';
+import { CopyTokenOnce, MembersPanel } from '../components/ComponentsIndex';
+import { canAdmin, type WorkspaceOutlet } from './workspaceContext';
 
 export function SettingsPage() {
   const { accessToken } = useAuth();
+  const { workspaceId, role } = useOutletContext<WorkspaceOutlet>();
   const [tokens, setTokens] = useState<McpToken[]>([]);
   const [access, setAccess] = useState<McpAccessRow[]>([]);
   const [name, setName] = useState('Cursor');
   const [secret, setSecret] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const owner = canAdmin(role);
 
   async function refresh() {
     if (!accessToken) return;
@@ -37,30 +43,32 @@ export function SettingsPage() {
     });
   }, [accessToken]);
 
-  const snippet = useMemo(() => {
-    const token = secret ?? 'dira_mcp_…';
-    return JSON.stringify(
-      {
-        mcpServers: {
-          dira: {
-            url: `${API_URL}/mcp`,
-            headers: { Authorization: `Bearer ${token}` },
+  const snippet = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          mcpServers: {
+            dira: {
+              url: `${API_URL}/mcp`,
+              headers: { Authorization: 'Bearer dira_mcp_…' },
+            },
           },
         },
-      },
-      null,
-      2
-    );
-  }, [secret]);
+        null,
+        2
+      ),
+    []
+  );
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
     if (!accessToken) return;
     setBusy(true);
+    setCopied(false);
     try {
       const token = await createMcpToken(accessToken, name);
       setSecret(token.secret ?? null);
-      setMessage('Copy the token now. It will not be shown again.');
+      setMessage(null);
       await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not create token');
@@ -73,7 +81,8 @@ export function SettingsPage() {
     if (!accessToken) return;
     if (!window.confirm('Revoke this MCP token?')) return;
     await revokeMcpToken(accessToken, id);
-    if (secret) setSecret(null);
+    setSecret(null);
+    setCopied(false);
     await refresh();
   }
 
@@ -105,11 +114,18 @@ export function SettingsPage() {
   return (
     <section className="settings-page">
       <h1>Settings</h1>
-      <p className="muted">Connect coding agents to markdown docs in selected workspaces.</p>
+      <p className="muted">Workspace members and MCP access for coding agents.</p>
       {message ? (
-        <p className={secret ? 'muted' : 'error'} role="status">
+        <p className="error" role="status">
           {message}
         </p>
+      ) : null}
+
+      {owner && accessToken ? (
+        <MembersPanel
+          workspaceId={workspaceId}
+          accessToken={accessToken}
+        />
       ) : null}
 
       <div className="settings-section">
@@ -120,7 +136,20 @@ export function SettingsPage() {
             {busy ? 'Creating…' : 'Create token'}
           </button>
         </form>
-        {secret ? <p className="settings-token">{secret}</p> : null}
+        {secret ? (
+          <CopyTokenOnce
+            secret={secret}
+            onCopied={() => {
+              setSecret(null);
+              setCopied(true);
+            }}
+          />
+        ) : null}
+        {copied ? (
+          <p className="muted" role="status">
+            Token copied. It will not be shown again.
+          </p>
+        ) : null}
         {tokens.length === 0 ? <p className="muted">No active tokens.</p> : null}
         {tokens.map((token) => (
           <div className="settings-row" key={token.id}>

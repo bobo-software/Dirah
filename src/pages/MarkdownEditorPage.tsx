@@ -6,8 +6,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useOutletContext, useParams } from 'react-router-dom';
 import { getMarkdown, putMarkdown } from '../api/pages';
+import { getAiStatus } from '../api/ai';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { pageKind } from './pageKind';
+import { AskPanel } from './AskPanel';
 
 export function MarkdownEditorPage() {
   const { pageId } = useParams();
@@ -19,8 +21,12 @@ export function MarkdownEditorPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
   const timer = useRef<number | null>(null);
   const hashRef = useRef<string | undefined>(undefined);
+  const contentRef = useRef(content);
+  contentRef.current = content;
 
   const load = useCallback(async () => {
     if (!accessToken || !pageId) return;
@@ -37,6 +43,13 @@ export function MarkdownEditorPage() {
       setMessage(error instanceof Error ? error.message : 'Could not load markdown');
     });
   }, [load]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    void getAiStatus(accessToken)
+      .then(setAiEnabled)
+      .catch(() => setAiEnabled(false));
+  }, [accessToken]);
 
   async function save(next = content) {
     if (!accessToken || !pageId || !editable) return;
@@ -76,6 +89,14 @@ export function MarkdownEditorPage() {
     URL.revokeObjectURL(url);
   }
 
+  function insertAsk(text: string): boolean {
+    const next = `${contentRef.current.trimEnd()}\n\n${text}\n`;
+    setContent(next);
+    setDirty(true);
+    void save(next);
+    return true;
+  }
+
   if (page && pageKind(page) !== 'markdown') {
     return <p className="muted">This is not a markdown document.</p>;
   }
@@ -94,6 +115,15 @@ export function MarkdownEditorPage() {
         ) : (
           <span className="muted">View only</span>
         )}
+        {accessToken && aiEnabled ? (
+          <button
+            type="button"
+            className={`linkish${askOpen ? ' on' : ''}`}
+            onClick={() => setAskOpen((open) => !open)}
+          >
+            Ask
+          </button>
+        ) : null}
         {hash ? <span className="muted">etag {hash.slice(0, 8)}</span> : null}
         {message ? (
           <p className="error" role="alert">
@@ -101,6 +131,15 @@ export function MarkdownEditorPage() {
           </p>
         ) : null}
       </div>
+      {askOpen && accessToken && pageId ? (
+        <AskPanel
+          pageId={pageId}
+          accessToken={accessToken}
+          editable={editable}
+          getContext={() => contentRef.current}
+          onInsert={insertAsk}
+        />
+      ) : null}
       <div className={editable ? 'markdown-split' : 'markdown-split readonly'}>
         {editable ? (
           <CodeMirror

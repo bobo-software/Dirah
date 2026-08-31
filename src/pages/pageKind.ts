@@ -1,20 +1,15 @@
-export function pageKind(page: { kind?: string | null }): 'page' | 'folder' | 'markdown' {
-  if (page.kind === 'folder' || page.kind === 'markdown') return page.kind;
-  return 'page';
+export function pageKind(page: { kind?: string | null }): 'folder' | 'markdown' {
+  return page.kind === 'folder' ? 'folder' : 'markdown';
 }
 
-export function kindLabel(kind: 'page' | 'folder' | 'markdown'): string {
-  if (kind === 'folder') return 'Folder';
-  if (kind === 'markdown') return 'Markdown';
-  return 'Page';
+export function kindLabel(kind: 'folder' | 'markdown'): string {
+  return kind === 'folder' ? 'Folder' : 'Markdown';
 }
 
-export function kindGlyph(kind: 'page' | 'folder' | 'markdown'): string {
-  if (kind === 'folder') return '📁';
-  if (kind === 'markdown') return 'MD';
-  return 'P';
+export function kindGlyph(kind: 'folder' | 'markdown'): string {
+  return kind === 'folder' ? '📁' : 'MD';
 }
 
-export function canHaveChildren(kind: 'page' | 'folder' | 'markdown'): boolean {
-  return kind !== 'markdown';
+export function canHaveChildren(kind: 'folder' | 'markdown'): boolean {
+  return kind === 'folder';
 }

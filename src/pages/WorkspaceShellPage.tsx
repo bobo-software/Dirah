@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { Link, Outlet, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
   createPage,
@@ -9,18 +9,19 @@ import {
   setPageFavorite,
 } from '../api/pages';
 import type { PageKind, PublicPage, PublicWorkspace } from '../api/client';
+import { CreateWorkspaceModal, Sidebar } from '../components/ComponentsIndex';
+import { setLastWorkspaceId } from '../components/lastWorkspace';
+import { useSidebarDrawer } from '../components/Sidebar';
 import { EmptyEditorPane } from './EmptyEditorPane';
-import { MembersPanel } from './MembersPanel';
-import { PresencePanel } from './PresencePanel';
 import { buildPageTree, PageTree } from './PageTree';
 import { canAdmin, canEdit } from './workspaceContext';
-import { FollowProvider } from '../sync/FollowContext';
 
 export function WorkspaceShellPage() {
   const { workspaceId, pageId } = useParams();
   const navigate = useNavigate();
   const isTrash = Boolean(useMatch('/w/:workspaceId/trash'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
+  const isSettings = Boolean(useMatch('/w/:workspaceId/settings'));
   const { accessToken, getWorkspace, listWorkspaces } = useAuth();
   const [workspace, setWorkspace] = useState<PublicWorkspace | null>(null);
   const [workspaces, setWorkspaces] = useState<PublicWorkspace[]>([]);
@@ -31,8 +32,8 @@ export function WorkspaceShellPage() {
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  const [createOpen, setCreateOpen] = useState(false);
+  const { open: sidebarOpen, setOpen: setSidebarOpen, narrow } = useSidebarDrawer();
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(search.trim()), 200);
@@ -46,6 +47,7 @@ export function WorkspaceShellPage() {
 
   useEffect(() => {
     if (!workspaceId) return;
+    setLastWorkspaceId(workspaceId);
     void (async () => {
       try {
         const [current, all] = await Promise.all([getWorkspace(workspaceId), listWorkspaces()]);
@@ -59,37 +61,11 @@ export function WorkspaceShellPage() {
   }, [workspaceId, getWorkspace, listWorkspaces, refreshPages]);
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
-    const sync = () => setNarrow(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
-
-  useEffect(() => {
     setSidebarOpen(false);
-  }, [pageId, isTrash, isCollection, workspaceId]);
+  }, [pageId, isTrash, isCollection, workspaceId, setSidebarOpen]);
 
-  useEffect(() => {
-    if (!sidebarOpen) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setSidebarOpen(false);
-    }
-    window.addEventListener('keydown', onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [sidebarOpen]);
-
-  async function onCreateNode(kind: PageKind = 'page', parentId?: string | null) {
+  async function onCreateNode(kind: PageKind = 'markdown', parentId?: string | null) {
     if (!accessToken || !workspaceId) return;
-    if ((kind === 'folder' || kind === 'markdown') && workspace?.encrypted) {
-      setMessage('Markdown and folders are unavailable while encryption is on');
-      return;
-    }
     setBusy(true);
     setMessage(null);
     try {
@@ -162,7 +138,7 @@ export function WorkspaceShellPage() {
         <p className="error" role="alert">
           {message}
         </p>
-        <Link to="/">Back to workspaces</Link>
+        <Link to="/">Back home</Link>
       </section>
     );
   }
@@ -198,51 +174,18 @@ export function WorkspaceShellPage() {
     onTrash: (page: PublicPage) => void onTrash(page),
     onFavorite: (page: PublicPage) => void onFavorite(page),
     onMove,
-    encrypted: Boolean(workspace.encrypted),
   };
 
   return (
-    <FollowProvider>
-      <div className="shell">
-      {sidebarOpen ? (
-        <button
-          type="button"
-          className="sidebar-backdrop"
-          aria-label="Close pages"
-          onClick={() => setSidebarOpen(false)}
-        />
-      ) : null}
-      <aside
-        className={sidebarOpen ? 'sidebar open' : 'sidebar'}
-        id="workspace-sidebar"
-        inert={narrow && !sidebarOpen ? true : undefined}
-        onClick={(event) => {
-          if ((event.target as HTMLElement).closest('a')) {
-            setSidebarOpen(false);
-          }
-        }}
+    <div className="shell">
+      <Sidebar
+        workspaces={workspaces}
+        workspace={workspace}
+        open={sidebarOpen}
+        narrow={narrow}
+        onClose={() => setSidebarOpen(false)}
+        onNewWorkspace={() => setCreateOpen(true)}
       >
-        <div className="sidebar-drawer-head">
-          <button type="button" className="linkish sidebar-close" onClick={() => setSidebarOpen(false)}>
-            Close
-          </button>
-        </div>
-        <label className="sidebar-label" htmlFor="workspace-switcher">
-          Workspace
-        </label>
-        <select
-          id="workspace-switcher"
-          value={workspace.id}
-          onChange={(event) => navigate(`/w/${event.target.value}`)}
-        >
-          {workspaces.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-        <p className="muted role-badge">{workspace.role}</p>
-        {workspace.encrypted ? <p className="muted">Encrypted</p> : null}
         <label className="sidebar-label" htmlFor="page-search">
           Search
         </label>
@@ -275,29 +218,22 @@ export function WorkspaceShellPage() {
           <p className="sidebar-label">Pages</p>
           {editable ? (
             <span className="header-creates">
-              <button type="button" className="linkish" onClick={() => void onCreateNode('page')} disabled={busy}>
-                Page
+              <button
+                type="button"
+                className="linkish"
+                onClick={() => void onCreateNode('markdown')}
+                disabled={busy}
+              >
+                MD
               </button>
-              {!workspace.encrypted ? (
-                <>
-                  <button
-                    type="button"
-                    className="linkish"
-                    onClick={() => void onCreateNode('folder')}
-                    disabled={busy}
-                  >
-                    Folder
-                  </button>
-                  <button
-                    type="button"
-                    className="linkish"
-                    onClick={() => void onCreateNode('markdown')}
-                    disabled={busy}
-                  >
-                    MD
-                  </button>
-                </>
-              ) : null}
+              <button
+                type="button"
+                className="linkish"
+                onClick={() => void onCreateNode('folder')}
+                disabled={busy}
+              >
+                Folder
+              </button>
             </span>
           ) : null}
         </div>
@@ -306,31 +242,20 @@ export function WorkspaceShellPage() {
         ) : (
           <PageTree nodes={tree} {...treeProps} />
         )}
-        <div className="sidebar-links">
-          <NavLink to={`/w/${workspaceId}/collection`} className="trash-link">
-            Collection
-          </NavLink>
-          <NavLink to={`/w/${workspaceId}/trash`} className="trash-link">
-            Trash
-          </NavLink>
-        </div>
-        <PresencePanel pageOpen={Boolean(pageId) && !isTrash && !isCollection} />
-        {admin && accessToken ? (
-          <MembersPanel
-            workspaceId={workspaceId}
-            accessToken={accessToken}
-            encrypted={Boolean(workspace.encrypted)}
-            onEncrypted={() => {
-              void getWorkspace(workspaceId).then(setWorkspace);
-            }}
-          />
-        ) : null}
         {message ? (
           <p className="error" role="alert">
             {message}
           </p>
         ) : null}
-      </aside>
+      </Sidebar>
+      <CreateWorkspaceModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(created) => {
+          setLastWorkspaceId(created.id);
+          navigate(`/w/${created.id}`);
+        }}
+      />
       <section className="editor-pane">
         <div className="mobile-chrome">
           <button
@@ -340,6 +265,11 @@ export function WorkspaceShellPage() {
             aria-expanded={sidebarOpen}
             onClick={() => setSidebarOpen(true)}
           >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <line x1="3.5" y1="6.5" x2="20.5" y2="6.5" />
+              <line x1="3.5" y1="12" x2="20.5" y2="12" />
+              <line x1="3.5" y1="17.5" x2="20.5" y2="17.5" />
+            </svg>
             Pages
           </button>
           {currentTitle ? (
@@ -348,9 +278,11 @@ export function WorkspaceShellPage() {
             <span className="mobile-title">Collection</span>
           ) : isTrash ? (
             <span className="mobile-title">Trash</span>
+          ) : isSettings ? (
+            <span className="mobile-title">Settings</span>
           ) : null}
         </div>
-        {pageId || isTrash || isCollection ? (
+        {pageId || isTrash || isCollection || isSettings ? (
           <Outlet
             context={{
               role: workspace.role,
@@ -358,7 +290,7 @@ export function WorkspaceShellPage() {
               pageTitle: currentTitle,
               refreshPages,
               pages,
-              encrypted: Boolean(workspace.encrypted),
+              workspaceId,
               onCreateNode: (kind: PageKind, parentId?: string | null) => void onCreateNode(kind, parentId),
             }}
           />
@@ -368,11 +300,9 @@ export function WorkspaceShellPage() {
             busy={busy}
             hasPages={pages.length > 0}
             allowCreate={editable}
-            allowDocs={!workspace.encrypted}
           />
         )}
       </section>
       </div>
-    </FollowProvider>
   );
 }

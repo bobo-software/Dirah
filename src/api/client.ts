@@ -13,7 +13,7 @@ export type PublicWorkspace = {
   mcpEnabled?: boolean;
 };
 
-export type PageKind = 'page' | 'folder' | 'markdown';
+export type PageKind = 'folder' | 'markdown';
 
 export type PublicPage = {
   id: string;

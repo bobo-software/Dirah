@@ -7,11 +7,11 @@ import { pageKind } from './pageKind';
 export function FolderLandingPage({
   onCreate,
 }: {
-  onCreate: (kind: 'page' | 'folder' | 'markdown', parentId: string | null) => void;
+  onCreate: (kind: 'folder' | 'markdown', parentId: string | null) => void;
 }) {
   const { workspaceId, pageId } = useParams();
   const navigate = useNavigate();
-  const { role, accessToken, pages, encrypted, refreshPages } = useOutletContext<WorkspaceOutlet>();
+  const { role, accessToken, pages, refreshPages } = useOutletContext<WorkspaceOutlet>();
   const editable = canEdit(role);
   const folder = pages.find((page) => page.id === pageId);
   const children = pages.filter((page) => page.parentId === pageId);
@@ -44,16 +44,13 @@ export function FolderLandingPage({
           ? 'This folder is empty.'
           : `${children.length} item${children.length === 1 ? '' : 's'} in this folder.`}
       </p>
-      {editable && !encrypted ? (
+      {editable ? (
         <div className="folder-actions">
           <button type="button" onClick={() => onCreate('markdown', pageId ?? null)}>
             New markdown
           </button>
           <button type="button" onClick={() => onCreate('folder', pageId ?? null)}>
             New folder
-          </button>
-          <button type="button" onClick={() => onCreate('page', pageId ?? null)}>
-            New page
           </button>
           <label className="linkish import-md">
             Import .md
@@ -70,7 +67,7 @@ export function FolderLandingPage({
                 className="linkish"
                 onClick={() => navigate(`/w/${workspaceId}/p/${child.id}`)}
               >
-                {pageKind(child) === 'folder' ? '📁' : pageKind(child) === 'markdown' ? 'MD' : 'P'} {child.title}
+                {pageKind(child) === 'folder' ? '📁' : 'MD'} {child.title}
               </button>
             </li>
           ))}

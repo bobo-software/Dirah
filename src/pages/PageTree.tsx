@@ -4,6 +4,27 @@ import type { PageKind, PublicPage } from '../api/client';
 import { ShareDialog } from './ShareDialog';
 import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
 
+function RenameIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20Z" />
+      <path d="M13 7l4 4" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4.5 7h15" />
+      <path d="M9.5 7V4.75c0-.69.56-1.25 1.25-1.25h2.5c.69 0 1.25.56 1.25 1.25V7" />
+      <path d="M6.5 7.5l.9 12.15a1.5 1.5 0 0 0 1.5 1.35h6.2a1.5 1.5 0 0 0 1.5-1.35l.9-12.15" />
+      <path d="M10.2 11v6.2" />
+      <path d="M13.8 11v6.2" />
+    </svg>
+  );
+}
+
 export type PageNode = {
   page: PublicPage;
   children: PageNode[];
@@ -45,7 +66,6 @@ export function PageTree({
   onTrash,
   onFavorite,
   onMove,
-  encrypted,
 }: {
   nodes: PageNode[];
   workspaceId: string;
@@ -62,7 +82,6 @@ export function PageTree({
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
-  encrypted: boolean;
 }) {
   return (
     <ul className="page-tree">
@@ -84,7 +103,6 @@ export function PageTree({
           onTrash={onTrash}
           onFavorite={onFavorite}
           onMove={onMove}
-          encrypted={encrypted}
         />
       ))}
     </ul>
@@ -107,7 +125,6 @@ function PageTreeItem({
   onTrash,
   onFavorite,
   onMove,
-  encrypted,
 }: {
   node: PageNode;
   workspaceId: string;
@@ -124,7 +141,6 @@ function PageTreeItem({
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
-  encrypted: boolean;
 }) {
   const page = node.page;
   const kind = pageKind(page);
@@ -190,24 +206,27 @@ function PageTreeItem({
             >
               {page.favorited ? '★' : '☆'}
             </button>
+            {editable && kind === 'markdown' ? (
+              <span className="page-row-actions">
+                <button type="button" className="linkish icon-btn" aria-label="Rename" title="Rename" onClick={() => onStartRename(page)}>
+                  <RenameIcon />
+                </button>
+                <button type="button" className="linkish icon-btn danger" aria-label="Trash" title="Trash" onClick={() => onTrash(page)}>
+                  <TrashIcon />
+                </button>
+              </span>
+            ) : null}
           </div>
-          {editable ? (
+          {editable && kind !== 'markdown' ? (
             <span className="page-actions">
               {nestable ? (
                 <>
-                  <button type="button" className="linkish" onClick={() => onCreateChild(page, 'page')}>
-                    Page
+                  <button type="button" className="linkish" onClick={() => onCreateChild(page, 'markdown')}>
+                    MD
                   </button>
-                  {!encrypted ? (
-                    <>
-                      <button type="button" className="linkish" onClick={() => onCreateChild(page, 'folder')}>
-                        Folder
-                      </button>
-                      <button type="button" className="linkish" onClick={() => onCreateChild(page, 'markdown')}>
-                        MD
-                      </button>
-                    </>
-                  ) : null}
+                  <button type="button" className="linkish" onClick={() => onCreateChild(page, 'folder')}>
+                    Folder
+                  </button>
                 </>
               ) : null}
               <button type="button" className="linkish" onClick={() => onStartRename(page)}>
@@ -217,11 +236,11 @@ function PageTreeItem({
                 Trash
               </button>
             </span>
-          ) : (
+          ) : !editable ? (
             <span className="page-actions" />
-          )}
-          {admin && active && accessToken && kind === 'page' ? (
-            <ShareDialog pageId={page.id} accessToken={accessToken} encrypted={encrypted} />
+          ) : null}
+          {admin && active && accessToken && kind === 'markdown' ? (
+            <ShareDialog pageId={page.id} accessToken={accessToken} />
           ) : null}
         </>
       )}
@@ -242,7 +261,6 @@ function PageTreeItem({
           onTrash={onTrash}
           onFavorite={onFavorite}
           onMove={onMove}
-          encrypted={encrypted}
         />
       ) : null}
     </li>

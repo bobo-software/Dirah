@@ -6,7 +6,7 @@ export type WorkspaceOutlet = {
   pageTitle?: string;
   refreshPages: () => Promise<void>;
   pages: PublicPage[];
-  encrypted: boolean;
+  workspaceId: string;
   onCreateNode: (kind: PageKind, parentId?: string | null) => void;
 };
 
