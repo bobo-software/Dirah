@@ -32,7 +32,7 @@ Do not start this until phases 0–4 meet their acceptance checks. This is the A
 - Mobile readers
 - S3 for blobs (shipped: [phase-5-blobs.md](./phase-5-blobs.md))
 - E2E encryption of updates (shipped: [phase-5-e2e.md](./phase-5-e2e.md))
-- Email invites (shipped: [phase-5-invites.md](./phase-5-invites.md)), OAuth, SSO
+- Email invites (shipped: [phase-5-invites.md](./phase-5-invites.md)), Google / GitHub OAuth (shipped: [phase-5-oauth.md](./phase-5-oauth.md)), enterprise SAML / company OIDC
 - Full-text search (extract text from Y.Doc into Postgres `tsvector` or an external index)
 
 ## What not to do even later without a decision
@@ -44,7 +44,7 @@ Do not start this until phases 0–4 meet their acceptance checks. This is the A
 
 ## When a later item moves up, give it its own file with the same structure as phases 0–4, and check it off [backlog.md](./backlog.md).
 
-**Active later slice:** next is OAuth / SSO ([backlog.md](./backlog.md)). Shipped: [phase-5-edgeless.md](./phase-5-edgeless.md), [phase-5-database.md](./phase-5-database.md), [phase-5-awareness.md](./phase-5-awareness.md), [phase-5-ai.md](./phase-5-ai.md), [phase-5-mobile.md](./phase-5-mobile.md), [phase-5-search.md](./phase-5-search.md), [phase-5-follow.md](./phase-5-follow.md), [phase-5-collection.md](./phase-5-collection.md), [phase-5-history.md](./phase-5-history.md), [phase-5-redis.md](./phase-5-redis.md), [phase-5-blobs.md](./phase-5-blobs.md), [phase-5-e2e.md](./phase-5-e2e.md), [phase-5-invites.md](./phase-5-invites.md). [phase-5-desktop.md](./phase-5-desktop.md) shipped then was removed.
+**Active later slice:** next is native iOS / Android ([backlog.md](./backlog.md)). Shipped: [phase-5-edgeless.md](./phase-5-edgeless.md), [phase-5-database.md](./phase-5-database.md), [phase-5-awareness.md](./phase-5-awareness.md), [phase-5-ai.md](./phase-5-ai.md), [phase-5-mobile.md](./phase-5-mobile.md), [phase-5-search.md](./phase-5-search.md), [phase-5-follow.md](./phase-5-follow.md), [phase-5-collection.md](./phase-5-collection.md), [phase-5-history.md](./phase-5-history.md), [phase-5-redis.md](./phase-5-redis.md), [phase-5-blobs.md](./phase-5-blobs.md), [phase-5-e2e.md](./phase-5-e2e.md), [phase-5-invites.md](./phase-5-invites.md), [phase-5-oauth.md](./phase-5-oauth.md). [phase-5-desktop.md](./phase-5-desktop.md) shipped then was removed.
 
 ## Related
 

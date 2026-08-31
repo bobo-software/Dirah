@@ -22,6 +22,10 @@ Postgres migrator uses schema `drizzle`, not `public.__drizzle_migrations`. [`sr
 
 [`src/routes/auth.api.test.ts`](../../src/routes/auth.api.test.ts) catches connection failure, sets `dbReady = false`, and the big register/refresh test **returns without failing**. CI can be green while Phase 0 never ran. Prefer `describe.skipIf` with a loud log, or fail when `CI=true`.
 
+## Live schema grants
+
+On managed Postgres 15+, the app role may connect but still fail `CREATE TABLE` until `GRANT USAGE, CREATE ON SCHEMA public` is issued **on the product database** (`dira`), not only while connected to `postgres`. Live Cloud.co.za has this grant; keep it when recreating the role.
+
 ## Startup does not ping the database
 
 [`verifyDatabaseConnection`](../../src/db/index.ts) is exported and unused. [`src/server.ts`](../../src/server.ts) will listen even if Postgres is down; the first register then 500s (as happened before migrate). Call verify on boot in development, or at least log a warning.

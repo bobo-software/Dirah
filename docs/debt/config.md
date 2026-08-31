@@ -7,12 +7,19 @@
 
 A fresh `docker compose up` will not be the database the API is pointed at. Pick one pair and make compose, example, and docs match.
 
-## PORT 4000 vs 4006
+## PORT 4000 vs 4006 vs 4002
 
 - Default in [`src/config/env.ts`](../../src/config/env.ts) and `.env.example`: **4000**.
 - Local `.env` and `dira_web` `VITE_API_URL`: **4006**.
+- Coolify API image [`Dockerfile`](../../Dockerfile) `EXPOSE 4002`. Live `.env` may use 4002 when the process runs in that container.
 
-Anyone following only `.env.example` will miss the web app. Either standardize on 4000 in examples and MCP configs, or document 4006 as the local convention.
+Anyone following only `.env.example` will miss the web app. Either standardize on 4000 in examples and MCP configs, or document 4006 as the local convention. Live Coolify is not the local port.
+
+## Live Postgres (Cloud.co.za)
+
+The API pool uses `ssl: false` (the server does not speak SSL). Role `dira_user` on database `dira`. On Postgres 15+, `GRANT CONNECT` is not enough: connect to **`dira`** (not `postgres`) and `GRANT USAGE, CREATE ON SCHEMA public TO dira_user`. Migrations through `0010_phase5_oauth` have been applied there.
+
+Cursor Postgres MCP still follows the project MCP port (**4006**). It will not reach a live API that is listening on 4002.
 
 ## CORS fallback is `*`
 
