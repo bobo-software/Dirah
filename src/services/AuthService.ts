@@ -113,6 +113,10 @@ export class AuthService {
       throw new HttpError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
     }
 
+    if (!user.passwordHash) {
+      throw new HttpError('This account uses Google or GitHub to sign in', 401, 'OAUTH_ONLY');
+    }
+
     const matches = await bcrypt.compare(password, user.passwordHash);
     if (!matches) {
       throw new HttpError('Invalid email or password', 401, 'INVALID_CREDENTIALS');

@@ -25,6 +25,15 @@ async function main(): Promise<void> {
         ? `Invites: SMTP (${env.appPublicUrl})`
         : `Invites: copy-link (${env.appPublicUrl})`
     );
+    const oauth = {
+      google: Boolean((process.env.GOOGLE_CLIENT_ID ?? '').trim() && (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()),
+      github: Boolean((process.env.GITHUB_CLIENT_ID ?? '').trim() && (process.env.GITHUB_CLIENT_SECRET ?? '').trim()),
+    };
+    const oauthNames = [
+      oauth.google ? 'Google' : null,
+      oauth.github ? 'GitHub' : null,
+    ].filter(Boolean);
+    console.log(oauthNames.length ? `OAuth: ${oauthNames.join(', ')}` : 'OAuth: off');
   });
 }
 

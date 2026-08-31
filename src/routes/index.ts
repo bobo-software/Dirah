@@ -15,6 +15,7 @@ import type { MemberService } from '../services/MemberService';
 import type { ShareService } from '../services/ShareService';
 import type { AiService } from '../services/AiService';
 import type { CryptoService } from '../services/CryptoService';
+import type { OAuthService } from '../services/OAuthService';
 
 export function createApiRouter(
   authService: AuthService,
@@ -24,11 +25,12 @@ export function createApiRouter(
   memberService: MemberService,
   shareService: ShareService,
   aiService: AiService,
-  cryptoService: CryptoService
+  cryptoService: CryptoService,
+  oauthService: OAuthService
 ): Router {
   const router = Router();
   router.use('/health', healthRouter);
-  router.use('/auth', createAuthRouter(authService, cryptoService));
+  router.use('/auth', createAuthRouter(authService, cryptoService, oauthService));
   router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService));
   router.use('/pages', createPageRouter(pageService, sync, shareService));
   router.use('/blobs', createBlobRouter(blobService));

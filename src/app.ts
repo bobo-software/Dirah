@@ -18,6 +18,8 @@ import { MemberService } from './services/MemberService';
 import { ShareService } from './services/ShareService';
 import { AiService } from './services/AiService';
 import { CryptoService } from './services/CryptoService';
+import { OAuthService } from './services/OAuthService';
+import { defaultOAuthExchanger, type OAuthExchanger } from './oauth/providers';
 
 export interface CreateAppOptions {
   pgMcpService?: PgMcpService;
@@ -26,6 +28,7 @@ export interface CreateAppOptions {
   blobService?: BlobService;
   docSyncService?: DocSyncService;
   aiService?: AiService;
+  oauthExchanger?: OAuthExchanger;
 }
 
 export async function createApp(options: CreateAppOptions = {}): Promise<Express> {
@@ -47,6 +50,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
     options.blobService ?? new BlobService(db, authService, createBlobStore(env));
   const memberService = new MemberService(db, authService);
   const cryptoService = new CryptoService(db, authService);
+  const oauthService = new OAuthService(
+    db,
+    authService,
+    options.oauthExchanger ?? defaultOAuthExchanger
+  );
   const shareService = new ShareService(db, authService, pageService);
   const docSyncService =
     options.docSyncService ??
@@ -72,7 +80,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       memberService,
       shareService,
       aiService,
-      cryptoService
+      cryptoService,
+      oauthService
     )
   );
 

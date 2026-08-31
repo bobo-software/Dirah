@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 import { env } from '../config/env';
 
 export interface JwtPayload {
@@ -12,7 +13,7 @@ export function signAccessToken(payload: JwtPayload): string {
 }
 
 export function signRefreshToken(userId: string): string {
-  return jwt.sign({ userId }, env.jwtRefreshSecret, { expiresIn: '7d' });
+  return jwt.sign({ userId, jti: crypto.randomUUID() }, env.jwtRefreshSecret, { expiresIn: '7d' });
 }
 
 export function verifyAccessToken(token: string): JwtPayload {
