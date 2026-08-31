@@ -8,7 +8,7 @@ These files are the source of truth for *what to build next*. They are not imple
 
 See **[PROGRESS.md](../PROGRESS.md)** for live status across sessions.
 
-**Phase 5n — Email invites (no existing account) is implemented.** Remaining work: [backlog.md](./backlog.md).
+**Phase 5o — Google / GitHub OAuth is implemented.** Remaining work: [backlog.md](./backlog.md).
 
 ## Reading order
 
@@ -34,7 +34,8 @@ See **[PROGRESS.md](../PROGRESS.md)** for live status across sessions.
 20. [phase-5-blobs.md](./phase-5-blobs.md) — optional MinIO/S3 blob bytes
 21. [phase-5-e2e.md](./phase-5-e2e.md) — optional E2E encryption of Yjs updates
 22. [phase-5-invites.md](./phase-5-invites.md) — email invites for people without an account
-23. [backlog.md](./backlog.md) — remaining product work (ordered)
+23. [phase-5-oauth.md](./phase-5-oauth.md) — Google / GitHub sign-in
+24. [backlog.md](./backlog.md) — remaining product work (ordered)
 
 ## Scope (core clone)
 

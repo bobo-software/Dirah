@@ -30,9 +30,17 @@ Pinned `@blocksuite/presets`, `blocks`, and `store` at **0.19.5** (last line wit
 - Error `<p className="error">` has no `role="alert"` on some pages.
 - `.visually-hidden` in `index.css` is unused.
 
-## Deploy config (Docker)
+## Deploy config (Docker / Coolify)
 
-`Dockerfile` `EXPOSE 82` vs `nginx.conf` `listen 83` — containers and the published port will not agree.
+Web [`Dockerfile`](../../../dira_web/Dockerfile) and [`nginx.conf`](../../../dira_web/nginx.conf) both use port **83**.
+
+`npm ci` in `node:20-alpine` is npm **10**. A lockfile written by npm **12** omitted `react@18.3.1` (BlockSuite icons peer). `package.json` `overrides` pin `react` / `react-dom` to the app versions so `npm ci` matches.
+
+TypeScript 6 DOM types reject `Uint8Array` views as WebCrypto `BufferSource`. Copy through [`src/crypto/bytes.ts`](../../../dira_web/src/crypto/bytes.ts) before `encrypt` / `decrypt` / `importKey`.
+
+Vite bakes `VITE_API_URL` at image build. Coolify has injected a hostname with no scheme; the Dockerfile prefixes `https://` in that case. Prefer setting the Coolify build arg to the full API origin anyway (`https://…`). `.dockerignore` excludes `.env` so the image does not bake local secrets.
+
+API [`Dockerfile`](../../Dockerfile) is Node 26, `EXPOSE 4002`.
 
 ## Example PORT vs web
 

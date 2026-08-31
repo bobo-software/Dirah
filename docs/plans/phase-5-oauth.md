@@ -1,12 +1,12 @@
 # Phase 5o — Google / GitHub OAuth
 
-Next item on [backlog.md](./backlog.md) when this was written. Email invites are done. Do not pull in SAML, OIDC enterprise SSO, or magic-link-only login.
+**Shipped.** Email invites are done. Do not pull in SAML, OIDC enterprise SSO, or magic-link-only login.
 
 ## Decision
 
 Sign in with **Google** and/or **GitHub** when that provider’s client id and secret are set. Unset credentials (local default) hide the buttons; password register/login still work. Same optional pattern as AI, Redis, MinIO, and SMTP.
 
-Enterprise SSO (SAML / company OIDC) stays on the backlog — it needs an identity-provider decision.
+Enterprise SSO (SAML / company OIDC) needs an identity-provider decision — see [backlog.md](./backlog.md) “Not without”.
 
 ## Goal
 
@@ -58,4 +58,4 @@ Unique `(provider, provider_user_id)`.
 
 - Invites: [phase-5-invites.md](./phase-5-invites.md)
 - E2E: [phase-5-e2e.md](./phase-5-e2e.md)
-- Backlog: [backlog.md](./backlog.md)
+- Backlog (next is native iOS / Android): [backlog.md](./backlog.md)

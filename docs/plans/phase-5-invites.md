@@ -6,7 +6,7 @@ Next item on [backlog.md](./backlog.md) when this was written. E2E encryption is
 
 Invite still happens from the members panel. If that email **already has a Dira account**, they join immediately (unchanged). If they **do not**, the owner creates a pending invite. The invitee opens `/invite/:token`, sets a password, and lands in that workspace.
 
-Mail is optional: `SMTP_URL` sends the link; if it is unset the API returns `inviteUrl` so the owner can copy it (local/dev). OAuth and SSO stay on the backlog.
+Mail is optional: `SMTP_URL` sends the link; if it is unset the API returns `inviteUrl` so the owner can copy it (local/dev). Google / GitHub OAuth shipped in [phase-5-oauth.md](./phase-5-oauth.md); enterprise SAML / company OIDC stays off this slice.
 
 ## Goal
 
@@ -48,7 +48,7 @@ Token is random `base64url`. Expiry 7 days. Re-inviting the same pending email r
 
 ## Not in this slice
 
-- OAuth / Google / GitHub / OIDC / SAML
+- OAuth / Google / GitHub (later: [phase-5-oauth.md](./phase-5-oauth.md)) / OIDC / SAML
 - Magic-link login without a password
 - Inviting to an encrypted workspace auto-wrapping the DEK before the invitee has keys (owner panel backfills)
 

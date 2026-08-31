@@ -4,7 +4,7 @@ Living status for Dira across chat sessions. **Update this file at the end of ev
 
 ## Now
 
-**Phase 5n — Email invites (no existing account) is implemented.** Remaining product work is in [plans/backlog.md](./plans/backlog.md). Do not start the next item unless asked.
+**Phase 5o — Google / GitHub OAuth is implemented.** Remaining product work is in [plans/backlog.md](./plans/backlog.md). Do not start the next item unless asked.
 
 ## Local run
 
@@ -16,6 +16,8 @@ Living status for Dira across chat sessions. **Update this file at the end of ev
 | Postgres | already running locally (`.env` user `postgres`); or `docker compose up` (user `dira` — see [debt/config.md](./debt/config.md)) | localhost:5432 |
 
 Web `.env`: `VITE_API_URL=http://localhost:4006`. CORS: `http://localhost:5181`.
+
+Coolify live is separate: API image `EXPOSE 4002`; web is nginx on **83**. Point the web build arg `VITE_API_URL` at the public API origin (`https://…`). The web Dockerfile prefixes `https://` if Coolify injects a hostname with no scheme.
 
 From this repo root, `npm run dev` in `dira_web` can pick up the backend package if the shell cwd is wrong — run Vite via `dira_web/node_modules/.bin/vite` or `cd` there first.
 
@@ -47,27 +49,36 @@ From this repo root, `npm run dev` in `dira_web` can pick up the backend package
 - Phase 5l: optional MinIO/S3 blob bytes. Postgres `blobs` stays the catalog; objects go to `MINIO_ENDPOINT` when endpoint+keys are set, else `BLOB_DIR` on disk. Editor still uses `/api/workspaces/:id/blobs` and `/api/blobs/:id`. Compose has an optional `minio` service. **52** backend tests.
 - Phase 5m: optional end-to-end encryption of Yjs updates. Owner **Encrypt pages**; clients seal AES-256-GCM envelopes; DEK wrapped to each member’s ECDH P-256 key. Server stores opaque bytes (no merge/search/history/Ask). Public share is 409. Unencrypted workspaces unchanged. **54** backend tests.
 - Phase 5n: email invites for people without an account. Unknown email → pending `workspace_invites` + copyable `/invite/:token` (SMTP optional via `SMTP_URL`). Accept sets a password and joins that workspace only (no extra “My workspace”). Existing-user invite still adds immediately. **55** backend tests.
+- Phase 5o: optional Google / GitHub OAuth. Unset client id+secret hide the buttons; password login still works. First-time OAuth creates the user + “My workspace”; same email links an existing account. Callback lands on `{APP_PUBLIC_URL}/oauth#refreshToken=…`. Migration `0010_phase5_oauth`. **57** backend tests. Enterprise SAML / company OIDC is not this slice.
 - Product backlog: [plans/backlog.md](./plans/backlog.md) (ordered remaining features). Technical leftovers stay in [debt/](./debt/).
 
 ## Next (in order)
 
-1. Remaining product backlog — OAuth / SSO is next ([backlog.md](./plans/backlog.md)).
+1. Remaining product backlog — native iOS / Android is next ([backlog.md](./plans/backlog.md)).
 
 Pay down [debt/](./debt/) when it blocks a phase (especially PORT/MCP mismatch and `drizzle-kit generate`).
 
 ## Blocked / watch
 
-- `.mcp.json` still points at port **4000**; the API is on **4006**. Cursor project MCP: `.cursor/mcp.json` and `cursor/mcp.json` use 4006.
+- `.mcp.json` still points at port **4000**; the API is on **4006**. Cursor project MCP: `.cursor/mcp.json` and `cursor/mcp.json` use 4006. Pointing the API `.env` at live Postgres does not retarget those MCP URLs.
 - `drizzle-kit generate` fails on `target: ES2023` — migrations are hand-written until kit is upgraded or given its own tsconfig.
 - Auth API tests soft-skip if Postgres is missing; they are not a substitute for a real CI DB.
-- BlockSuite 0.19.5 + Vite 8: see [debt/web.md](./debt/web.md) (icon typo rewrite, prebundle, no StrictMode).
+- BlockSuite 0.19.5 + Vite 8: see [debt/web.md](./debt/web.md) (icon typo rewrite, prebundle, no StrictMode). Docker `npm ci` needs the React `overrides` pin (npm 10 vs npm 12 lockfile).
 - After join, the client pushes a full `Y.encodeStateAsUpdate` so first-load local IDB content uploads. `doc_updates` grows until `DOC_SNAPSHOT_EVERY` (default 50) compact into `doc_snapshots`.
 - Backend is CJS; `yjs` is ESM — snapshot merge uses dynamic `import('yjs')`.
 - ts-node cannot type-resolve `@aws-sdk/client-s3` (tsc can). Blob store loads the SDK with `createRequire`.
+- Live Google / GitHub click-through was not finished in the browser this session (API tests use a stub exchanger). Encrypted workspaces still need a password-derived account key after OAuth.
+- Leftover GitHub repo `GiftSibiya/src` (nested `src/.git` accident) still exists; deleting it needs a token with `delete_repo`.
 
 ## Session log
 
 Add a short entry newest-first.
+
+### 2026-08-31 (phase 5o + live deploy)
+
+- Google / GitHub OAuth: `users.password_hash` nullable, `oauth_accounts`, `GET /api/auth/oauth/status`, start/callback, web `OAuthButtons` + `/oauth` catch page. Unset secrets → no buttons (local default). Migration `0010_phase5_oauth`. API tests with a stub exchanger: new user, reuse, link existing email, bad state, unverified email.
+- Live Postgres (Cloud.co.za): `dira_user` on database `dira`, Postgres 18, no SSL. Grants must be issued **while connected to `dira`** (`GRANT USAGE, CREATE ON SCHEMA public`). Applied `0000` … `0010_phase5_oauth` (15 public tables).
+- Coolify `dira_web`: `npm ci` now matches the lockfile (React pinned in `overrides` for npm 10). `tsc` accepts WebCrypto buffers via `src/crypto/bytes.ts`. Dockerfile prefixes `https://` when `VITE_API_URL` has no scheme. Nested `src/.git` was removed so GitHub tracks the web source as normal files.
 
 ### 2026-08-30 (phase 5n)
 
