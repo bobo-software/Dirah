@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
+import { useAuthStore } from '../stores/StoresIndex';
 import { apiRequest } from '../api/client';
 
 export function McpOAuthConsentPage() {
-  const { accessToken } = useAuth();
+  const accessToken = useAuthStore((state) => state.accessToken);
   const [params] = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

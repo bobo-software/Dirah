@@ -1,40 +1,25 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import {
-  inviteMember,
-  listMembers,
-  removeMember,
-  revokeInvite,
-  setMemberRole,
-  type PublicInvite,
-  type PublicMember,
-} from '../api/members';
+import { type FormEvent, useEffect, useState } from 'react';
+import { EMPTY_INVITES, EMPTY_MEMBERS, useMembersStore } from '../stores/StoresIndex';
 
-export default function MembersPanel({
-  workspaceId,
-  accessToken,
-}: {
-  workspaceId: string;
-  accessToken: string;
-}) {
-  const [members, setMembers] = useState<PublicMember[]>([]);
-  const [invites, setInvites] = useState<PublicInvite[]>([]);
+export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
+  const members = useMembersStore((state) => state.byWorkspace[workspaceId]?.members ?? EMPTY_MEMBERS);
+  const invites = useMembersStore((state) => state.byWorkspace[workspaceId]?.invites ?? EMPTY_INVITES);
+  const fetchMembers = useMembersStore((state) => state.fetchMembers);
+  const inviteMember = useMembersStore((state) => state.inviteMember);
+  const revokeInvite = useMembersStore((state) => state.revokeInvite);
+  const setMemberRole = useMembersStore((state) => state.setMemberRole);
+  const removeMember = useMembersStore((state) => state.removeMember);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('editor');
   const [message, setMessage] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const refresh = useCallback(async () => {
-    const data = await listMembers(accessToken, workspaceId);
-    setMembers(data.members);
-    setInvites(data.invites ?? []);
-  }, [accessToken, workspaceId]);
-
   useEffect(() => {
-    void refresh().catch((error: unknown) => {
+    void fetchMembers(workspaceId).catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : 'Could not load members');
     });
-  }, [refresh]);
+  }, [workspaceId, fetchMembers]);
 
   async function copyUrl(url: string) {
     try {
@@ -52,14 +37,12 @@ export default function MembersPanel({
     setBusy(true);
     setMessage(null);
     try {
-      const result = await inviteMember(accessToken, workspaceId, email, role);
+      const result = await inviteMember(workspaceId, email, role);
       if (result.member) {
         setEmail('');
-        await refresh();
       } else if (result.invite) {
         setEmail('');
         await copyUrl(result.invite.inviteUrl);
-        await refresh();
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not invite');
@@ -81,11 +64,9 @@ export default function MembersPanel({
               aria-label={`Role for ${member.email}`}
               value={member.role}
               onChange={(event) => {
-                void setMemberRole(accessToken, workspaceId, member.userId, event.target.value)
-                  .then(refresh)
-                  .catch((error: unknown) => {
-                    setMessage(error instanceof Error ? error.message : 'Could not change role');
-                  });
+                void setMemberRole(workspaceId, member.userId, event.target.value).catch((error: unknown) => {
+                  setMessage(error instanceof Error ? error.message : 'Could not change role');
+                });
               }}
             >
               <option value="owner">owner</option>
@@ -96,11 +77,9 @@ export default function MembersPanel({
               type="button"
               className="linkish danger"
               onClick={() => {
-                void removeMember(accessToken, workspaceId, member.userId)
-                  .then(refresh)
-                  .catch((error: unknown) => {
-                    setMessage(error instanceof Error ? error.message : 'Could not remove');
-                  });
+                void removeMember(workspaceId, member.userId).catch((error: unknown) => {
+                  setMessage(error instanceof Error ? error.message : 'Could not remove');
+                });
               }}
             >
               Remove
@@ -120,11 +99,9 @@ export default function MembersPanel({
               type="button"
               className="linkish danger"
               onClick={() => {
-                void revokeInvite(accessToken, workspaceId, invite.id)
-                  .then(refresh)
-                  .catch((error: unknown) => {
-                    setMessage(error instanceof Error ? error.message : 'Could not revoke');
-                  });
+                void revokeInvite(workspaceId, invite.id).catch((error: unknown) => {
+                  setMessage(error instanceof Error ? error.message : 'Could not revoke');
+                });
               }}
             >
               Revoke

@@ -130,6 +130,7 @@ a {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  padding-top: 3.25rem;
 }
 
 .topbar {
@@ -139,6 +140,14 @@ a {
   padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+}
+
+.app > .topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
 }
 
 .brand {
@@ -345,8 +354,6 @@ select {
 
 .shell {
   flex: 1;
-  display: grid;
-  grid-template-columns: 16.5rem 1fr;
   min-height: calc(100vh - 3.25rem);
 }
 
@@ -354,13 +361,16 @@ select {
   border-right: 1px solid var(--border);
   padding: 0.75rem 0.7rem 0.7rem;
   background: var(--surface);
-  overflow: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   line-height: 1.3;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  position: fixed;
+  top: 3.25rem;
+  left: 0;
+  bottom: 0;
+  width: 16.5rem;
+  z-index: 20;
 }
 
 .sidebar :focus-visible {
@@ -369,10 +379,22 @@ select {
   border-radius: 4px;
 }
 
-.sidebar-workspace {
-  margin: 0 0 0.55rem;
-  padding-bottom: 0.55rem;
-  border-bottom: 1px solid var(--border);
+.topbar-workspace {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-workspace .workspace-switcher {
+  width: auto;
+  border-color: var(--border);
+}
+
+.topbar-workspace .workspace-switcher-name {
+  max-width: 12rem;
+}
+
+.topbar-workspace .topbar-empty-cta {
+  width: auto;
 }
 
 .sidebar-workspace-row {
@@ -494,16 +516,6 @@ select {
   border-color: var(--text-h);
 }
 
-.sidebar-workspace-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.35rem 0 0;
-  font-size: 0.75rem;
-  color: var(--muted);
-  padding-left: 0.1rem;
-}
-
 .role-badge {
   margin: 0;
   padding: 0.05rem 0.4rem;
@@ -544,6 +556,10 @@ select {
 .sidebar-body {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 .sidebar-body input[type='search'] {
@@ -559,6 +575,7 @@ select {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
+  flex: none;
   gap: 0.05rem;
   margin-top: auto;
   padding-top: 0.5rem;
@@ -619,6 +636,7 @@ select {
 }
 
 .editor-pane {
+  margin-left: 16.5rem;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -702,6 +720,7 @@ select {
 }
 
 .page-tree li.active > .page-row a,
+.page-tree li.active > .page-row .page-row-title,
 .page-list li.active > a {
   color: var(--accent);
   font-weight: 600;
@@ -744,7 +763,8 @@ select {
   background: var(--accent-soft);
 }
 
-.page-row a {
+.page-row a,
+.page-row-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -753,6 +773,10 @@ select {
   color: var(--text);
   text-decoration: none;
   font-size: 0.83rem;
+}
+
+.page-row-title {
+  cursor: pointer;
 }
 
 button.linkish.star {
@@ -770,6 +794,84 @@ button.linkish.star.on {
   align-items: center;
   gap: 0.05rem;
   flex: none;
+}
+
+.row-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.95rem;
+  flex: none;
+}
+
+.row-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+}
+
+.row-toggle-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.row-toggle-btn svg {
+  transition: transform 0.12s ease;
+  transform: rotate(90deg);
+}
+
+.row-toggle-btn.collapsed svg {
+  transform: rotate(0deg);
+}
+
+.page-row-menu {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.page-row-dropdown {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 9.5rem;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px var(--shadow);
+}
+
+.page-row-dropdown-item {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.page-row-dropdown-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.page-row-dropdown-item.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .icon-btn {
@@ -952,17 +1054,18 @@ button.linkish.star.on {
 }
 
 @media (min-width: 768px) {
-  .page-tree li > .page-actions,
-  .page-tree li > .page-row .page-row-actions {
+  .page-tree li > .page-row .page-row-actions,
+  .page-tree li > .page-row .page-row-menu {
     opacity: 0;
   }
 
-  .page-tree li:hover > .page-actions,
-  .page-tree li:focus-within > .page-actions,
-  .page-tree li.active > .page-actions,
   .page-tree li:hover > .page-row .page-row-actions,
   .page-tree li:focus-within > .page-row .page-row-actions,
-  .page-tree li.active > .page-row .page-row-actions {
+  .page-tree li.active > .page-row .page-row-actions,
+  .page-tree li:hover > .page-row .page-row-menu,
+  .page-tree li:focus-within > .page-row .page-row-menu,
+  .page-tree li.active > .page-row .page-row-menu,
+  .page-tree li > .page-row .page-row-menu.open {
     opacity: 1;
   }
 }
@@ -1367,8 +1470,11 @@ button.linkish.danger {
   }
 
   .shell {
-    grid-template-columns: 1fr;
     min-height: calc(100dvh - 3.25rem);
+  }
+
+  .editor-pane {
+    margin-left: 0;
   }
 
   .mobile-chrome {
@@ -1456,6 +1562,7 @@ button.linkish.danger {
     top: 0;
     left: 0;
     bottom: 0;
+    height: auto;
     width: min(19rem, 88vw);
     z-index: 31;
     visibility: hidden;
@@ -1500,12 +1607,30 @@ button.linkish.danger {
   color: var(--muted);
 }
 
+.editor-title {
+  font-family: var(--sans);
+  color: var(--text-h);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+
 .markdown-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 0;
   flex: 1;
   border-top: 1px solid var(--border);
+}
+
+.markdown-split.preview-only {
+  grid-template-columns: 1fr;
+}
+
+.markdown-split.preview-only .markdown-preview {
+  border-left: 0;
 }
 
 .markdown-split .cm-editor {

@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
-import {
-  createPage,
-  deletePage,
-  listPages,
-  patchPage,
-  setPageFavorite,
-} from '../api/pages';
-import type { PageKind, PublicPage, PublicWorkspace } from '../api/client';
-import { Sidebar, WorkspacesModal } from '../components/ComponentsIndex';
-import { clearLastWorkspaceId, setLastWorkspaceId } from '../components/lastWorkspace';
+import { useEffect, useState } from 'react';
+import { Link, Outlet, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { EMPTY_PAGES, usePageStore, useWorkspaceStore } from '../stores/StoresIndex';
+import type { PageKind, PublicPage } from '../api/client';
+import { Sidebar } from '../components/ComponentsIndex';
+import { setLastWorkspaceId } from '../components/lastWorkspace';
 import { useSidebarDrawer } from '../components/Sidebar';
 import { EmptyEditorPane } from './EmptyEditorPane';
 import { buildPageTree, draggedPageId, PageTree } from './PageTree';
@@ -19,21 +12,25 @@ import { canEdit } from './workspaceContext';
 export function WorkspaceShellPage() {
   const { workspaceId, pageId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const isTrash = Boolean(useMatch('/w/:workspaceId/trash'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
   const isSettings = Boolean(useMatch('/w/:workspaceId/settings'));
-  const { accessToken, getWorkspace, listWorkspaces } = useAuth();
-  const [workspace, setWorkspace] = useState<PublicWorkspace | null>(null);
-  const [workspaces, setWorkspaces] = useState<PublicWorkspace[]>([]);
-  const [pages, setPages] = useState<PublicPage[]>([]);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const pages = usePageStore((state) => state.byWorkspace[workspaceId ?? ''] ?? EMPTY_PAGES);
+  const fetchPages = usePageStore((state) => state.fetchPages);
+  const pageStoreCreatePage = usePageStore((state) => state.createPage);
+  const pageStorePatchPage = usePageStore((state) => state.patchPage);
+  const pageStoreTrashPage = usePageStore((state) => state.trashPage);
+  const pageStoreSetFavorite = usePageStore((state) => state.setFavorite);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [workspacesOpen, setWorkspacesOpen] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [rootOver, setRootOver] = useState(false);
   const { open: sidebarOpen, setOpen: setSidebarOpen, narrow } = useSidebarDrawer();
 
@@ -42,44 +39,31 @@ export function WorkspaceShellPage() {
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  const refreshPages = useCallback(async () => {
-    if (!accessToken || !workspaceId) return;
-    setPages(await listPages(accessToken, workspaceId, { q: query || undefined }));
-  }, [accessToken, workspaceId, query]);
-
   useEffect(() => {
     if (!workspaceId) return;
     setLastWorkspaceId(workspaceId);
     void (async () => {
       try {
-        const [current, all] = await Promise.all([getWorkspace(workspaceId), listWorkspaces()]);
-        setWorkspace(current);
-        setWorkspaces(all);
-        await refreshPages();
+        await Promise.all([fetchWorkspaces(), setActiveWorkspace(workspaceId)]);
+        await fetchPages(workspaceId, { q: query || undefined });
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'Workspace not found');
       }
     })();
-  }, [workspaceId, getWorkspace, listWorkspaces, refreshPages]);
+  }, [workspaceId, query, fetchWorkspaces, setActiveWorkspace, fetchPages]);
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pageId, isTrash, isCollection, workspaceId, setSidebarOpen]);
 
   async function onCreateNode(kind: PageKind = 'markdown', parentId?: string | null) {
-    if (!accessToken || !workspaceId) return;
+    if (!workspaceId) return;
     setBusy(true);
     setMessage(null);
     try {
       const id = crypto.randomUUID();
       const title = kind === 'folder' ? 'Folder' : 'Untitled';
-      const page = await createPage(accessToken, workspaceId, {
-        id,
-        title,
-        parentId: parentId ?? null,
-        kind,
-      });
-      await refreshPages();
+      const page = await pageStoreCreatePage(workspaceId, { id, title, parentId: parentId ?? null, kind });
       navigate(`/w/${workspaceId}/p/${page.id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not create page');
@@ -89,23 +73,20 @@ export function WorkspaceShellPage() {
   }
 
   async function commitRename(page: PublicPage) {
-    if (!accessToken) return;
     const title = renameValue.trim() || 'Untitled';
     try {
-      await patchPage(accessToken, page.id, { title });
+      await pageStorePatchPage(page.id, { title });
       setRenamingId(null);
-      await refreshPages();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not rename page');
     }
   }
 
   async function onTrash(page: PublicPage) {
-    if (!accessToken || !workspaceId) return;
+    if (!workspaceId) return;
     if (!window.confirm(`Move “${page.title}” and nested pages to trash?`)) return;
     try {
-      await deletePage(accessToken, page.id);
-      await refreshPages();
+      await pageStoreTrashPage(page.id);
       if (pageId === page.id) {
         navigate(`/w/${workspaceId}`);
       }
@@ -115,26 +96,36 @@ export function WorkspaceShellPage() {
   }
 
   async function onFavorite(page: PublicPage) {
-    if (!accessToken) return;
     try {
-      await setPageFavorite(accessToken, page.id, !page.favorited);
-      await refreshPages();
+      await pageStoreSetFavorite(page.id, !page.favorited);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not update favorite');
     }
   }
 
+  function onToggleExpand(pageId: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
+    });
+  }
+
   async function onMove(draggedId: string, parentId: string | null) {
-    if (!accessToken) return;
     const current = pages.find((page) => page.id === draggedId);
     if (current && current.parentId === parentId) return;
     try {
-      await patchPage(accessToken, draggedId, { parentId });
-      await refreshPages();
+      await pageStorePatchPage(draggedId, { parentId });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not move page');
     }
   }
+
+  const workspace = workspaces.find((item) => item.id === workspaceId);
 
   if (message && !workspace) {
     return (
@@ -147,7 +138,7 @@ export function WorkspaceShellPage() {
     );
   }
 
-  if (!workspaceId || !workspace || workspace.id !== workspaceId) {
+  if (!workspaceId || !workspace) {
     return <p className="muted">Loading workspace…</p>;
   }
 
@@ -175,18 +166,17 @@ export function WorkspaceShellPage() {
     onTrash: (page: PublicPage) => void onTrash(page),
     onFavorite: (page: PublicPage) => void onFavorite(page),
     onMove,
+    expandedIds,
+    onToggleExpand,
   };
 
   return (
     <div className="shell">
       <Sidebar
-        workspaces={workspaces}
         workspace={workspace}
         open={sidebarOpen}
         narrow={narrow}
-        manageOpen={workspacesOpen}
         onClose={() => setSidebarOpen(false)}
-        onOpenWorkspaces={() => setWorkspacesOpen(true)}
       >
         <label className="sidebar-label" htmlFor="page-search">
           Search
@@ -258,39 +248,6 @@ export function WorkspaceShellPage() {
           </p>
         ) : null}
       </Sidebar>
-      <WorkspacesModal
-        open={workspacesOpen}
-        onClose={() => setWorkspacesOpen(false)}
-        workspaces={workspaces}
-        currentId={workspace.id}
-        onSelect={(id) => {
-          setLastWorkspaceId(id);
-          const stayOnSettings = /\/settings\/?$/.test(location.pathname);
-          navigate(stayOnSettings ? `/w/${id}/settings` : `/w/${id}`);
-        }}
-        onCreated={(created) => {
-          setLastWorkspaceId(created.id);
-          setWorkspaces((list) => [...list, created]);
-          navigate(`/w/${created.id}`);
-        }}
-        onRenamed={(updated) => {
-          setWorkspaces((list) => list.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
-          setWorkspace((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
-        }}
-        onDeleted={(id) => {
-          const remaining = workspaces.filter((item) => item.id !== id);
-          setWorkspaces(remaining);
-          if (workspace.id !== id) return;
-          const next = remaining[0];
-          if (next) {
-            setLastWorkspaceId(next.id);
-            navigate(`/w/${next.id}`);
-            return;
-          }
-          clearLastWorkspaceId();
-          navigate('/');
-        }}
-      />
       <section className="editor-pane">
         <div className="mobile-chrome">
           <button
@@ -321,10 +278,7 @@ export function WorkspaceShellPage() {
           <Outlet
             context={{
               role: workspace.role,
-              accessToken,
               pageTitle: currentTitle,
-              refreshPages,
-              pages,
               workspaceId,
               onCreateNode: (kind: PageKind, parentId?: string | null) => void onCreateNode(kind, parentId),
             }}

@@ -1,34 +1,31 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { deletePagePermanent, listPages, restorePage } from '../api/pages';
+import { EMPTY_PAGES, usePageStore } from '../stores/StoresIndex';
 import type { PublicPage } from '../api/client';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 
 export function TrashPage() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
-  const { role, accessToken, refreshPages } = useOutletContext<WorkspaceOutlet>();
-  const [pages, setPages] = useState<PublicPage[]>([]);
+  const { role } = useOutletContext<WorkspaceOutlet>();
+  const pages = usePageStore((state) => state.trashedByWorkspace[workspaceId ?? ''] ?? EMPTY_PAGES);
+  const fetchTrashed = usePageStore((state) => state.fetchTrashed);
+  const restorePage = usePageStore((state) => state.restorePage);
+  const deletePagePermanent = usePageStore((state) => state.deletePagePermanent);
   const [message, setMessage] = useState<string | null>(null);
   const editable = canEdit(role);
 
-  const refresh = useCallback(async () => {
-    if (!accessToken || !workspaceId) return;
-    setPages(await listPages(accessToken, workspaceId, { trashed: true }));
-  }, [accessToken, workspaceId]);
-
   useEffect(() => {
-    void refresh().catch((error: unknown) => {
+    if (!workspaceId) return;
+    void fetchTrashed(workspaceId).catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : 'Could not load trash');
     });
-  }, [refresh]);
+  }, [workspaceId, fetchTrashed]);
 
   async function onRestore(page: PublicPage) {
-    if (!accessToken || !workspaceId) return;
+    if (!workspaceId) return;
     try {
-      await restorePage(accessToken, page.id);
-      await refresh();
-      await refreshPages();
+      await restorePage(page.id);
       navigate(`/w/${workspaceId}/p/${page.id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not restore page');
@@ -36,14 +33,11 @@ export function TrashPage() {
   }
 
   async function onPermanent(page: PublicPage) {
-    if (!accessToken || !workspaceId) return;
     if (!window.confirm(`Permanently delete “${page.title}” and any nested pages still in trash?`)) {
       return;
     }
     try {
-      await deletePagePermanent(accessToken, page.id);
-      await refresh();
-      await refreshPages();
+      await deletePagePermanent(page.id);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not delete page');
     }

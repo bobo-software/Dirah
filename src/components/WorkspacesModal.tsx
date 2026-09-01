@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
-import { useAuth } from '../auth/AuthContext';
+import { useWorkspaceStore } from '../stores/StoresIndex';
 import type { PublicWorkspace } from '../api/client';
 
 function RenameIcon() {
@@ -26,23 +26,22 @@ function TrashIcon() {
 export default function WorkspacesModal({
   open,
   onClose,
-  workspaces,
   currentId,
   onSelect,
   onCreated,
-  onRenamed,
   onDeleted,
 }: {
   open: boolean;
   onClose: () => void;
-  workspaces: PublicWorkspace[];
   currentId: string;
   onSelect: (id: string) => void;
   onCreated: (workspace: PublicWorkspace) => void;
-  onRenamed: (workspace: PublicWorkspace) => void;
   onDeleted: (id: string) => void;
 }) {
-  const { createWorkspace, renameWorkspace, deleteWorkspace } = useAuth();
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const createWorkspace = useWorkspaceStore((state) => state.createWorkspace);
+  const renameWorkspace = useWorkspaceStore((state) => state.renameWorkspace);
+  const deleteWorkspace = useWorkspaceStore((state) => state.deleteWorkspace);
   const titleId = useId();
   const createRef = useRef<HTMLInputElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -101,8 +100,7 @@ export default function WorkspacesModal({
     setPending('rename');
     setMessage(null);
     try {
-      const updated = await renameWorkspace(workspace.id, renameValue);
-      onRenamed(updated);
+      await renameWorkspace(workspace.id, renameValue);
       setRenamingId(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not rename workspace');

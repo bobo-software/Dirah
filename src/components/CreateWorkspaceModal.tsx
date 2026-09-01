@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
-import { useAuth } from '../auth/AuthContext';
+import { useWorkspaceStore } from '../stores/StoresIndex';
 import type { PublicWorkspace } from '../api/client';
 
 export default function CreateWorkspaceModal({
@@ -11,7 +11,7 @@ export default function CreateWorkspaceModal({
   onClose: () => void;
   onCreated: (workspace: PublicWorkspace) => void;
 }) {
-  const { createWorkspace } = useAuth();
+  const createWorkspace = useWorkspaceStore((state) => state.createWorkspace);
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');

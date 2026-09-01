@@ -32,15 +32,6 @@ export function useSidebarDrawer() {
   return { open, setOpen, narrow };
 }
 
-function PlusIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
-
 function CloseIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
@@ -83,26 +74,19 @@ function SettingsIcon() {
 }
 
 export default function Sidebar({
-  workspaces,
   workspace,
   open,
   narrow,
-  manageOpen,
   onClose,
-  onOpenWorkspaces,
   children,
 }: {
-  workspaces: PublicWorkspace[];
   workspace: PublicWorkspace | null;
   open: boolean;
   narrow: boolean;
-  manageOpen: boolean;
   onClose: () => void;
-  onOpenWorkspaces: () => void;
   children?: ReactNode;
 }) {
   const currentId = workspace?.id ?? '';
-  const initial = (workspace?.name ?? '?').trim().charAt(0).toUpperCase() || '?';
 
   return (
     <>
@@ -124,34 +108,6 @@ export default function Sidebar({
           <button type="button" className="sidebar-close" onClick={onClose} aria-label="Close menu">
             <CloseIcon />
           </button>
-        </div>
-        <div className="sidebar-workspace">
-          {workspaces.length > 0 ? (
-            <button
-              type="button"
-              className="workspace-switcher"
-              aria-haspopup="dialog"
-              aria-expanded={manageOpen}
-              title="Manage workspaces"
-              onClick={onOpenWorkspaces}
-            >
-              <span className="workspace-avatar" aria-hidden="true">
-                {initial}
-              </span>
-              <span className="workspace-switcher-name">{workspace?.name ?? 'Workspaces'}</span>
-              <span className="workspace-switcher-caret" aria-hidden="true" />
-            </button>
-          ) : (
-            <button type="button" className="sidebar-empty-cta" onClick={onOpenWorkspaces}>
-              <PlusIcon />
-              New workspace
-            </button>
-          )}
-          {workspace ? (
-            <p className="sidebar-workspace-meta">
-              <span className="role-badge">{workspace.role}</span>
-            </p>
-          ) : null}
         </div>
         {children ? <div className="sidebar-body">{children}</div> : null}
         {currentId ? (

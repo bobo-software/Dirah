@@ -1,7 +1,25 @@
 import { NavLink } from 'react-router-dom';
-import { useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import type { PageKind, PublicPage } from '../api/client';
 import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
+
+function ChevronIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+function KebabIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
 
 function RenameIcon() {
   return (
@@ -67,6 +85,8 @@ type PageTreeProps = {
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
+  expandedIds: Set<string>;
+  onToggleExpand: (pageId: string) => void;
   ancestorIds?: string[];
 };
 
@@ -95,14 +115,46 @@ function PageTreeItem({
   onTrash,
   onFavorite,
   onMove,
+  expandedIds,
+  onToggleExpand,
   ancestorIds = [],
 }: PageTreeProps & { node: PageNode }) {
   const page = node.page;
   const kind = pageKind(page);
   const active = page.id === pageId;
   const nestable = canHaveChildren(kind);
+  const hasChildren = node.children.length > 0;
+  const expanded = expandedIds.has(page.id);
+  const collapsed = !expanded;
   const [dragging, setDragging] = useState(false);
   const [over, setOver] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLSpanElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        menuTriggerRef.current?.focus();
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
 
   function canAccept(dragged: string): boolean {
     if (!editable || !nestable || !dragged) return false;
@@ -152,6 +204,12 @@ function PageTreeItem({
     onMove(dragged, page.id);
   }
 
+  function onRowClick(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!nestable) return;
+    if ((event.target as HTMLElement).closest('button, input, a')) return;
+    onToggleExpand(page.id);
+  }
+
   const rowClass = [
     'page-row',
     dragging ? 'dragging' : '',
@@ -179,67 +237,131 @@ function PageTreeItem({
           />
         </form>
       ) : (
-        <>
-          <div
-            className={rowClass}
-            draggable={editable && renamingId !== page.id}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            title={nestable && editable ? 'Drop a file here to move it into this folder' : undefined}
-          >
-            <span className="kind-glyph" title={kind}>
-              {kindGlyph(kind)}
-            </span>
+        <div
+          className={rowClass}
+          draggable={editable && renamingId !== page.id}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={onRowClick}
+          title={nestable && editable ? 'Drop a file here to move it into this folder' : undefined}
+        >
+          <span className="row-toggle">
+            {nestable && hasChildren ? (
+              <button
+                type="button"
+                className={collapsed ? 'row-toggle-btn collapsed' : 'row-toggle-btn'}
+                aria-label={collapsed ? 'Expand folder' : 'Collapse folder'}
+                aria-expanded={!collapsed}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleExpand(page.id);
+                }}
+              >
+                <ChevronIcon />
+              </button>
+            ) : null}
+          </span>
+          <span className="kind-glyph" title={kind}>
+            {kindGlyph(kind)}
+          </span>
+          {nestable ? (
+            <span className="page-row-title">{page.title}</span>
+          ) : (
             <NavLink draggable={false} to={`/w/${workspaceId}/p/${page.id}`}>
               {page.title}
             </NavLink>
-            <button
-              type="button"
-              className={page.favorited ? 'linkish star on' : 'linkish star'}
-              aria-label={page.favorited ? 'Remove favorite' : 'Favorite'}
-              onClick={() => onFavorite(page)}
-            >
-              {page.favorited ? '★' : '☆'}
-            </button>
-            {editable && kind === 'markdown' ? (
-              <span className="page-row-actions">
-                <button type="button" className="linkish icon-btn" aria-label="Rename" title="Rename" onClick={() => onStartRename(page)}>
-                  <RenameIcon />
-                </button>
-                <button type="button" className="linkish icon-btn danger" aria-label="Trash" title="Trash" onClick={() => onTrash(page)}>
-                  <TrashIcon />
-                </button>
-              </span>
-            ) : null}
-          </div>
-          {editable && kind !== 'markdown' ? (
-            <span className="page-actions">
-              {nestable ? (
-                <>
-                  <button type="button" className="linkish" onClick={() => onCreateChild(page, 'markdown')}>
-                    MD
-                  </button>
-                  <button type="button" className="linkish" onClick={() => onCreateChild(page, 'folder')}>
-                    Folder
-                  </button>
-                </>
-              ) : null}
-              <button type="button" className="linkish" onClick={() => onStartRename(page)}>
-                Rename
+          )}
+          <button
+            type="button"
+            className={page.favorited ? 'linkish star on' : 'linkish star'}
+            aria-label={page.favorited ? 'Remove favorite' : 'Favorite'}
+            onClick={() => onFavorite(page)}
+          >
+            {page.favorited ? '★' : '☆'}
+          </button>
+          {editable && kind === 'markdown' ? (
+            <span className="page-row-actions">
+              <button type="button" className="linkish icon-btn" aria-label="Rename" title="Rename" onClick={() => onStartRename(page)}>
+                <RenameIcon />
               </button>
-              <button type="button" className="linkish danger" onClick={() => onTrash(page)}>
-                Trash
+              <button type="button" className="linkish icon-btn danger" aria-label="Trash" title="Trash" onClick={() => onTrash(page)}>
+                <TrashIcon />
               </button>
             </span>
-          ) : !editable ? (
-            <span className="page-actions" />
           ) : null}
-        </>
+          {editable && kind !== 'markdown' ? (
+            <span className={menuOpen ? 'page-row-menu open' : 'page-row-menu'} ref={menuRef}>
+              <button
+                type="button"
+                ref={menuTriggerRef}
+                className="linkish icon-btn"
+                aria-label="More actions"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((value) => !value)}
+              >
+                <KebabIcon />
+              </button>
+              {menuOpen ? (
+                <div className="page-row-dropdown" role="menu">
+                  {nestable ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="page-row-dropdown-item"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onCreateChild(page, 'markdown');
+                        }}
+                      >
+                        New file
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="page-row-dropdown-item"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onCreateChild(page, 'folder');
+                        }}
+                      >
+                        New subfolder
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="page-row-dropdown-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onStartRename(page);
+                    }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="page-row-dropdown-item danger"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onTrash(page);
+                    }}
+                  >
+                    Trash
+                  </button>
+                </div>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
       )}
-      {node.children.length > 0 ? (
+      {hasChildren && expanded ? (
         <PageTree
           nodes={node.children}
           workspaceId={workspaceId}
@@ -254,6 +376,8 @@ function PageTreeItem({
           onTrash={onTrash}
           onFavorite={onFavorite}
           onMove={onMove}
+          expandedIds={expandedIds}
+          onToggleExpand={onToggleExpand}
           ancestorIds={[...ancestorIds, page.id]}
         />
       ) : null}

@@ -1,12 +1,14 @@
 import { type FormEvent, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
+import { useAuthStore } from '../stores/StoresIndex';
 import { OAuthButtons } from './OAuthButtons';
 import { Logo } from '../components/Logo';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 export function RegisterPage() {
-  const { user, ready, register } = useAuth();
+  const user = useAuthStore((state) => state.user);
+  const ready = useAuthStore((state) => state.ready);
+  const register = useAuthStore((state) => state.register);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);

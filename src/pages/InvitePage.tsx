@@ -1,12 +1,16 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
+import { useAuthStore, useInviteStore } from '../stores/StoresIndex';
 import { Logo } from '../components/Logo';
-import { previewInvite, type InvitePreview } from '../api/members';
+import type { InvitePreview } from '../api/members';
 
 export function InvitePage() {
   const { token } = useParams<{ token: string }>();
-  const { user, ready, acceptInvite, logout } = useAuth();
+  const user = useAuthStore((state) => state.user);
+  const ready = useAuthStore((state) => state.ready);
+  const acceptInvite = useAuthStore((state) => state.acceptInvite);
+  const logout = useAuthStore((state) => state.logout);
+  const fetchPreview = useInviteStore((state) => state.fetchPreview);
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -19,10 +23,10 @@ export function InvitePage() {
       setMissing(true);
       return;
     }
-    void previewInvite(token)
+    void fetchPreview(token)
       .then(setPreview)
       .catch(() => setMissing(true));
-  }, [token]);
+  }, [token, fetchPreview]);
 
   if (!ready) return <p className="muted">Loading…</p>;
   if (nextPath) return <Navigate to={nextPath} replace />;

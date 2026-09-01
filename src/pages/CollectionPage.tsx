@@ -1,24 +1,25 @@
 import { useMemo, useState } from 'react';
 import { Link, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
-import { patchPage } from '../api/pages';
+import { EMPTY_PAGES, usePageStore } from '../stores/StoresIndex';
 import type { PublicPage } from '../api/client';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { PAGE_STATUSES, pageStatusLabel, parsePageStatus, type PageStatus } from './pageStatus';
 
 export function CollectionPage() {
   const { workspaceId } = useParams();
-  const { role, accessToken, refreshPages, pages } = useOutletContext<WorkspaceOutlet>();
+  const { role } = useOutletContext<WorkspaceOutlet>();
+  const pages = usePageStore((state) => state.byWorkspace[workspaceId ?? ''] ?? EMPTY_PAGES);
+  const patchPage = usePageStore((state) => state.patchPage);
   const [searchParams, setSearchParams] = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);
   const editable = canEdit(role);
   const view = searchParams.get('view') === 'kanban' ? 'kanban' : 'table';
 
   async function onStatus(page: PublicPage, status: PageStatus) {
-    if (!accessToken || !editable) return;
+    if (!editable) return;
     try {
-      await patchPage(accessToken, page.id, { status });
+      await patchPage(page.id, { status });
       setMessage(null);
-      await refreshPages();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not update status');
     }

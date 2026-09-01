@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { REFRESH_KEY } from '../auth/AuthContext';
+import { REFRESH_KEY } from '../stores/StoresIndex';
 import { Logo } from '../components/Logo';
 
 export function OAuthCatchPage() {

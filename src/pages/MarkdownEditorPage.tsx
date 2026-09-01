@@ -5,17 +5,31 @@ import { EditorView } from '@codemirror/view';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useOutletContext, useParams } from 'react-router-dom';
-import { getMarkdown, putMarkdown } from '../api/pages';
-import { getAiStatus } from '../api/ai';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { pageKind } from './pageKind';
 import { AskPanel } from './AskPanel';
 import { useTheme } from '../theme/ThemeContext';
+import {
+  EMPTY_PAGES,
+  useAiStatusStore,
+  useAuthStore,
+  useEditorViewStore,
+  useMarkdownContentStore,
+  usePageStore,
+} from '../stores/StoresIndex';
 
 export function MarkdownEditorPage() {
-  const { pageId } = useParams();
-  const { role, accessToken, pageTitle, pages, refreshPages } = useOutletContext<WorkspaceOutlet>();
+  const { workspaceId, pageId } = useParams();
+  const { role, pageTitle } = useOutletContext<WorkspaceOutlet>();
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const pages = usePageStore((state) => state.byWorkspace[workspaceId ?? ''] ?? EMPTY_PAGES);
+  const loadContent = useMarkdownContentStore((state) => state.loadContent);
+  const saveContent = useMarkdownContentStore((state) => state.saveContent);
+  const aiEnabled = useAiStatusStore((state) => state.enabled);
+  const fetchAiStatus = useAiStatusStore((state) => state.fetchStatus);
   const { resolved } = useTheme();
+  const showSource = useEditorViewStore((state) => state.showSource);
+  const toggleShowSource = useEditorViewStore((state) => state.toggleShowSource);
   const editable = canEdit(role);
   const page = pages.find((item) => item.id === pageId);
   const [content, setContent] = useState('');
@@ -24,21 +38,20 @@ export function MarkdownEditorPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(false);
   const timer = useRef<number | null>(null);
   const hashRef = useRef<string | undefined>(undefined);
   const contentRef = useRef(content);
   contentRef.current = content;
 
   const load = useCallback(async () => {
-    if (!accessToken || !pageId) return;
-    const body = await getMarkdown(accessToken, pageId);
-    hashRef.current = body.hash;
-    setHash(body.hash);
-    setContent(body.content);
+    if (!pageId) return;
+    const entry = await loadContent(pageId);
+    hashRef.current = entry.hash;
+    setHash(entry.hash);
+    setContent(entry.content);
     setDirty(false);
     setMessage(null);
-  }, [accessToken, pageId]);
+  }, [pageId, loadContent]);
 
   useEffect(() => {
     void load().catch((error: unknown) => {
@@ -47,22 +60,18 @@ export function MarkdownEditorPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!accessToken) return;
-    void getAiStatus(accessToken)
-      .then(setAiEnabled)
-      .catch(() => setAiEnabled(false));
-  }, [accessToken]);
+    void fetchAiStatus();
+  }, [fetchAiStatus]);
 
   async function save(next = content) {
-    if (!accessToken || !pageId || !editable) return;
+    if (!pageId || !editable) return;
     setSaving(true);
     try {
-      const body = await putMarkdown(accessToken, pageId, next, hashRef.current);
-      hashRef.current = body.hash;
-      setHash(body.hash);
+      const entry = await saveContent(pageId, next, hashRef.current);
+      hashRef.current = entry.hash;
+      setHash(entry.hash);
       setDirty(false);
       setMessage(null);
-      await refreshPages();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not save markdown');
     } finally {
@@ -106,6 +115,15 @@ export function MarkdownEditorPage() {
   return (
     <>
       <div className="editor-toolbar">
+        <span className="editor-title">{pageTitle || page?.title || 'Untitled'}</span>
+        <button
+          type="button"
+          className={`linkish${showSource ? ' on' : ''}`}
+          onClick={toggleShowSource}
+          aria-pressed={showSource}
+        >
+          {showSource ? 'Hide source' : 'Show source'}
+        </button>
         <span className="kind-chip">Markdown</span>
         <button type="button" className="linkish" onClick={onDownload}>
           Download .md
@@ -142,19 +160,23 @@ export function MarkdownEditorPage() {
           onInsert={insertAsk}
         />
       ) : null}
-      <div className={editable ? 'markdown-split' : 'markdown-split readonly'}>
-        {editable ? (
-          <CodeMirror
-            value={content}
-            height="100%"
-            theme={resolved}
-            extensions={[markdown(), EditorView.lineWrapping]}
-            onChange={onChange}
-            basicSetup={{ lineNumbers: true, foldGutter: true }}
-          />
-        ) : (
-          <pre className="markdown-source">{content}</pre>
-        )}
+      <div
+        className={`markdown-split${editable ? '' : ' readonly'}${showSource ? '' : ' preview-only'}`}
+      >
+        {showSource ? (
+          editable ? (
+            <CodeMirror
+              value={content}
+              height="100%"
+              theme={resolved}
+              extensions={[markdown(), EditorView.lineWrapping]}
+              onChange={onChange}
+              basicSetup={{ lineNumbers: true, foldGutter: true }}
+            />
+          ) : (
+            <pre className="markdown-source">{content}</pre>
+          )
+        ) : null}
         <div className="markdown-preview">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '_Empty document._'}</ReactMarkdown>
         </div>

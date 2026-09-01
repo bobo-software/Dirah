@@ -1,6 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { AuthProvider } from './auth/AuthContext';
+import { useAuthStore } from './stores/StoresIndex';
 import { AppFrame, RequireAuth } from './layout/AppFrame';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -32,58 +32,60 @@ const CollectionPage = lazy(async () => {
 });
 
 export default function App() {
+  useEffect(() => {
+    void useAuthStore.getState().initAuth();
+  }, []);
+
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/invite/:token" element={<InvitePage />} />
-          <Route path="/oauth" element={<OAuthCatchPage />} />
-          <Route
-            path="/s/:token"
-            element={
-              <Suspense fallback={<p className="muted">Loading shared page…</p>}>
-                <PublicSharePage />
-              </Suspense>
-            }
-          />
-          <Route element={<RequireAuth />}>
-            <Route element={<AppFrame />}>
-              <Route path="/" element={<HomeRedirect />} />
-              <Route path="/settings" element={<SettingsRedirect />} />
-              <Route path="/settings/mcp-oauth" element={<McpOAuthConsentPage />} />
-              <Route path="/w/:workspaceId" element={<WorkspaceShellPage />}>
-                <Route
-                  path="p/:pageId"
-                  element={
-                    <Suspense fallback={<p className="muted">Loading editor…</p>}>
-                      <WorkspaceNodePage />
-                    </Suspense>
-                  }
-                />
-                <Route
-                  path="collection"
-                  element={
-                    <Suspense fallback={<p className="muted">Loading collection…</p>}>
-                      <CollectionPage />
-                    </Suspense>
-                  }
-                />
-                <Route
-                  path="trash"
-                  element={
-                    <Suspense fallback={<p className="muted">Loading trash…</p>}>
-                      <TrashPage />
-                    </Suspense>
-                  }
-                />
-                <Route path="settings" element={<SettingsPage />} />
-              </Route>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/invite/:token" element={<InvitePage />} />
+        <Route path="/oauth" element={<OAuthCatchPage />} />
+        <Route
+          path="/s/:token"
+          element={
+            <Suspense fallback={<p className="muted">Loading shared page…</p>}>
+              <PublicSharePage />
+            </Suspense>
+          }
+        />
+        <Route element={<RequireAuth />}>
+          <Route element={<AppFrame />}>
+            <Route path="/" element={<HomeRedirect />} />
+            <Route path="/settings" element={<SettingsRedirect />} />
+            <Route path="/settings/mcp-oauth" element={<McpOAuthConsentPage />} />
+            <Route path="/w/:workspaceId" element={<WorkspaceShellPage />}>
+              <Route
+                path="p/:pageId"
+                element={
+                  <Suspense fallback={<p className="muted">Loading editor…</p>}>
+                    <WorkspaceNodePage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="collection"
+                element={
+                  <Suspense fallback={<p className="muted">Loading collection…</p>}>
+                    <CollectionPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="trash"
+                element={
+                  <Suspense fallback={<p className="muted">Loading trash…</p>}>
+                    <TrashPage />
+                  </Suspense>
+                }
+              />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }

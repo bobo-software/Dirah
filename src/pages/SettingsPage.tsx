@@ -1,26 +1,21 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { API_URL } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import {
-  createMcpToken,
-  listMcpAccess,
-  listMcpTokens,
-  revokeMcpToken,
-  setMcpAccess,
-  setWorkspaceMcpEnabled,
-  updateMcpToken,
-  type McpAccessRow,
-  type McpToken,
-} from '../api/mcp';
+import { useMcpStore } from '../stores/StoresIndex';
+import type { McpAccessRow, McpToken } from '../api/mcp';
 import { CopyTokenOnce, MembersPanel } from '../components/ComponentsIndex';
 import { canAdmin, type WorkspaceOutlet } from './workspaceContext';
 
 export function SettingsPage() {
-  const { accessToken } = useAuth();
   const { workspaceId, role } = useOutletContext<WorkspaceOutlet>();
-  const [tokens, setTokens] = useState<McpToken[]>([]);
-  const [access, setAccess] = useState<McpAccessRow[]>([]);
+  const tokens = useMcpStore((state) => state.tokens);
+  const access = useMcpStore((state) => state.access);
+  const fetchAll = useMcpStore((state) => state.fetchAll);
+  const createMcpToken = useMcpStore((state) => state.createToken);
+  const updateMcpToken = useMcpStore((state) => state.updateToken);
+  const revokeMcpToken = useMcpStore((state) => state.revokeToken);
+  const setMcpAccess = useMcpStore((state) => state.setAccess);
+  const setWorkspaceMcpEnabled = useMcpStore((state) => state.setWorkspaceEnabled);
   const [name, setName] = useState('Cursor');
   const [newTokenDefaultWorkspaceId, setNewTokenDefaultWorkspaceId] = useState('');
   const [secret, setSecret] = useState<string | null>(null);
@@ -29,21 +24,11 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const owner = canAdmin(role);
 
-  async function refresh() {
-    if (!accessToken) return;
-    const [nextTokens, nextAccess] = await Promise.all([
-      listMcpTokens(accessToken),
-      listMcpAccess(accessToken),
-    ]);
-    setTokens(nextTokens);
-    setAccess(nextAccess);
-  }
-
   useEffect(() => {
-    void refresh().catch((error: unknown) => {
+    void fetchAll().catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : 'Could not load settings');
     });
-  }, [accessToken]);
+  }, [fetchAll]);
 
   const snippet = useMemo(
     () =>
@@ -64,14 +49,12 @@ export function SettingsPage() {
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
-    if (!accessToken) return;
     setBusy(true);
     setCopied(false);
     try {
-      const token = await createMcpToken(accessToken, name, newTokenDefaultWorkspaceId || undefined);
+      const token = await createMcpToken(name, newTokenDefaultWorkspaceId || undefined);
       setSecret(token.secret ?? null);
       setMessage(null);
-      await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not create token');
     } finally {
@@ -80,11 +63,9 @@ export function SettingsPage() {
   }
 
   async function onSetDefaultWorkspace(tokenId: string, defaultWorkspaceId: string) {
-    if (!accessToken) return;
     try {
-      await updateMcpToken(accessToken, tokenId, { defaultWorkspaceId: defaultWorkspaceId || null });
+      await updateMcpToken(tokenId, { defaultWorkspaceId: defaultWorkspaceId || null });
       setMessage(null);
-      await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not update default workspace');
     }
@@ -100,16 +81,13 @@ export function SettingsPage() {
   }
 
   async function onRevoke(id: string) {
-    if (!accessToken) return;
     if (!window.confirm('Revoke this MCP token?')) return;
-    await revokeMcpToken(accessToken, id);
+    await revokeMcpToken(id);
     setSecret(null);
     setCopied(false);
-    await refresh();
   }
 
   async function onToggle(row: McpAccessRow, field: 'allowlisted' | 'canWrite', value: boolean) {
-    if (!accessToken) return;
     const next = access.map((item) => {
       if (item.workspaceId !== row.workspaceId) return item;
       if (field === 'allowlisted') {
@@ -117,19 +95,15 @@ export function SettingsPage() {
       }
       return { ...item, canWrite: value };
     });
-    setAccess(next);
     try {
-      const saved = await setMcpAccess(
-        accessToken,
+      await setMcpAccess(
         next
           .filter((item) => item.allowlisted)
           .map((item) => ({ workspaceId: item.workspaceId, canWrite: item.canWrite }))
       );
-      setAccess(saved);
       setMessage(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not update allowlist');
-      await refresh();
     }
   }
 
@@ -143,12 +117,7 @@ export function SettingsPage() {
         </p>
       ) : null}
 
-      {owner && accessToken ? (
-        <MembersPanel
-          workspaceId={workspaceId}
-          accessToken={accessToken}
-        />
-      ) : null}
+      {owner ? <MembersPanel workspaceId={workspaceId} /> : null}
 
       <div className="settings-section">
         <h2>MCP tokens</h2>
@@ -252,12 +221,10 @@ export function SettingsPage() {
                 checked={row.mcpEnabled !== false}
                 disabled={row.role !== 'owner'}
                 onChange={(e) => {
-                  if (!accessToken || row.role !== 'owner') return;
-                  void setWorkspaceMcpEnabled(accessToken, row.workspaceId, e.target.checked)
-                    .then(() => refresh())
-                    .catch((error: unknown) => {
-                      setMessage(error instanceof Error ? error.message : 'Could not update workspace');
-                    });
+                  if (row.role !== 'owner') return;
+                  void setWorkspaceMcpEnabled(row.workspaceId, e.target.checked).catch((error: unknown) => {
+                    setMessage(error instanceof Error ? error.message : 'Could not update workspace');
+                  });
                 }}
               />{' '}
               Enabled

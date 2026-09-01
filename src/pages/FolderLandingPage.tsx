@@ -1,6 +1,6 @@
 import { useOutletContext, useParams, useNavigate } from 'react-router-dom';
 import type { ChangeEvent } from 'react';
-import { createPage, putMarkdown } from '../api/pages';
+import { EMPTY_PAGES, usePageStore, useMarkdownContentStore } from '../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { pageKind } from './pageKind';
 
@@ -11,7 +11,10 @@ export function FolderLandingPage({
 }) {
   const { workspaceId, pageId } = useParams();
   const navigate = useNavigate();
-  const { role, accessToken, pages, refreshPages } = useOutletContext<WorkspaceOutlet>();
+  const { role } = useOutletContext<WorkspaceOutlet>();
+  const pages = usePageStore((state) => state.byWorkspace[workspaceId ?? ''] ?? EMPTY_PAGES);
+  const createPage = usePageStore((state) => state.createPage);
+  const saveContent = useMarkdownContentStore((state) => state.saveContent);
   const editable = canEdit(role);
   const folder = pages.find((page) => page.id === pageId);
   const children = pages.filter((page) => page.parentId === pageId);
@@ -19,16 +22,11 @@ export function FolderLandingPage({
   async function onImport(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !accessToken || !workspaceId || !pageId) return;
+    if (!file || !workspaceId || !pageId) return;
     const title = file.name.replace(/\.md$/i, '') || 'Imported';
     const content = await file.text();
-    const page = await createPage(accessToken, workspaceId, {
-      title,
-      parentId: pageId,
-      kind: 'markdown',
-    });
-    await putMarkdown(accessToken, page.id, content);
-    await refreshPages();
+    const page = await createPage(workspaceId, { title, parentId: pageId, kind: 'markdown' });
+    await saveContent(page.id, content);
     navigate(`/w/${workspaceId}/p/${page.id}`);
   }
 

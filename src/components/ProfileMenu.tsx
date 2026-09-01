@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAuth } from '../auth/AuthContext';
+import { useAuthStore } from '../stores/StoresIndex';
 import { useTheme, type ThemePreference } from '../theme/ThemeContext';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
@@ -18,7 +18,8 @@ function UserIcon() {
 }
 
 export function ProfileMenu() {
-  const { user, logout } = useAuth();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   const { preference, setPreference } = useTheme();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);

@@ -1,31 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
-import type { PublicWorkspace } from '../api/client';
+import { useWorkspaceStore } from '../stores/StoresIndex';
 import CreateWorkspaceModal from './CreateWorkspaceModal';
 import { pickDefaultWorkspaceId, setLastWorkspaceId } from './lastWorkspace';
 
 export default function HomeRedirect() {
-  const { listWorkspaces } = useAuth();
-  const [workspaces, setWorkspaces] = useState<PublicWorkspace[] | null>(null);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
+  const [settled, setSettled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   useEffect(() => {
-    void listWorkspaces()
-      .then(setWorkspaces)
+    void fetchWorkspaces()
       .catch((error: unknown) => {
         setMessage(error instanceof Error ? error.message : 'Could not load workspaces');
-        setWorkspaces([]);
-      });
-  }, [listWorkspaces]);
+      })
+      .finally(() => setSettled(true));
+  }, [fetchWorkspaces]);
 
   if (createdId) {
     return <Navigate to={`/w/${createdId}`} replace />;
   }
 
-  if (workspaces === null) {
+  if (!settled) {
     return <p className="muted">Loading workspace…</p>;
   }
 
