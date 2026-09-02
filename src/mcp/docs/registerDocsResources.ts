@@ -17,7 +17,7 @@ export function registerDocsResources(
     { title: 'Dira usage guide', description: 'Search-first guidance and this token\'s allowlisted workspaces.', mimeType: 'text/plain' },
     (async (uri: URL) => {
       const auth = currentDocsAuth();
-      const guide = await service.buildGuide(auth.userId, auth.defaultWorkspaceId);
+      const guide = await service.buildGuide(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
       return { contents: [{ uri: uri.href, mimeType: 'text/plain', text: buildDynamicInstructions(guide) }] };
     }) as never
   );
@@ -27,7 +27,7 @@ export function registerDocsResources(
     new ResourceTemplate('dira://{workspace}/{+path}', {
       list: async () => {
         const auth = currentDocsAuth();
-        const rows = await service.listWorkspaces(auth.userId);
+        const rows = await service.listWorkspaces(auth.userId, auth.tokenId);
         return {
           resources: rows.map((row) => ({
             uri: `dira://${row.slug}/readme.md`,
@@ -41,13 +41,13 @@ export function registerDocsResources(
       const auth = currentDocsAuth();
       const workspaceRef = Array.isArray(variables?.workspace) ? variables?.workspace[0] : variables?.workspace;
       const pathRef = Array.isArray(variables?.path) ? variables?.path.join('/') : variables?.path;
-      const workspace = await service.resolveWorkspace(auth.userId, workspaceRef ?? null, {
+      const workspace = await service.resolveWorkspace(auth.userId, auth.tokenId, workspaceRef ?? null, {
         defaultWorkspaceId: auth.defaultWorkspaceId,
       });
       if (!workspace || !pathRef) {
         return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: '' }] };
       }
-      const file = await service.readFile(auth.userId, workspace.workspaceId, { path: pathRef });
+      const file = await service.readFile(auth.userId, auth.tokenId, workspace.workspaceId, { path: pathRef });
       return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text: file.content }] };
     }) as never
   );

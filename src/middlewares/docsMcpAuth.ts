@@ -43,6 +43,20 @@ export function createDocsMcpAuthMiddleware(options: {
       }
       const payload = verifyAccessToken(secret);
       if (payload.role === 'mcp' && payload.userId) {
+        if (payload.tokenId) {
+          const usable = await options.tokens.isTokenUsable(payload.tokenId);
+          if (!usable) {
+            unauthorized(res, options.apiPublicUrl);
+            return;
+          }
+          req.mcpAuth = {
+            userId: payload.userId,
+            tokenId: payload.tokenId,
+            defaultWorkspaceId: usable.defaultWorkspaceId,
+          };
+          next();
+          return;
+        }
         req.mcpAuth = { userId: payload.userId, tokenId: null, defaultWorkspaceId: null };
         next();
         return;

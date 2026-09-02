@@ -7,6 +7,14 @@ import { asyncHandler } from '../utils/asyncHandler';
 const createSchema = z.object({
   name: z.string().max(80).optional(),
   defaultWorkspaceId: z.uuid().optional(),
+  workspaceAccess: z
+    .array(
+      z.object({
+        workspaceId: z.uuid(),
+        canWrite: z.boolean().optional(),
+      })
+    )
+    .optional(),
 });
 
 const updateSchema = z.object({
@@ -14,7 +22,9 @@ const updateSchema = z.object({
   defaultWorkspaceId: z.uuid().nullable().optional(),
 });
 
-const accessSchema = z.object({
+const tokenIdSchema = z.uuid();
+
+const tokenAccessSchema = z.object({
   workspaces: z.array(
     z.object({
       workspaceId: z.uuid(),
@@ -37,14 +47,15 @@ export function createMcpSettingsController(tokens: McpTokenService) {
       }
       const token = await tokens.createToken(req.user!.userId, parsed.data.name ?? 'MCP token', {
         defaultWorkspaceId: parsed.data.defaultWorkspaceId,
+        workspaceAccess: parsed.data.workspaceAccess,
       });
       return ResponseUtils.success(res, 'Token created', { token }, 201);
     }),
 
     updateToken: asyncHandler(async (req: Request, res: Response) => {
       const id = req.params.id;
-      if (!id) {
-        return ResponseUtils.error(res, 'Token id is required', null, 400);
+      if (!tokenIdSchema.safeParse(id).success) {
+        return ResponseUtils.error(res, 'Token not found', null, 404);
       }
       const parsed = updateSchema.safeParse(req.body ?? {});
       if (!parsed.success) {
@@ -56,24 +67,32 @@ export function createMcpSettingsController(tokens: McpTokenService) {
 
     revokeToken: asyncHandler(async (req: Request, res: Response) => {
       const id = req.params.id;
-      if (!id) {
-        return ResponseUtils.error(res, 'Token id is required', null, 400);
+      if (!tokenIdSchema.safeParse(id).success) {
+        return ResponseUtils.error(res, 'Token not found', null, 404);
       }
       await tokens.revokeToken(req.user!.userId, id);
       return ResponseUtils.success(res, 'Token revoked');
     }),
 
-    getAccess: asyncHandler(async (req: Request, res: Response) => {
-      const workspaces = await tokens.listAccess(req.user!.userId);
+    getTokenAccess: asyncHandler(async (req: Request, res: Response) => {
+      const id = req.params.id;
+      if (!tokenIdSchema.safeParse(id).success) {
+        return ResponseUtils.error(res, 'Token not found', null, 404);
+      }
+      const workspaces = await tokens.listTokenAccess(req.user!.userId, id);
       return ResponseUtils.success(res, 'ok', { workspaces });
     }),
 
-    setAccess: asyncHandler(async (req: Request, res: Response) => {
-      const parsed = accessSchema.safeParse(req.body ?? {});
+    setTokenAccess: asyncHandler(async (req: Request, res: Response) => {
+      const id = req.params.id;
+      if (!tokenIdSchema.safeParse(id).success) {
+        return ResponseUtils.error(res, 'Token not found', null, 404);
+      }
+      const parsed = tokenAccessSchema.safeParse(req.body ?? {});
       if (!parsed.success) {
         return ResponseUtils.error(res, 'Invalid access payload', parsed.error.flatten(), 400);
       }
-      const workspaces = await tokens.setAccess(req.user!.userId, parsed.data.workspaces);
+      const workspaces = await tokens.setTokenAccess(req.user!.userId, id, parsed.data.workspaces);
       return ResponseUtils.success(res, 'ok', { workspaces });
     }),
   };

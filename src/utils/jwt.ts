@@ -6,14 +6,17 @@ export interface JwtPayload {
   userId: string;
   profileId?: string;
   role?: string;
+  tokenId?: string;
 }
 
 export function signAccessToken(payload: JwtPayload): string {
   return jwt.sign(payload, env.jwtSecret, { expiresIn: '15m' });
 }
 
-export function signMcpAccessToken(userId: string): string {
-  return jwt.sign({ userId, role: 'mcp' } satisfies JwtPayload, env.jwtSecret, { expiresIn: '8h' });
+export function signMcpAccessToken(userId: string, tokenId: string): string {
+  return jwt.sign({ userId, role: 'mcp', tokenId } satisfies JwtPayload, env.jwtSecret, {
+    expiresIn: '8h',
+  });
 }
 
 export function signRefreshToken(userId: string): string {

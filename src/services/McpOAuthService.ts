@@ -4,6 +4,7 @@ import { mcpOauthClients, mcpOauthCodes } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { signMcpAccessToken } from '../utils/jwt';
 import { type Database } from './AuthService';
+import type { McpTokenService } from './McpTokenService';
 
 function hash(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -17,7 +18,8 @@ export class McpOAuthService {
   constructor(
     private readonly database: Database,
     private readonly apiPublicUrl: string,
-    private readonly appPublicUrl: string
+    private readonly appPublicUrl: string,
+    private readonly tokens: McpTokenService
   ) {}
 
   metadata() {
@@ -137,8 +139,10 @@ export class McpOAuthService {
       .update(mcpOauthCodes)
       .set({ usedAt: new Date() })
       .where(eq(mcpOauthCodes.codeHash, row.codeHash));
+    const client = await this.requireClient(row.clientId);
+    const token = await this.tokens.findOrCreateOauthToken(row.userId, client.id, client.clientName);
     return {
-      access_token: signMcpAccessToken(row.userId),
+      access_token: signMcpAccessToken(row.userId, token.id),
       token_type: 'Bearer',
       expires_in: 8 * 60 * 60,
       scope: 'dira.docs',

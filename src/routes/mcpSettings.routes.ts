@@ -11,7 +11,7 @@ export function createMcpSettingsRouter(tokens: McpTokenService): Router {
   router.post('/tokens', controller.createToken);
   router.patch('/tokens/:id', controller.updateToken);
   router.delete('/tokens/:id', controller.revokeToken);
-  router.get('/access', controller.getAccess);
-  router.put('/access', controller.setAccess);
+  router.get('/tokens/:id/access', controller.getTokenAccess);
+  router.put('/tokens/:id/access', controller.setTokenAccess);
   return router;
 }
