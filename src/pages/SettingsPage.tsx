@@ -1,28 +1,149 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { API_URL } from '../api/client';
-import { useMcpStore } from '../stores/StoresIndex';
-import type { McpAccessRow, McpToken } from '../api/mcp';
-import { CopyTokenOnce, MembersPanel } from '../components/ComponentsIndex';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
+import { useEditorViewStore, useMcpStore } from '../stores/StoresIndex';
+import { MembersPanel } from '../components/ComponentsIndex';
 import { canAdmin, type WorkspaceOutlet } from './workspaceContext';
+import { THEME_OPTIONS, useTheme } from '../theme/ThemeContext';
+import type { McpToken } from '../api/mcp';
+
+type SettingsTab = 'appearance' | 'members' | 'preferences' | 'mcp';
+
+function KebabIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString();
+}
+
+function TokenRow({
+  token,
+  workspaceId,
+  onRevoke,
+}: {
+  token: McpToken;
+  workspaceId: string;
+  onRevoke: (id: string) => void;
+}) {
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLSpanElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        menuTriggerRef.current?.focus();
+      }
+    }
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
+
+  function open() {
+    navigate(`/w/${workspaceId}/settings/mcp/${token.id}`);
+  }
+
+  return (
+    <tr
+      className="mcp-table-row"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      }}
+    >
+      <td className="mcp-table-name">{token.name}</td>
+      <td>
+        <code className="mcp-table-token">{token.tokenPrefix}…</code>
+      </td>
+      <td className="muted">{formatDate(token.createdAt)}</td>
+      <td className="muted">{token.lastUsedAt ? formatDate(token.lastUsedAt) : 'Never'}</td>
+      <td className="mcp-table-actions" onClick={(e) => e.stopPropagation()}>
+        <span className={menuOpen ? 'page-row-menu open' : 'page-row-menu'} ref={menuRef}>
+          <button
+            type="button"
+            ref={menuTriggerRef}
+            className="linkish icon-btn"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            <KebabIcon />
+          </button>
+          {menuOpen ? (
+            <div className="page-row-dropdown" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="page-row-dropdown-item danger"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRevoke(token.id);
+                }}
+              >
+                Revoke
+              </button>
+            </div>
+          ) : null}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+const ALL_TABS: { id: SettingsTab; label: string }[] = [
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'members', label: 'Members' },
+  { id: 'preferences', label: 'Preferences' },
+  { id: 'mcp', label: 'MCP' },
+];
 
 export function SettingsPage() {
   const { workspaceId, role } = useOutletContext<WorkspaceOutlet>();
+  const navigate = useNavigate();
   const tokens = useMcpStore((state) => state.tokens);
-  const access = useMcpStore((state) => state.access);
   const fetchAll = useMcpStore((state) => state.fetchAll);
-  const createMcpToken = useMcpStore((state) => state.createToken);
-  const updateMcpToken = useMcpStore((state) => state.updateToken);
   const revokeMcpToken = useMcpStore((state) => state.revokeToken);
-  const setMcpAccess = useMcpStore((state) => state.setAccess);
-  const setWorkspaceMcpEnabled = useMcpStore((state) => state.setWorkspaceEnabled);
-  const [name, setName] = useState('Cursor');
-  const [newTokenDefaultWorkspaceId, setNewTokenDefaultWorkspaceId] = useState('');
-  const [secret, setSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { preference, setPreference } = useTheme();
+  const showSource = useEditorViewStore((state) => state.showSource);
+  const setShowSource = useEditorViewStore((state) => state.setShowSource);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const owner = canAdmin(role);
+  const tabs = ALL_TABS.filter((tab) => tab.id !== 'members' || owner);
+  const requestedTab = searchParams.get('tab');
+  const activeTab = tabs.some((tab) => tab.id === requestedTab) ? (requestedTab as SettingsTab) : tabs[0].id;
+
+  function onSelectTab(id: SettingsTab) {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', id);
+    setSearchParams(next, { replace: true });
+  }
 
   useEffect(() => {
     void fetchAll().catch((error: unknown) => {
@@ -30,225 +151,114 @@ export function SettingsPage() {
     });
   }, [fetchAll]);
 
-  const snippet = useMemo(
-    () =>
-      JSON.stringify(
-        {
-          mcpServers: {
-            dira: {
-              url: `${API_URL}/mcp`,
-              headers: { Authorization: 'Bearer dira_mcp_…' },
-            },
-          },
-        },
-        null,
-        2
-      ),
-    []
-  );
-
-  async function onCreate(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setCopied(false);
-    try {
-      const token = await createMcpToken(name, newTokenDefaultWorkspaceId || undefined);
-      setSecret(token.secret ?? null);
-      setMessage(null);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not create token');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onSetDefaultWorkspace(tokenId: string, defaultWorkspaceId: string) {
-    try {
-      await updateMcpToken(tokenId, { defaultWorkspaceId: defaultWorkspaceId || null });
-      setMessage(null);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not update default workspace');
-    }
-  }
-
-  function agentSnippet(token: McpToken): string | null {
-    const allowlisted = access.filter((row) => row.allowlisted);
-    const workspace =
-      allowlisted.find((row) => row.workspaceId === token.defaultWorkspaceId) ??
-      (allowlisted.length === 1 ? allowlisted[0] : undefined);
-    if (!workspace) return null;
-    return `Canonical docs: Dira workspace \`${workspace.slug}\`. Call dira_guide, then search_docs before inventing APIs or duplicating existing docs.`;
-  }
-
   async function onRevoke(id: string) {
     if (!window.confirm('Revoke this MCP token?')) return;
-    await revokeMcpToken(id);
-    setSecret(null);
-    setCopied(false);
-  }
-
-  async function onToggle(row: McpAccessRow, field: 'allowlisted' | 'canWrite', value: boolean) {
-    const next = access.map((item) => {
-      if (item.workspaceId !== row.workspaceId) return item;
-      if (field === 'allowlisted') {
-        return { ...item, allowlisted: value, canWrite: value ? item.canWrite : false };
-      }
-      return { ...item, canWrite: value };
-    });
     try {
-      await setMcpAccess(
-        next
-          .filter((item) => item.allowlisted)
-          .map((item) => ({ workspaceId: item.workspaceId, canWrite: item.canWrite }))
-      );
-      setMessage(null);
+      await revokeMcpToken(id);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not update allowlist');
+      setMessage(error instanceof Error ? error.message : 'Could not revoke token');
     }
   }
 
   return (
     <section className="settings-page">
       <h1>Settings</h1>
-      <p className="muted">Workspace members and MCP access for coding agents.</p>
+      <p className="muted">Appearance, members, preferences, and MCP access for coding agents.</p>
       {message ? (
         <p className="error" role="status">
           {message}
         </p>
       ) : null}
 
-      {owner ? <MembersPanel workspaceId={workspaceId} /> : null}
-
-      <div className="settings-section">
-        <h2>MCP tokens</h2>
-        <form className="inline-form" onSubmit={(e) => void onCreate(e)}>
-          <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Token name" />
-          <select
-            aria-label="Default workspace"
-            value={newTokenDefaultWorkspaceId}
-            onChange={(e) => setNewTokenDefaultWorkspaceId(e.target.value)}
-          >
-            <option value="">No default workspace</option>
-            {access
-              .filter((row) => row.allowlisted)
-              .map((row) => (
-                <option key={row.workspaceId} value={row.workspaceId}>
-                  {row.name}
-                </option>
-              ))}
-          </select>
-          <button type="submit" disabled={busy}>
-            {busy ? 'Creating…' : 'Create token'}
-          </button>
-        </form>
-        {secret ? (
-          <CopyTokenOnce
-            secret={secret}
-            onCopied={() => {
-              setSecret(null);
-              setCopied(true);
-            }}
-          />
-        ) : null}
-        {copied ? (
-          <p className="muted" role="status">
-            Token copied. It will not be shown again.
-          </p>
-        ) : null}
-        {tokens.length === 0 ? <p className="muted">No active tokens.</p> : null}
-        {tokens.map((token) => (
-          <div className="settings-row settings-row-token" key={token.id}>
-            <div>
-              <strong>{token.name}</strong>
-              <p className="muted">{token.tokenPrefix}…</p>
-              <label className="sidebar-label" htmlFor={`default-ws-${token.id}`}>
-                Default workspace
-              </label>
-              <select
-                id={`default-ws-${token.id}`}
-                value={token.defaultWorkspaceId ?? ''}
-                onChange={(e) => void onSetDefaultWorkspace(token.id, e.target.value)}
-              >
-                <option value="">No default workspace</option>
-                {access
-                  .filter((row) => row.allowlisted)
-                  .map((row) => (
-                    <option key={row.workspaceId} value={row.workspaceId}>
-                      {row.name}
-                    </option>
-                  ))}
-              </select>
-              {agentSnippet(token) ? (
-                <>
-                  <label className="sidebar-label" htmlFor={`agent-snippet-${token.id}`}>
-                    CLAUDE.md / AGENTS.md snippet
-                  </label>
-                  <textarea
-                    id={`agent-snippet-${token.id}`}
-                    className="mcp-snippet"
-                    readOnly
-                    value={agentSnippet(token) ?? ''}
-                  />
-                </>
-              ) : null}
-            </div>
-            <button type="button" className="linkish danger" onClick={() => void onRevoke(token.id)}>
-              Revoke
+      <div className="settings-body">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={activeTab === tab.id ? 'settings-nav-item on' : 'settings-nav-item'}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
+              onClick={() => onSelectTab(tab.id)}
+            >
+              {tab.label}
             </button>
-          </div>
-        ))}
-        <label className="sidebar-label" htmlFor="mcp-snippet">
-          Cursor / Claude Code
-        </label>
-        <textarea id="mcp-snippet" className="mcp-snippet" readOnly value={snippet} />
-      </div>
-
-      <div className="settings-section">
-        <h2>Workspace access</h2>
-        {access.map((row) => (
-          <div className="settings-row" key={row.workspaceId}>
-            <div>
-              <strong>{row.name}</strong>
-              <p className="muted">
-                {row.role}
-                {row.encrypted ? ' · encrypted' : ''}
-                {row.mcpEnabled === false ? ' · MCP off' : ''}
-              </p>
+          ))}
+        </nav>
+        <div className="settings-content">
+          {activeTab === 'appearance' ? (
+            <div className="settings-section">
+              <h2>Appearance</h2>
+              <p className="muted">Choose how Dira looks on this device.</p>
+              <div className="theme-segmented settings-theme-segmented" role="group" aria-label="Theme">
+                {THEME_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={preference === option.value ? 'theme-option on' : 'theme-option'}
+                    onClick={() => setPreference(option.value)}
+                    aria-pressed={preference === option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <label>
-              <input
-                type="checkbox"
-                checked={row.mcpEnabled !== false}
-                disabled={row.role !== 'owner'}
-                onChange={(e) => {
-                  if (row.role !== 'owner') return;
-                  void setWorkspaceMcpEnabled(row.workspaceId, e.target.checked).catch((error: unknown) => {
-                    setMessage(error instanceof Error ? error.message : 'Could not update workspace');
-                  });
-                }}
-              />{' '}
-              Enabled
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={row.allowlisted}
-                disabled={row.encrypted || row.mcpEnabled === false}
-                onChange={(e) => void onToggle(row, 'allowlisted', e.target.checked)}
-              />{' '}
-              MCP
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={row.canWrite}
-                disabled={!row.allowlisted || row.role === 'viewer' || row.encrypted}
-                onChange={(e) => void onToggle(row, 'canWrite', e.target.checked)}
-              />{' '}
-              Write
-            </label>
-          </div>
-        ))}
+          ) : null}
+
+          {activeTab === 'members' && owner ? <MembersPanel workspaceId={workspaceId} /> : null}
+
+          {activeTab === 'preferences' ? (
+            <div className="settings-section">
+              <h2>Preferences</h2>
+              <label className="settings-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={showSource}
+                  onChange={(e) => setShowSource(e.target.checked)}
+                />
+                <span>
+                  <strong>Show markdown source by default</strong>
+                  <span className="muted"> — reveal the editor pane alongside the preview when you open a document.</span>
+                </span>
+              </label>
+            </div>
+          ) : null}
+
+          {activeTab === 'mcp' ? (
+            <div className="settings-section">
+              <div className="settings-section-head">
+                <h2>MCP tokens</h2>
+                <button type="button" onClick={() => navigate(`/w/${workspaceId}/settings/mcp/new`)}>
+                  New token
+                </button>
+              </div>
+              {tokens.length === 0 ? (
+                <p className="muted">No tokens yet. Create one to connect a coding agent.</p>
+              ) : (
+                <div className="mcp-table-wrap">
+                  <table className="mcp-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Token</th>
+                        <th>Created</th>
+                        <th>Last used</th>
+                        <th>
+                          <span className="visually-hidden">Actions</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tokens.map((token) => (
+                        <TokenRow key={token.id} token={token} workspaceId={workspaceId} onRevoke={(id) => void onRevoke(id)} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
     </section>
   );

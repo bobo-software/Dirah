@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../stores/StoresIndex';
-import { useTheme, type ThemePreference } from '../theme/ThemeContext';
-
-const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
+import { THEME_OPTIONS, useTheme } from '../theme/ThemeContext';
 
 function UserIcon() {
   return (

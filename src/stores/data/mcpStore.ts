@@ -1,28 +1,34 @@
 import { create } from 'zustand';
 import {
   listMcpTokens,
-  listMcpAccess,
   createMcpToken,
   updateMcpToken,
   revokeMcpToken,
-  setMcpAccess,
+  listTokenAccess,
+  setTokenAccess,
   setWorkspaceMcpEnabled,
-  type McpAccessRow,
   type McpToken,
+  type TokenAccessRow,
 } from '../../api/mcp';
 import { useAuthStore } from './authStore';
 
 type McpState = {
   tokens: McpToken[];
-  access: McpAccessRow[];
+  tokenAccess: Record<string, TokenAccessRow[]>;
+  tokenAccessLoading: Record<string, boolean>;
   loaded: boolean;
   loading: boolean;
   error: string | null;
   fetchAll: () => Promise<void>;
-  createToken: (name: string, defaultWorkspaceId?: string) => Promise<McpToken>;
+  createToken: (
+    name: string,
+    defaultWorkspaceId?: string,
+    workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>
+  ) => Promise<McpToken>;
   updateToken: (id: string, input: { name?: string; defaultWorkspaceId?: string | null }) => Promise<void>;
   revokeToken: (id: string) => Promise<void>;
-  setAccess: (workspaces: Array<{ workspaceId: string; canWrite?: boolean }>) => Promise<void>;
+  fetchTokenAccess: (tokenId: string) => Promise<void>;
+  setTokenAccess: (tokenId: string, items: Array<{ workspaceId: string; canWrite?: boolean }>) => Promise<void>;
   setWorkspaceEnabled: (workspaceId: string, enabled: boolean) => Promise<void>;
 };
 
@@ -34,7 +40,8 @@ function token(): string {
 
 export const useMcpStore = create<McpState>((set, get) => ({
   tokens: [],
-  access: [],
+  tokenAccess: {},
+  tokenAccessLoading: {},
   loaded: false,
   loading: false,
   error: null,
@@ -42,17 +49,20 @@ export const useMcpStore = create<McpState>((set, get) => ({
   fetchAll: async () => {
     set({ loading: true, error: null });
     try {
-      const [tokens, access] = await Promise.all([listMcpTokens(token()), listMcpAccess(token())]);
-      set({ tokens, access, loaded: true, loading: false });
+      const tokens = await listMcpTokens(token());
+      set({ tokens, loaded: true, loading: false });
     } catch (error) {
       set({ loading: false, error: error instanceof Error ? error.message : 'Could not load MCP settings' });
       throw error;
     }
   },
 
-  createToken: async (name, defaultWorkspaceId) => {
-    const created = await createMcpToken(token(), name, defaultWorkspaceId);
-    await get().fetchAll();
+  createToken: async (name, defaultWorkspaceId, workspaceAccess) => {
+    const created = await createMcpToken(token(), name, defaultWorkspaceId, workspaceAccess);
+    set((state) => ({
+      tokens: [...state.tokens, created],
+      tokenAccess: { ...state.tokenAccess, [created.id]: created.access },
+    }));
     return created;
   },
 
@@ -64,11 +74,29 @@ export const useMcpStore = create<McpState>((set, get) => ({
   revokeToken: async (id) => {
     await revokeMcpToken(token(), id);
     await get().fetchAll();
+    set((state) => {
+      const tokenAccess = { ...state.tokenAccess };
+      const tokenAccessLoading = { ...state.tokenAccessLoading };
+      delete tokenAccess[id];
+      delete tokenAccessLoading[id];
+      return { tokenAccess, tokenAccessLoading };
+    });
   },
 
-  setAccess: async (workspaces) => {
-    const access = await setMcpAccess(token(), workspaces);
-    set({ access });
+  fetchTokenAccess: async (tokenId) => {
+    if (get().tokenAccess[tokenId]) return;
+    set((state) => ({ tokenAccessLoading: { ...state.tokenAccessLoading, [tokenId]: true } }));
+    try {
+      const rows = await listTokenAccess(token(), tokenId);
+      set((state) => ({ tokenAccess: { ...state.tokenAccess, [tokenId]: rows } }));
+    } finally {
+      set((state) => ({ tokenAccessLoading: { ...state.tokenAccessLoading, [tokenId]: false } }));
+    }
+  },
+
+  setTokenAccess: async (tokenId, items) => {
+    const result = await setTokenAccess(token(), tokenId, items);
+    set((state) => ({ tokenAccess: { ...state.tokenAccess, [tokenId]: result } }));
   },
 
   setWorkspaceEnabled: async (workspaceId, enabled) => {

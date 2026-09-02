@@ -11,12 +11,11 @@ export type McpToken = {
   secret?: string;
 };
 
-export type McpAccessRow = {
+export type TokenAccessRow = {
   workspaceId: string;
   name: string;
   slug: string;
   role: string;
-  encrypted: boolean;
   mcpEnabled: boolean;
   allowlisted: boolean;
   canWrite: boolean;
@@ -30,13 +29,17 @@ export async function listMcpTokens(accessToken: string): Promise<McpToken[]> {
 export async function createMcpToken(
   accessToken: string,
   name: string,
-  defaultWorkspaceId?: string
-): Promise<McpToken> {
-  const data = await apiRequest<{ token: McpToken }>('/api/mcp/tokens', {
-    method: 'POST',
-    accessToken,
-    body: JSON.stringify({ name, defaultWorkspaceId }),
-  });
+  defaultWorkspaceId?: string,
+  workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>
+): Promise<McpToken & { secret: string; access: TokenAccessRow[] }> {
+  const data = await apiRequest<{ token: McpToken & { secret: string; access: TokenAccessRow[] } }>(
+    '/api/mcp/tokens',
+    {
+      method: 'POST',
+      accessToken,
+      body: JSON.stringify({ name, defaultWorkspaceId, workspaceAccess }),
+    }
+  );
   return data.token;
 }
 
@@ -57,16 +60,19 @@ export async function revokeMcpToken(accessToken: string, id: string): Promise<v
   await apiRequest(`/api/mcp/tokens/${id}`, { method: 'DELETE', accessToken });
 }
 
-export async function listMcpAccess(accessToken: string): Promise<McpAccessRow[]> {
-  const data = await apiRequest<{ workspaces: McpAccessRow[] }>('/api/mcp/access', { accessToken });
+export async function listTokenAccess(accessToken: string, tokenId: string): Promise<TokenAccessRow[]> {
+  const data = await apiRequest<{ workspaces: TokenAccessRow[] }>(`/api/mcp/tokens/${tokenId}/access`, {
+    accessToken,
+  });
   return data.workspaces;
 }
 
-export async function setMcpAccess(
+export async function setTokenAccess(
   accessToken: string,
+  tokenId: string,
   workspaces: Array<{ workspaceId: string; canWrite?: boolean }>
-): Promise<McpAccessRow[]> {
-  const data = await apiRequest<{ workspaces: McpAccessRow[] }>('/api/mcp/access', {
+): Promise<TokenAccessRow[]> {
+  const data = await apiRequest<{ workspaces: TokenAccessRow[] }>(`/api/mcp/tokens/${tokenId}/access`, {
     method: 'PUT',
     accessToken,
     body: JSON.stringify({ workspaces }),

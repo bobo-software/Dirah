@@ -8,6 +8,8 @@ import { InvitePage } from './pages/InvitePage';
 import { OAuthCatchPage } from './pages/OAuthCatchPage';
 import { HomeRedirect, SettingsRedirect } from './components/ComponentsIndex';
 import { SettingsPage } from './pages/SettingsPage';
+import { McpTokenDetailPage } from './pages/McpTokenDetailPage';
+import { McpTokenCreatePage } from './pages/McpTokenCreatePage';
 import { McpOAuthConsentPage } from './pages/McpOAuthConsentPage';
 import { WorkspaceShellPage } from './pages/WorkspaceShellPage';
 
@@ -82,6 +84,8 @@ export default function App() {
                 }
               />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="settings/mcp/new" element={<McpTokenCreatePage />} />
+              <Route path="settings/mcp/:tokenId" element={<McpTokenDetailPage />} />
             </Route>
           </Route>
         </Route>

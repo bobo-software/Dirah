@@ -3,6 +3,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 export type ThemePreference = 'system' | 'light' | 'dark';
 type ResolvedTheme = 'light' | 'dark';
 
+export const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
 const STORAGE_KEY = 'dira.theme';
 
 type ThemeState = {

@@ -7,6 +7,7 @@ import SettingsRedirect from './SettingsRedirect';
 import ThemeToggle from './ThemeToggle';
 import WorkspacesModal from './WorkspacesModal';
 import ProfileMenu from './ProfileMenu';
+import TokenAccessFields from './TokenAccessFields';
 import { Logo, BrandLink } from './Logo';
 
 export {
@@ -19,6 +20,7 @@ export {
   ThemeToggle,
   WorkspacesModal,
   ProfileMenu,
+  TokenAccessFields,
   Logo,
   BrandLink,
 };
@@ -33,6 +35,7 @@ const components = {
   ThemeToggle,
   WorkspacesModal,
   ProfileMenu,
+  TokenAccessFields,
   Logo,
   BrandLink,
 };

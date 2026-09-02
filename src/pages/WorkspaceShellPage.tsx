@@ -14,7 +14,7 @@ export function WorkspaceShellPage() {
   const navigate = useNavigate();
   const isTrash = Boolean(useMatch('/w/:workspaceId/trash'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
-  const isSettings = Boolean(useMatch('/w/:workspaceId/settings'));
+  const isSettings = Boolean(useMatch('/w/:workspaceId/settings/*'));
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
