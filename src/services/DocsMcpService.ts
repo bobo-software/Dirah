@@ -126,8 +126,8 @@ export class DocsMcpService {
     return `${origin}/w/${workspaceId}/p/${pageId}`;
   }
 
-  async listWorkspaces(userId: string) {
-    const rows = await this.allowlisted(userId);
+  async listWorkspaces(userId: string, tokenId: string | null) {
+    const rows = await this.allowlisted(userId, tokenId);
     const only = rows.length === 1;
     return rows.map((row) => ({
       workspaceId: row.workspaceId,
@@ -139,15 +139,19 @@ export class DocsMcpService {
     }));
   }
 
-  async buildGuide(userId: string, tokenDefaultWorkspaceId?: string | null): Promise<DocsGuide> {
-    const rows = await this.allowlisted(userId);
+  async buildGuide(
+    userId: string,
+    tokenId: string | null,
+    tokenDefaultWorkspaceId?: string | null
+  ): Promise<DocsGuide> {
+    const rows = await this.allowlisted(userId, tokenId);
     const only = rows.length === 1;
     const agentIndexPaths = await this.tokens.getAgentIndexPaths(rows.map((row) => row.workspaceId));
     const workspaces = await Promise.all(
       rows.map(async (row) => {
         const override = agentIndexPaths.get(row.workspaceId);
         const candidates = override ? [normalizePrefix(override).toLowerCase()] : AGENT_INDEX_FALLBACK_CHAIN;
-        const tree = await this.loadTree(userId, row.workspaceId);
+        const tree = await this.loadTree(userId, tokenId, row.workspaceId);
         const paths = new Set(tree.map((node) => node.path));
         const startAt = candidates.find((candidate) => paths.has(candidate)) ?? null;
         return {
@@ -165,10 +169,11 @@ export class DocsMcpService {
 
   async resolveWorkspace(
     userId: string,
+    tokenId: string | null,
     ref?: string | null,
     options: { optional?: boolean; defaultWorkspaceId?: string | null } = {}
   ): Promise<ResolvedWorkspace | null> {
-    const allowed = await this.allowlisted(userId);
+    const allowed = await this.allowlisted(userId, tokenId);
     const raw = (ref ?? '').trim();
     if (!raw) {
       if (allowed.length === 1) return allowed[0];
@@ -190,10 +195,14 @@ export class DocsMcpService {
     }
     if (UUID_RE.test(raw)) {
       const hit = allowed.find((row) => row.workspaceId === raw);
-      if (!hit) {
-        throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
-      }
-      return hit;
+      if (hit) return hit;
+      // Not in the pre-filtered allowlist — fall through to requireAllowlist so a
+      // disabled/encrypted workspace surfaces its specific reason (MCP_DISABLED,
+      // E2E_NO_MCP) instead of a generic "not allowlisted" when it was explicitly
+      // requested by id. requireAllowlist throws before this line can be reached
+      // in that case; if it doesn't throw (shouldn't happen), fall back below.
+      await this.tokens.requireAllowlist(userId, tokenId, raw, false);
+      throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
     }
     const lower = raw.toLowerCase();
     const byName = allowed.filter((row) => row.name.toLowerCase() === lower);
@@ -212,10 +221,11 @@ export class DocsMcpService {
 
   async resolveWorkspaceForPath(
     userId: string,
+    tokenId: string | null,
     path: string,
     defaultWorkspaceId?: string | null
   ): Promise<ResolvedWorkspace> {
-    const allowed = await this.allowlisted(userId);
+    const allowed = await this.allowlisted(userId, tokenId);
     if (allowed.length === 1) return allowed[0];
     if (allowed.length === 0) {
       throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
@@ -227,7 +237,7 @@ export class DocsMcpService {
     const normalized = normalizePrefix(path);
     const matches: ResolvedWorkspace[] = [];
     for (const workspace of allowed) {
-      const tree = await this.loadTree(userId, workspace.workspaceId);
+      const tree = await this.loadTree(userId, tokenId, workspace.workspaceId);
       if (tree.some((node) => node.path === normalized)) {
         matches.push(workspace);
       }
@@ -246,10 +256,11 @@ export class DocsMcpService {
 
   async listTree(
     userId: string,
+    tokenId: string | null,
     workspaceId: string,
     options: { prefix?: string; depth?: number; kind?: PageKind } = {}
   ): Promise<CompactTreeNode[]> {
-    const tree = await this.loadTree(userId, workspaceId);
+    const tree = await this.loadTree(userId, tokenId, workspaceId);
     const prefix = normalizePrefix(options.prefix);
     const filtered = prefix
       ? tree.filter((node) => node.path === prefix || node.path.startsWith(`${prefix}/`))
@@ -285,13 +296,13 @@ export class DocsMcpService {
     return new Map(entries);
   }
 
-  async getNode(userId: string, workspaceId: string, nodeId: string) {
-    await this.tokens.requireAllowlist(userId, workspaceId, false);
+  async getNode(userId: string, tokenId: string | null, workspaceId: string, nodeId: string) {
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, false);
     const page = await this.pages.requireMemberPage(userId, nodeId);
     if (page.workspaceId !== workspaceId || !isDocsKind(page.kind)) {
       throw new HttpError('Docs node not found', 404, 'DOCS_NOT_FOUND');
     }
-    const tree = await this.loadTree(userId, workspaceId);
+    const tree = await this.loadTree(userId, tokenId, workspaceId);
     const node = tree.find((item) => item.id === nodeId);
     const path = node?.path ?? segmentFor(page);
     return {
@@ -307,10 +318,11 @@ export class DocsMcpService {
 
   async readFile(
     userId: string,
+    tokenId: string | null,
     workspaceId: string,
     pathOrId: { path?: string; nodeId?: string; startLine?: number; maxLines?: number }
   ) {
-    await this.tokens.requireAllowlist(userId, workspaceId, false);
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, false);
     const page = await this.resolveDocsNode(userId, workspaceId, pathOrId, 'markdown');
     const body = await this.pages.getMarkdown(userId, page.id);
     const lines = body.content.split('\n');
@@ -327,7 +339,7 @@ export class DocsMcpService {
     return {
       id: page.id,
       title: page.title,
-      path: (await this.pathOf(userId, workspaceId, page.id)) ?? `${page.slug ?? 'untitled'}.md`,
+      path: (await this.pathOf(userId, tokenId, workspaceId, page.id)) ?? `${page.slug ?? 'untitled'}.md`,
       content,
       hash: body.hash,
       updatedAt: body.updatedAt,
@@ -340,10 +352,11 @@ export class DocsMcpService {
 
   async writeFile(
     userId: string,
+    tokenId: string | null,
     workspaceId: string,
     input: { path: string; content: string; createParents?: boolean; hash?: string }
   ) {
-    await this.tokens.requireAllowlist(userId, workspaceId, true);
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
     const segments = parseDocsPath(input.path);
     if (!segments.length) {
       throw new HttpError('Path is required', 400, 'INVALID_PATH');
@@ -363,7 +376,7 @@ export class DocsMcpService {
       }));
     const body = await this.pages.putMarkdown(userId, page.id, input.content, input.hash);
     const path = segments.join('/');
-    const warnings = await this.checkLinks(userId, workspaceId, path, input.content);
+    const warnings = await this.checkLinks(userId, tokenId, workspaceId, path, input.content);
     return {
       id: page.id,
       title: page.title,
@@ -377,13 +390,14 @@ export class DocsMcpService {
 
   private async checkLinks(
     userId: string,
+    tokenId: string | null,
     workspaceId: string,
     filePath: string,
     content: string
   ): Promise<string[]> {
     const links = extractMarkdownLinks(content);
     if (!links.length) return [];
-    const tree = await this.loadTree(userId, workspaceId);
+    const tree = await this.loadTree(userId, tokenId, workspaceId);
     const known = new Set(tree.map((node) => node.path));
     const fileDir = filePath.split('/').slice(0, -1).join('/');
     const warnings: string[] = [];
@@ -398,6 +412,7 @@ export class DocsMcpService {
 
   async editFile(
     userId: string,
+    tokenId: string | null,
     workspaceId: string,
     input: {
       path?: string;
@@ -408,11 +423,11 @@ export class DocsMcpService {
       replaceAll?: boolean;
     }
   ) {
-    await this.tokens.requireAllowlist(userId, workspaceId, true);
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
     if (!input.oldString) {
       throw new HttpError('oldString is required', 400, 'INVALID_PATCH');
     }
-    const current = await this.readFile(userId, workspaceId, input);
+    const current = await this.readFile(userId, tokenId, workspaceId, input);
     const occurrences = current.content.split(input.oldString).length - 1;
     if (occurrences === 0) {
       throw new HttpError('oldString was not found', 400, 'PATCH_NOT_FOUND');
@@ -429,7 +444,7 @@ export class DocsMcpService {
       ? current.content.split(input.oldString).join(input.newString)
       : current.content.replace(input.oldString, input.newString);
     const body = await this.pages.putMarkdown(userId, current.id, next, input.hash ?? current.hash);
-    const warnings = await this.checkLinks(userId, workspaceId, current.path, next);
+    const warnings = await this.checkLinks(userId, tokenId, workspaceId, current.path, next);
     return {
       id: current.id,
       path: current.path,
@@ -439,8 +454,8 @@ export class DocsMcpService {
     };
   }
 
-  async createFolder(userId: string, workspaceId: string, input: { path: string }) {
-    await this.tokens.requireAllowlist(userId, workspaceId, true);
+  async createFolder(userId: string, tokenId: string | null, workspaceId: string, input: { path: string }) {
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
     const segments = parseDocsPath(input.path);
     if (!segments.length) {
       throw new HttpError('Path is required', 400, 'INVALID_PATH');
@@ -456,10 +471,11 @@ export class DocsMcpService {
 
   async rename(
     userId: string,
+    tokenId: string | null,
     workspaceId: string,
     input: { path?: string; nodeId?: string; title?: string; slug?: string }
   ) {
-    await this.tokens.requireAllowlist(userId, workspaceId, true);
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
     const page = await this.resolveDocsNode(userId, workspaceId, input);
     const updated = await this.pages.patch(userId, page.id, {
       title: input.title,
@@ -469,16 +485,17 @@ export class DocsMcpService {
       id: updated.id,
       title: updated.title,
       slug: updated.slug,
-      path: await this.pathOf(userId, workspaceId, updated.id),
+      path: await this.pathOf(userId, tokenId, workspaceId, updated.id),
     };
   }
 
   async move(
     userId: string,
+    tokenId: string | null,
     workspaceId: string,
     input: { path?: string; nodeId?: string; parentPath?: string; parentId?: string | null }
   ) {
-    await this.tokens.requireAllowlist(userId, workspaceId, true);
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
     const page = await this.resolveDocsNode(userId, workspaceId, input);
     let parentId = input.parentId ?? null;
     if (input.parentPath) {
@@ -486,11 +503,15 @@ export class DocsMcpService {
       parentId = parent.id;
     }
     const updated = await this.pages.patch(userId, page.id, { parentId });
-    return { id: updated.id, parentId: updated.parentId, path: await this.pathOf(userId, workspaceId, updated.id) };
+    return {
+      id: updated.id,
+      parentId: updated.parentId,
+      path: await this.pathOf(userId, tokenId, workspaceId, updated.id),
+    };
   }
 
-  async delete(userId: string, workspaceId: string, input: { path?: string; nodeId?: string }) {
-    await this.tokens.requireAllowlist(userId, workspaceId, true);
+  async delete(userId: string, tokenId: string | null, workspaceId: string, input: { path?: string; nodeId?: string }) {
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
     const page = await this.resolveDocsNode(userId, workspaceId, input);
     await this.pages.trash(userId, page.id);
     return { id: page.id, trashed: true };
@@ -498,6 +519,7 @@ export class DocsMcpService {
 
   async searchDocs(
     userId: string,
+    tokenId: string | null,
     ref: string | null | undefined,
     q: string,
     limit = 20
@@ -506,8 +528,8 @@ export class DocsMcpService {
     // `workspace` here means "search everywhere allowlisted," which is the point
     // of this tool. The default is only for tools that need a single target.
     const cap = Math.min(50, Math.max(1, limit));
-    const resolved = await this.resolveWorkspace(userId, ref, { optional: true });
-    const targets = resolved ? [resolved] : await this.allowlisted(userId);
+    const resolved = await this.resolveWorkspace(userId, tokenId, ref, { optional: true });
+    const targets = resolved ? [resolved] : await this.allowlisted(userId, tokenId);
     if (!targets.length) {
       throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
     }
@@ -524,9 +546,9 @@ export class DocsMcpService {
       url: string;
     }> = [];
     outer: for (const workspace of targets) {
-      await this.tokens.requireAllowlist(userId, workspace.workspaceId, false);
+      await this.tokens.requireAllowlist(userId, tokenId, workspace.workspaceId, false);
       const found = await this.pages.searchMarkdown(userId, workspace.workspaceId, q, cap);
-      const tree = await this.loadTree(userId, workspace.workspaceId);
+      const tree = await this.loadTree(userId, tokenId, workspace.workspaceId);
       const pathById = new Map(tree.map((node) => [node.id, node.path]));
       for (const hit of found) {
         const path = pathById.get(hit.page.id) ?? `${hit.page.slug ?? 'untitled'}.md`;
@@ -554,10 +576,14 @@ export class DocsMcpService {
     return this.tokens.recordAudit(entry);
   }
 
-  private async allowlisted(userId: string): Promise<Array<ResolvedWorkspace & { role: string; canWrite: boolean }>> {
-    const rows = await this.tokens.listAccess(userId);
+  private async allowlisted(
+    userId: string,
+    tokenId: string | null
+  ): Promise<Array<ResolvedWorkspace & { role: string; canWrite: boolean }>> {
+    if (!tokenId) return [];
+    const rows = await this.tokens.listTokenAccess(userId, tokenId);
     return rows
-      .filter((row) => row.allowlisted && row.mcpEnabled !== false && !row.encrypted)
+      .filter((row) => row.allowlisted && row.mcpEnabled !== false)
       .map((row) => ({
         workspaceId: row.workspaceId,
         name: row.name,
@@ -567,8 +593,8 @@ export class DocsMcpService {
       }));
   }
 
-  private async loadTree(userId: string, workspaceId: string): Promise<DocsTreeNode[]> {
-    await this.tokens.requireAllowlist(userId, workspaceId, false);
+  private async loadTree(userId: string, tokenId: string | null, workspaceId: string): Promise<DocsTreeNode[]> {
+    await this.tokens.requireAllowlist(userId, tokenId, workspaceId, false);
     const pages = await this.pages.list(userId, workspaceId);
     return this.withPaths(pages.filter((page) => isDocsKind(page.kind)));
   }
@@ -665,8 +691,13 @@ export class DocsMcpService {
     );
   }
 
-  private async pathOf(userId: string, workspaceId: string, nodeId: string): Promise<string | null> {
-    const tree = await this.loadTree(userId, workspaceId);
+  private async pathOf(
+    userId: string,
+    tokenId: string | null,
+    workspaceId: string,
+    nodeId: string
+  ): Promise<string | null> {
+    const tree = await this.loadTree(userId, tokenId, workspaceId);
     return tree.find((node) => node.id === nodeId)?.path ?? null;
   }
 

@@ -92,7 +92,7 @@ describe('docs MCP protocol', () => {
     expect((toolResult(emptyWs).data as unknown[]).length).toBe(0);
 
     await request(app)
-      .put('/api/mcp/access')
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
       .set('Authorization', `Bearer ${jwt}`)
       .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
@@ -238,7 +238,7 @@ describe('docs MCP protocol', () => {
     const secret = tokenRes.body.data.token.secret as string;
 
     await request(app)
-      .put('/api/mcp/access')
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
       .set('Authorization', `Bearer ${jwt}`)
       .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
@@ -329,7 +329,7 @@ describe('docs MCP protocol', () => {
     expect(second.status).toBe(201);
     const acmeId = second.body.data.workspace.id as string;
     await request(app)
-      .put('/api/mcp/access')
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
       .set('Authorization', `Bearer ${jwt}`)
       .send({
         workspaces: [
@@ -412,20 +412,17 @@ describe('docs MCP protocol', () => {
       .send({ name: 'Second Workspace' });
     const secondId = second.body.data.workspace.id as string;
 
-    await request(app)
-      .put('/api/mcp/access')
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
       .set('Authorization', `Bearer ${jwt}`)
       .send({
-        workspaces: [
+        name: 'agent-default',
+        defaultWorkspaceId: secondId,
+        workspaceAccess: [
           { workspaceId, canWrite: true },
           { workspaceId: secondId, canWrite: true },
         ],
       });
-
-    const tokenRes = await request(app)
-      .post('/api/mcp/tokens')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ name: 'agent-default', defaultWorkspaceId: secondId });
     const secret = tokenRes.body.data.token.secret as string;
 
     const written = await mcpPost(app, secret, {
@@ -455,15 +452,15 @@ describe('docs MCP protocol', () => {
       .send({ email: `phase8-search-${stamp}@example.com`, password });
     const jwt = owner.body.data.tokens.accessToken as string;
     const workspaceId = owner.body.data.workspace.id as string;
-    await request(app)
-      .put('/api/mcp/access')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ workspaces: [{ workspaceId, canWrite: true }] });
     const tokenRes = await request(app)
       .post('/api/mcp/tokens')
       .set('Authorization', `Bearer ${jwt}`)
       .send({ name: 'agent-search' });
     const secret = tokenRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
     await mcpPost(app, secret, {
       jsonrpc: '2.0',
@@ -529,15 +526,15 @@ describe('docs MCP protocol', () => {
       .send({ email: `phase8-edit-${stamp}@example.com`, password });
     const jwt = owner.body.data.tokens.accessToken as string;
     const workspaceId = owner.body.data.workspace.id as string;
-    await request(app)
-      .put('/api/mcp/access')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ workspaces: [{ workspaceId, canWrite: true }] });
     const tokenRes = await request(app)
       .post('/api/mcp/tokens')
       .set('Authorization', `Bearer ${jwt}`)
       .send({ name: 'agent-edit' });
     const secret = tokenRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
     await mcpPost(app, secret, {
       jsonrpc: '2.0',
@@ -609,15 +606,15 @@ describe('docs MCP protocol', () => {
       .send({ email: `phase8-tree-${stamp}@example.com`, password });
     const jwt = owner.body.data.tokens.accessToken as string;
     const workspaceId = owner.body.data.workspace.id as string;
-    await request(app)
-      .put('/api/mcp/access')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ workspaces: [{ workspaceId, canWrite: true }] });
     const tokenRes = await request(app)
       .post('/api/mcp/tokens')
       .set('Authorization', `Bearer ${jwt}`)
       .send({ name: 'agent-tree' });
     const secret = tokenRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
     for (const [path, content] of [
       ['zeta.md', '# Zeta Heading\n\nBody.\n'],
@@ -675,15 +672,15 @@ describe('docs MCP protocol', () => {
       .send({ email: `phase8-resources-${stamp}@example.com`, password });
     const jwt = owner.body.data.tokens.accessToken as string;
     const workspaceId = owner.body.data.workspace.id as string;
-    await request(app)
-      .put('/api/mcp/access')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ workspaces: [{ workspaceId, canWrite: true }] });
     const tokenRes = await request(app)
       .post('/api/mcp/tokens')
       .set('Authorization', `Bearer ${jwt}`)
       .send({ name: 'agent-resources' });
     const secret = tokenRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
     await mcpPost(app, secret, {
       jsonrpc: '2.0',
@@ -732,8 +729,13 @@ describe('docs MCP protocol', () => {
       .set('Authorization', `Bearer ${jwt}`)
       .send({ name: 'Second Path Workspace' });
     const secondId = second.body.data.workspace.id as string;
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-path-resolve' });
+    const secret = tokenRes.body.data.token.secret as string;
     await request(app)
-      .put('/api/mcp/access')
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
       .set('Authorization', `Bearer ${jwt}`)
       .send({
         workspaces: [
@@ -741,11 +743,6 @@ describe('docs MCP protocol', () => {
           { workspaceId: secondId, canWrite: true },
         ],
       });
-    const tokenRes = await request(app)
-      .post('/api/mcp/tokens')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ name: 'agent-path-resolve' });
-    const secret = tokenRes.body.data.token.secret as string;
 
     await mcpPost(app, secret, {
       jsonrpc: '2.0',
@@ -806,15 +803,15 @@ describe('docs MCP protocol', () => {
       .send({ email: `phase8-links-${stamp}@example.com`, password });
     const jwt = owner.body.data.tokens.accessToken as string;
     const workspaceId = owner.body.data.workspace.id as string;
-    await request(app)
-      .put('/api/mcp/access')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ workspaces: [{ workspaceId, canWrite: true }] });
     const tokenRes = await request(app)
       .post('/api/mcp/tokens')
       .set('Authorization', `Bearer ${jwt}`)
       .send({ name: 'agent-links' });
     const secret = tokenRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
     await mcpPost(app, secret, {
       jsonrpc: '2.0',
@@ -856,5 +853,141 @@ describe('docs MCP protocol', () => {
     const cleanResult = toolResult(clean);
     expect(cleanResult.success).toBe(true);
     expect((cleanResult.data as { warnings?: string[] }).warnings).toBeUndefined();
+  });
+
+  it('grants are per-token: token A cannot reach a workspace only granted to token B', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase-per-token-mcp-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspace1 = owner.body.data.workspace.id as string;
+
+    const secondWs = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Per Token Workspace 2' });
+    const workspace2 = secondWs.body.data.workspace.id as string;
+
+    const tokenARes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'token-a' });
+    const secretA = tokenARes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenARes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId: workspace1, canWrite: true }] });
+
+    const tokenBRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'token-b' });
+    const secretB = tokenBRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenBRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId: workspace2, canWrite: true }] });
+
+    // Token A, granted only workspace1, must be rejected against workspace2.
+    const aAgainstB = await mcpPost(app, secretA, {
+      jsonrpc: '2.0',
+      id: 100,
+      method: 'tools/call',
+      params: { name: 'list_tree', arguments: { workspaceId: workspace2 } },
+    });
+    const aAgainstBResult = toolResult(aAgainstB);
+    expect(aAgainstBResult.success).toBe(false);
+    expect(aAgainstBResult.error).toBe('MCP_NOT_ALLOWLISTED');
+
+    // And the reverse: token B, granted only workspace2, must be rejected against workspace1.
+    const bAgainstA = await mcpPost(app, secretB, {
+      jsonrpc: '2.0',
+      id: 101,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { workspaceId: workspace1, path: 'anything.md' } },
+    });
+    const bAgainstAResult = toolResult(bAgainstA);
+    expect(bAgainstAResult.success).toBe(false);
+    expect(bAgainstAResult.error).toBe('MCP_NOT_ALLOWLISTED');
+
+    // Sanity: each token still works fine against its own granted workspace.
+    const aAgainstOwn = await mcpPost(app, secretA, {
+      jsonrpc: '2.0',
+      id: 102,
+      method: 'tools/call',
+      params: { name: 'list_tree', arguments: { workspaceId: workspace1 } },
+    });
+    expect(toolResult(aAgainstOwn).success).toBe(true);
+  });
+
+  it('a read-only token grant allows reads but rejects writes with MCP_READ_ONLY', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase-readonly-mcp-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    // Seed a file with a writable token first so there's something to read.
+    const seedToken = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'seed-token' });
+    const seedSecret = seedToken.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${seedToken.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    await mcpPost(app, seedSecret, {
+      jsonrpc: '2.0',
+      id: 110,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId, path: 'readonly-check.md', content: '# Read only\n' },
+      },
+    });
+
+    const readOnlyToken = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'readonly-token' });
+    const readOnlySecret = readOnlyToken.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${readOnlyToken.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: false }] });
+
+    const read = await mcpPost(app, readOnlySecret, {
+      jsonrpc: '2.0',
+      id: 111,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { workspaceId, path: 'readonly-check.md' } },
+    });
+    expect(toolResult(read).success).toBe(true);
+
+    const listTree = await mcpPost(app, readOnlySecret, {
+      jsonrpc: '2.0',
+      id: 112,
+      method: 'tools/call',
+      params: { name: 'list_tree', arguments: { workspaceId } },
+    });
+    expect(toolResult(listTree).success).toBe(true);
+
+    const write = await mcpPost(app, readOnlySecret, {
+      jsonrpc: '2.0',
+      id: 113,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId, path: 'readonly-check.md', content: '# Changed\n' },
+      },
+    });
+    const writeResult = toolResult(write);
+    expect(writeResult.success).toBe(false);
+    expect(writeResult.error).toBe('MCP_READ_ONLY');
   });
 });

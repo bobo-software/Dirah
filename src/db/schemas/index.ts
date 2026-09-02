@@ -11,7 +11,7 @@ export { workspaceInvites } from './invites';
 export { oauthAccounts } from './oauth';
 export {
   mcpTokens,
-  mcpWorkspaceAccess,
+  mcpTokenWorkspaceAccess,
   mcpAudit,
   mcpOauthClients,
   mcpOauthCodes,

@@ -74,9 +74,9 @@ async function requireWorkspace(
   const auth = currentDocsAuth();
   const ref = workspaceRef(args);
   if (!ref && options.resolveByPath && args.path) {
-    return serviceRef!.resolveWorkspaceForPath(auth.userId, args.path, auth.defaultWorkspaceId);
+    return serviceRef!.resolveWorkspaceForPath(auth.userId, auth.tokenId, args.path, auth.defaultWorkspaceId);
   }
-  const resolved = await serviceRef!.resolveWorkspace(auth.userId, ref, {
+  const resolved = await serviceRef!.resolveWorkspace(auth.userId, auth.tokenId, ref, {
     defaultWorkspaceId: auth.defaultWorkspaceId,
   });
   if (!resolved) {
@@ -109,7 +109,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     (async () =>
       run('dira_guide', async () => {
         const auth = currentDocsAuth();
-        const guide = await serviceRef!.buildGuide(auth.userId, auth.defaultWorkspaceId);
+        const guide = await serviceRef!.buildGuide(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
         return { instructions: buildDynamicInstructions(guide), workspaces: guide.workspaces };
       })) as never
   );
@@ -121,7 +121,10 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       description: 'List workspaces allowlisted for this MCP token. Includes slug (use as workspace) and default when only one is allowlisted.',
       inputSchema: z.object({}),
     },
-    (async () => run('list_workspaces', () => service.listWorkspaces(currentDocsAuth().userId))) as never
+    (async () =>
+      run('list_workspaces', () =>
+        service.listWorkspaces(currentDocsAuth().userId, currentDocsAuth().tokenId)
+      )) as never
   );
 
   server.registerTool(
@@ -145,7 +148,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       kind?: 'markdown' | 'folder';
     }) =>
       inWorkspace('list_tree', args, (workspaceId) =>
-        service.listTree(currentDocsAuth().userId, workspaceId, {
+        service.listTree(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, {
           prefix: args.prefix,
           depth: args.depth,
           kind: args.kind,
@@ -162,7 +165,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     },
     (async (args: { workspaceId?: string; workspace?: string; nodeId: string }) =>
       inWorkspace('get_node', args, (workspaceId) =>
-        service.getNode(currentDocsAuth().userId, workspaceId, args.nodeId)
+        service.getNode(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args.nodeId)
       )) as never
   );
 
@@ -190,7 +193,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       inWorkspace(
         'read_file',
         args,
-        (workspaceId) => service.readFile(currentDocsAuth().userId, workspaceId, args),
+        (workspaceId) => service.readFile(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args),
         { resolveByPath: true }
       )) as never
   );
@@ -217,7 +220,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       hash?: string;
     }) =>
       inWorkspace('write_file', args, (workspaceId) =>
-        service.writeFile(currentDocsAuth().userId, workspaceId, args)
+        service.writeFile(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args)
       )) as never
   );
 
@@ -250,7 +253,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       inWorkspace(
         'edit_file',
         args,
-        (workspaceId) => service.editFile(currentDocsAuth().userId, workspaceId, args),
+        (workspaceId) => service.editFile(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args),
         { resolveByPath: true }
       )) as never
   );
@@ -264,7 +267,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     },
     (async (args: { workspaceId?: string; workspace?: string; path: string }) =>
       inWorkspace('create_folder', args, (workspaceId) =>
-        service.createFolder(currentDocsAuth().userId, workspaceId, args)
+        service.createFolder(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args)
       )) as never
   );
 
@@ -292,7 +295,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       inWorkspace(
         'rename',
         args,
-        (workspaceId) => service.rename(currentDocsAuth().userId, workspaceId, args),
+        (workspaceId) => service.rename(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args),
         { resolveByPath: true }
       )) as never
   );
@@ -321,7 +324,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       inWorkspace(
         'move',
         args,
-        (workspaceId) => service.move(currentDocsAuth().userId, workspaceId, args),
+        (workspaceId) => service.move(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args),
         { resolveByPath: true }
       )) as never
   );
@@ -341,7 +344,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       inWorkspace(
         'delete',
         args,
-        (workspaceId) => service.delete(currentDocsAuth().userId, workspaceId, args),
+        (workspaceId) => service.delete(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, args),
         { resolveByPath: true }
       )) as never
   );
@@ -371,7 +374,13 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
         if (!term) {
           throw new HttpError('q or query is required', 400, 'INVALID_ARGS');
         }
-        return service.searchDocs(currentDocsAuth().userId, workspaceRef(args), term, args.limit);
+        return service.searchDocs(
+          currentDocsAuth().userId,
+          currentDocsAuth().tokenId,
+          workspaceRef(args),
+          term,
+          args.limit
+        );
       })) as never
   );
 }

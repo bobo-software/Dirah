@@ -120,6 +120,21 @@
       "when": 1756537600000,
       "tag": "0016_phase8_mcp_agent_context",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1756537700000,
+      "tag": "0017_mcp_token_workspace_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1756537800000,
+      "tag": "0018_drop_mcp_workspace_access",
+      "breakpoints": true
     }
   ]
 }
+

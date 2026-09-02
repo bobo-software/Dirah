@@ -41,6 +41,7 @@ describe('MCP PAT and allowlist API', () => {
       .send({ name: 'Cursor' });
     expect(created.status).toBe(201);
     const secret = created.body.data.token.secret as string;
+    const tokenId = created.body.data.token.id as string;
     expect(secret.startsWith('dira_mcp_')).toBe(true);
     expect(created.body.data.token).not.toHaveProperty('tokenHash');
 
@@ -52,12 +53,12 @@ describe('MCP PAT and allowlist API', () => {
     expect(listed.body.data.tokens[0].secret).toBeUndefined();
 
     const empty = await request(app)
-      .get('/api/mcp/access')
+      .get(`/api/mcp/tokens/${tokenId}/access`)
       .set('Authorization', `Bearer ${ownerToken}`);
     expect(empty.body.data.workspaces[0].allowlisted).toBe(false);
 
     const allowed = await request(app)
-      .put('/api/mcp/access')
+      .put(`/api/mcp/tokens/${tokenId}/access`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ workspaces: [{ workspaceId, canWrite: true }] });
     expect(allowed.status).toBe(200);
@@ -73,8 +74,18 @@ describe('MCP PAT and allowlist API', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: viewerEmail, role: 'viewer' });
 
+    // Under the per-token model, a viewer must have their own token before they
+    // can grant it any access. This still verifies the core invariant: a viewer's
+    // role caps canWrite to false regardless of what they request.
+    const viewerCreated = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .send({ name: 'viewer token' });
+    expect(viewerCreated.status).toBe(201);
+    const viewerTokenId = viewerCreated.body.data.token.id as string;
+
     const viewerAccess = await request(app)
-      .put('/api/mcp/access')
+      .put(`/api/mcp/tokens/${viewerTokenId}/access`)
       .set('Authorization', `Bearer ${viewerToken}`)
       .send({ workspaces: [{ workspaceId, canWrite: true }] });
     expect(viewerAccess.status).toBe(200);
@@ -84,7 +95,7 @@ describe('MCP PAT and allowlist API', () => {
     expect(row.canWrite).toBe(false);
 
     const revoked = await request(app)
-      .delete(`/api/mcp/tokens/${created.body.data.token.id}`)
+      .delete(`/api/mcp/tokens/${tokenId}`)
       .set('Authorization', `Bearer ${ownerToken}`);
     expect(revoked.status).toBe(200);
   });
@@ -97,8 +108,15 @@ describe('MCP PAT and allowlist API', () => {
     const workspaceId = owner.body.data.workspace.id as string;
     expect(owner.body.data.workspace.mcpEnabled).toBe(true);
 
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent' });
+    const secret = tokenRes.body.data.token.secret as string;
+    const tokenId = tokenRes.body.data.token.id as string;
+
     await request(app)
-      .put('/api/mcp/access')
+      .put(`/api/mcp/tokens/${tokenId}/access`)
       .set('Authorization', `Bearer ${jwt}`)
       .send({ workspaces: [{ workspaceId, canWrite: true }] });
 
@@ -109,11 +127,6 @@ describe('MCP PAT and allowlist API', () => {
     expect(off.status).toBe(200);
     expect(off.body.data.workspace.mcpEnabled).toBe(false);
 
-    const tokenRes = await request(app)
-      .post('/api/mcp/tokens')
-      .set('Authorization', `Bearer ${jwt}`)
-      .send({ name: 'agent' });
-    const secret = tokenRes.body.data.token.secret as string;
     const listed = await request(app)
       .post('/mcp')
       .set('Content-Type', 'application/json')
@@ -125,7 +138,7 @@ describe('MCP PAT and allowlist API', () => {
         method: 'tools/call',
         params: { name: 'list_tree', arguments: { workspaceId } },
       });
-    const text = JSON.stringify(listed.body ?? listed.text);
+    const text = JSON.stringify(listed.body?.result ? listed.body : listed.text);
     expect(text.includes('MCP_DISABLED') || text.includes('disabled')).toBe(true);
   });
 
@@ -142,18 +155,41 @@ describe('MCP PAT and allowlist API', () => {
       .send({ name: 'Second Workspace' });
     const otherOwnerWsId = secondWs.body.data.workspace.id as string;
 
+    const thirdWs = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Third Workspace (never granted)' });
+    const ungrantedWsId = thirdWs.body.data.workspace.id as string;
+
     const foreignOwner = await request(app)
       .post('/api/auth/register')
       .send({ email: `phase8-default-ws-foreign-${Date.now()}@example.com`, password });
     const foreignWorkspaceId = foreignOwner.body.data.workspace.id as string;
 
+    // Create the token with an initial grant + default workspace in one shot.
     const created = await request(app)
       .post('/api/mcp/tokens')
       .set('Authorization', `Bearer ${jwt}`)
-      .send({ name: 'agent', defaultWorkspaceId: workspaceId });
+      .send({
+        name: 'agent',
+        defaultWorkspaceId: workspaceId,
+        workspaceAccess: [{ workspaceId, canWrite: true }],
+      });
     expect(created.status).toBe(201);
     expect(created.body.data.token.defaultWorkspaceId).toBe(workspaceId);
     const tokenId = created.body.data.token.id as string;
+
+    // Grant both workspaces so the default can move to the second one.
+    const granted = await request(app)
+      .put(`/api/mcp/tokens/${tokenId}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({
+        workspaces: [
+          { workspaceId, canWrite: true },
+          { workspaceId: otherOwnerWsId, canWrite: true },
+        ],
+      });
+    expect(granted.status).toBe(200);
 
     const patched = await request(app)
       .patch(`/api/mcp/tokens/${tokenId}`)
@@ -169,10 +205,104 @@ describe('MCP PAT and allowlist API', () => {
     expect(cleared.status).toBe(200);
     expect(cleared.body.data.token.defaultWorkspaceId).toBeNull();
 
-    const rejected = await request(app)
+    // A real workspace the user owns, but never granted to this token: rejected.
+    const rejectedUngranted = await request(app)
+      .patch(`/api/mcp/tokens/${tokenId}`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ defaultWorkspaceId: ungrantedWsId });
+    expect(rejectedUngranted.status).toBe(409);
+    expect(rejectedUngranted.body.error ?? rejectedUngranted.body.code).toBe('DEFAULT_NOT_GRANTED');
+
+    // A workspace outside the user's own memberships is, by construction, never
+    // in the token's grant set either — so it produces the same 409, not a 404.
+    const rejectedForeign = await request(app)
       .patch(`/api/mcp/tokens/${tokenId}`)
       .set('Authorization', `Bearer ${jwt}`)
       .send({ defaultWorkspaceId: foreignWorkspaceId });
-    expect(rejected.status).toBe(404);
+    expect(rejectedForeign.status).toBe(409);
+    expect(rejectedForeign.body.error ?? rejectedForeign.body.code).toBe('DEFAULT_NOT_GRANTED');
+  });
+
+  it('grants are per-token, not shared across a user\'s tokens', async () => {
+    if (!dbReady) return;
+    const email = `phase-per-token-${Date.now()}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const wsA = owner.body.data.workspace.id as string;
+
+    const wsBRes = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Workspace B' });
+    const wsB = wsBRes.body.data.workspace.id as string;
+
+    const token1 = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'token-1' });
+    const token1Id = token1.body.data.token.id as string;
+
+    const token2 = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'token-2' });
+    const token2Id = token2.body.data.token.id as string;
+
+    await request(app)
+      .put(`/api/mcp/tokens/${token1Id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId: wsA, canWrite: true }] });
+
+    await request(app)
+      .put(`/api/mcp/tokens/${token2Id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId: wsB, canWrite: true }] });
+
+    const token1Access = await request(app)
+      .get(`/api/mcp/tokens/${token1Id}/access`)
+      .set('Authorization', `Bearer ${jwt}`);
+    const t1A = token1Access.body.data.workspaces.find((w: { workspaceId: string }) => w.workspaceId === wsA);
+    const t1B = token1Access.body.data.workspaces.find((w: { workspaceId: string }) => w.workspaceId === wsB);
+    expect(t1A.allowlisted).toBe(true);
+    expect(t1B.allowlisted).toBe(false);
+
+    const token2Access = await request(app)
+      .get(`/api/mcp/tokens/${token2Id}/access`)
+      .set('Authorization', `Bearer ${jwt}`);
+    const t2A = token2Access.body.data.workspaces.find((w: { workspaceId: string }) => w.workspaceId === wsA);
+    const t2B = token2Access.body.data.workspaces.find((w: { workspaceId: string }) => w.workspaceId === wsB);
+    expect(t2A.allowlisted).toBe(false);
+    expect(t2B.allowlisted).toBe(true);
+  });
+
+  it('rejects access reads/writes for a token id that is not owned by the requester', async () => {
+    if (!dbReady) return;
+    const ownerA = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase-not-owned-a-${Date.now()}@example.com`, password });
+    const jwtA = ownerA.body.data.tokens.accessToken as string;
+
+    const ownerB = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase-not-owned-b-${Date.now()}@example.com`, password });
+    const jwtB = ownerB.body.data.tokens.accessToken as string;
+    const wsB = ownerB.body.data.workspace.id as string;
+
+    const tokenB = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwtB}`)
+      .send({ name: 'b-token' });
+    const tokenBId = tokenB.body.data.token.id as string;
+
+    const getRes = await request(app)
+      .get(`/api/mcp/tokens/${tokenBId}/access`)
+      .set('Authorization', `Bearer ${jwtA}`);
+    expect(getRes.status).toBe(404);
+
+    const setRes = await request(app)
+      .put(`/api/mcp/tokens/${tokenBId}/access`)
+      .set('Authorization', `Bearer ${jwtA}`)
+      .send({ workspaces: [{ workspaceId: wsB, canWrite: true }] });
+    expect(setRes.status).toBe(404);
   });
 });

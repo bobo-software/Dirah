@@ -73,7 +73,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   });
   const apiPublicUrl =
     (process.env.API_PUBLIC_URL ?? '').trim().replace(/\/$/, '') || `http://localhost:${env.port}`;
-  const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl);
+  const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl, mcpTokenService);
   const shareService = new ShareService(db, authService, pageService);
   const aiService =
     options.aiService ??

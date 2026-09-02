@@ -1,29 +1,41 @@
-import { boolean, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { users } from './users';
 import { workspaces } from './workspaces';
 
-export const mcpTokens = pgTable('mcp_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  tokenHash: text('token_hash').notNull(),
-  tokenPrefix: text('token_prefix').notNull(),
-  defaultWorkspaceId: uuid('default_workspace_id').references(() => workspaces.id, {
-    onDelete: 'set null',
-  }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
-});
-
-export const mcpWorkspaceAccess = pgTable(
-  'mcp_workspace_access',
+export const mcpTokens = pgTable(
+  'mcp_tokens',
   {
+    id: uuid('id').primaryKey().defaultRandom(),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    tokenPrefix: text('token_prefix').notNull(),
+    defaultWorkspaceId: uuid('default_workspace_id').references(() => workspaces.id, {
+      onDelete: 'set null',
+    }),
+    oauthClientId: text('oauth_client_id').references(() => mcpOauthClients.id, {
+      onDelete: 'cascade',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => ({
+    userOauthClientUnique: unique('mcp_tokens_user_oauth_client').on(
+      table.userId,
+      table.oauthClientId
+    ),
+  })
+);
+
+export const mcpTokenWorkspaceAccess = pgTable(
+  'mcp_token_workspace_access',
+  {
+    tokenId: uuid('token_id')
+      .notNull()
+      .references(() => mcpTokens.id, { onDelete: 'cascade' }),
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
@@ -31,7 +43,10 @@ export const mcpWorkspaceAccess = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.workspaceId], name: 'mcp_workspace_access_pk' }),
+    pk: primaryKey({
+      columns: [table.tokenId, table.workspaceId],
+      name: 'mcp_token_workspace_access_pk',
+    }),
   })
 );
 
