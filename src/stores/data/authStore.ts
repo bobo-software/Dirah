@@ -29,7 +29,7 @@ async function applyTokens(tokens: AuthTokens, set: (partial: Partial<AuthState>
   set({ user });
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   accessToken: null,
   ready: false,
@@ -84,7 +84,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   acceptInviteAsSession: async (token) => {
     set({ error: null });
-    const accessToken = useAuthStore.getState().accessToken;
+    const accessToken = get().accessToken;
     if (!accessToken) throw new Error('Not signed in');
     const data = await apiRequest<{ user: PublicUser; workspace: PublicWorkspace }>(
       `/api/invites/${token}/accept`,
