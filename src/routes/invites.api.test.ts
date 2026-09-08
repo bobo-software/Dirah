@@ -31,7 +31,7 @@ describe('email invites API', () => {
 
   afterAll(async () => {});
 
-  it('creates a pending invite, accepts it, and refuses expired tokens', async () => {
+  it('creates pending invites for new and existing users, accepts via register or session', async () => {
     if (!dbReady) {
       return;
     }
@@ -48,12 +48,42 @@ describe('email invites API', () => {
     expect(existing.status).toBe(201);
     const editorToken = existing.body.data.tokens.accessToken as string;
 
-    const added = await request(app)
+    const invitedExisting = await request(app)
       .post(`/api/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: editorEmail, role: 'editor' });
-    expect(added.status).toBe(201);
-    expect(added.body.data.member.email).toBe(editorEmail);
+    expect(invitedExisting.status).toBe(201);
+    expect(invitedExisting.body.data.invite.email).toBe(editorEmail);
+    expect(invitedExisting.body.data.invite.mailed).toBe(false);
+    expect(invitedExisting.body.data.member).toBeUndefined();
+
+    const editorInviteToken = String(invitedExisting.body.data.invite.inviteUrl).split('/invite/')[1];
+    const editorPreview = await request(app).get(`/api/invites/${editorInviteToken}`);
+    expect(editorPreview.status).toBe(200);
+    expect(editorPreview.body.data.invite.invitedByEmail).toBe(ownerEmail);
+    expect(editorPreview.body.data.invite.accountExists).toBe(true);
+    expect(editorPreview.body.data.invite.workspaceName).toBe(workspaceName);
+
+    const acceptWrongUser = await request(app)
+      .post(`/api/invites/${editorInviteToken}/accept`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({});
+    expect(acceptWrongUser.status).toBe(403);
+
+    const acceptExisting = await request(app)
+      .post(`/api/invites/${editorInviteToken}/accept`)
+      .set('Authorization', `Bearer ${editorToken}`)
+      .send({});
+    expect(acceptExisting.status).toBe(201);
+    expect(acceptExisting.body.data.workspace.id).toBe(workspaceId);
+    expect(acceptExisting.body.data.workspace.role).toBe('editor');
+    expect(acceptExisting.body.data.user.email).toBe(editorEmail);
+
+    const editorSees = await request(app)
+      .get(`/api/workspaces/${workspaceId}`)
+      .set('Authorization', `Bearer ${editorToken}`);
+    expect(editorSees.status).toBe(200);
+    expect(editorSees.body.data.workspace.role).toBe('editor');
 
     const viewerInvite = await request(app)
       .post(`/api/workspaces/${workspaceId}/members`)
@@ -84,11 +114,8 @@ describe('email invites API', () => {
     expect(preview.body.data.invite.email).toBe(guestEmail);
     expect(preview.body.data.invite.workspaceName).toBe(workspaceName);
     expect(preview.body.data.invite.role).toBe('editor');
-
-    const strangerBefore = await request(app)
-      .get(`/api/workspaces/${workspaceId}`)
-      .set('Authorization', `Bearer ${editorToken}`);
-    expect(strangerBefore.status).toBe(200);
+    expect(preview.body.data.invite.invitedByEmail).toBe(ownerEmail);
+    expect(preview.body.data.invite.accountExists).toBe(false);
 
     const guestBefore = await request(app).post('/api/auth/login').send({
       email: guestEmail,

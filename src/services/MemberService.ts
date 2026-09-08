@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { and, count, eq, isNull } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { users, workspaceInvites, workspaceMemberKeys, workspaceMembers, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { isMemberRole, isWorkspaceRole } from '../authz/roles';
@@ -30,11 +31,11 @@ export interface InvitePreview {
   workspaceName: string;
   role: string;
   expiresAt: string;
+  invitedByEmail: string;
+  accountExists: boolean;
 }
 
-export type InviteOutcome =
-  | { kind: 'member'; member: PublicMember }
-  | { kind: 'pending'; invite: PublicInvite & { mailed: boolean } };
+export type InviteOutcome = { kind: 'pending'; invite: PublicInvite & { mailed: boolean } };
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -113,37 +114,35 @@ export class MemberService {
     if (!email || !email.includes('@')) {
       throw new HttpError('A valid email is required', 400, 'INVALID_EMAIL');
     }
-    const [user] = await this.database
-      .select({ id: users.id, email: users.email })
+
+    const [inviter] = await this.database
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!inviter) {
+      throw new HttpError('User not found', 401, 'USER_NOT_FOUND');
+    }
+
+    const [existingUser] = await this.database
+      .select({ id: users.id })
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
-    if (user) {
-      await this.database
-        .delete(workspaceInvites)
-        .where(
-          and(
-            eq(workspaceInvites.workspaceId, workspaceId),
-            eq(workspaceInvites.email, email),
-            isNull(workspaceInvites.acceptedAt)
-          )
-        );
-      const [existing] = await this.database
+    if (existingUser) {
+      const [existingMember] = await this.database
         .select({ userId: workspaceMembers.userId })
         .from(workspaceMembers)
         .where(
-          and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, user.id))
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, existingUser.id)
+          )
         )
         .limit(1);
-      if (existing) {
+      if (existingMember) {
         throw new HttpError('Already a member', 409, 'ALREADY_MEMBER');
       }
-      await this.database.insert(workspaceMembers).values({
-        workspaceId,
-        userId: user.id,
-        role: roleRaw,
-      });
-      return { kind: 'member', member: { userId: user.id, email: user.email, role: roleRaw } };
     }
 
     const token = crypto.randomBytes(24).toString('base64url');
@@ -187,6 +186,7 @@ export class MemberService {
       workspaceName: workspace.name,
       role: roleRaw,
       inviteUrl: inviteUrlFor(token),
+      invitedByEmail: inviter.email,
     });
     return {
       kind: 'pending',
@@ -220,11 +220,18 @@ export class MemberService {
 
   async preview(token: string): Promise<InvitePreview> {
     const invite = await this.requireOpenInvite(token);
+    const [existing] = await this.database
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, invite.email))
+      .limit(1);
     return {
       email: invite.email,
       workspaceName: invite.workspaceName,
       role: invite.role,
       expiresAt: invite.expiresAt.toISOString(),
+      invitedByEmail: invite.invitedByEmail,
+      accountExists: Boolean(existing),
     };
   }
 
@@ -236,6 +243,18 @@ export class MemberService {
       throw new HttpError('Password must be at least 8 characters', 400, 'WEAK_PASSWORD');
     }
     const invite = await this.requireOpenInvite(token);
+    const [existing] = await this.database
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, invite.email))
+      .limit(1);
+    if (existing) {
+      throw new HttpError(
+        'Email already registered. Sign in to accept this invite.',
+        409,
+        'EMAIL_TAKEN'
+      );
+    }
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     try {
@@ -269,13 +288,82 @@ export class MemberService {
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new HttpError(
-          'Email already registered. Sign in, then ask the owner to invite you again.',
+          'Email already registered. Sign in to accept this invite.',
           409,
           'EMAIL_TAKEN'
         );
       }
       throw error;
     }
+  }
+
+  async acceptAsUser(
+    token: string,
+    userId: string
+  ): Promise<{ user: PublicUser; workspace: PublicWorkspace }> {
+    const invite = await this.requireOpenInvite(token);
+    const [user] = await this.database
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) {
+      throw new HttpError('User not found', 401, 'USER_NOT_FOUND');
+    }
+    if (normalizeEmail(user.email) !== invite.email) {
+      throw new HttpError(
+        'Signed-in account does not match this invite. Sign out and use the invited email.',
+        403,
+        'INVITE_EMAIL_MISMATCH'
+      );
+    }
+
+    const [existingMember] = await this.database
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(eq(workspaceMembers.workspaceId, invite.workspaceId), eq(workspaceMembers.userId, user.id))
+      )
+      .limit(1);
+    if (existingMember) {
+      await this.database
+        .update(workspaceInvites)
+        .set({ acceptedAt: new Date() })
+        .where(eq(workspaceInvites.id, invite.id));
+      return {
+        user,
+        workspace: {
+          id: invite.workspaceId,
+          name: invite.workspaceName,
+          encrypted: invite.encrypted,
+          mcpEnabled: invite.mcpEnabled ?? true,
+          role: invite.role,
+        },
+      };
+    }
+
+    await this.database.transaction(async (tx) => {
+      await tx.insert(workspaceMembers).values({
+        workspaceId: invite.workspaceId,
+        userId: user.id,
+        role: invite.role,
+      });
+      await tx
+        .update(workspaceInvites)
+        .set({ acceptedAt: new Date() })
+        .where(eq(workspaceInvites.id, invite.id));
+    });
+
+    return {
+      user,
+      workspace: {
+        id: invite.workspaceId,
+        name: invite.workspaceName,
+        encrypted: invite.encrypted,
+        mcpEnabled: invite.mcpEnabled ?? true,
+        role: invite.role,
+      },
+    };
   }
 
   private async requireOpenInvite(token: string): Promise<{
@@ -287,11 +375,13 @@ export class MemberService {
     email: string;
     role: string;
     expiresAt: Date;
+    invitedByEmail: string;
   }> {
     const trimmed = token.trim();
     if (!trimmed) {
       throw new HttpError('Invite not found', 404, 'INVITE_NOT_FOUND');
     }
+    const inviter = alias(users, 'inviter');
     const [row] = await this.database
       .select({
         id: workspaceInvites.id,
@@ -303,15 +393,27 @@ export class MemberService {
         role: workspaceInvites.role,
         expiresAt: workspaceInvites.expiresAt,
         acceptedAt: workspaceInvites.acceptedAt,
+        invitedByEmail: inviter.email,
       })
       .from(workspaceInvites)
       .innerJoin(workspaces, eq(workspaces.id, workspaceInvites.workspaceId))
+      .innerJoin(inviter, eq(inviter.id, workspaceInvites.invitedBy))
       .where(eq(workspaceInvites.token, trimmed))
       .limit(1);
     if (!row || row.acceptedAt || row.expiresAt.getTime() <= Date.now()) {
       throw new HttpError('Invite not found', 404, 'INVITE_NOT_FOUND');
     }
-    return row;
+    return {
+      id: row.id,
+      workspaceId: row.workspaceId,
+      workspaceName: row.workspaceName,
+      encrypted: row.encrypted,
+      mcpEnabled: row.mcpEnabled,
+      email: row.email,
+      role: row.role,
+      expiresAt: row.expiresAt,
+      invitedByEmail: row.invitedByEmail,
+    };
   }
 
   async setRole(

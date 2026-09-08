@@ -6,6 +6,7 @@ import { createApiRouter } from './routes';
 import { getHealth } from './controllers/health.controller';
 import { errorHandler } from './middlewares/errorHandler';
 import { notFound } from './middlewares/notFound';
+import { requestTiming } from './middlewares/requestTiming';
 import { mcpApiKeyMiddleware } from './middlewares/mcpApiKey';
 import { createDiraMcpExpressHandler } from './mcp/createDiraMcpExpressHandler';
 import { PgMcpService } from './services/mcp/PgMcpService';
@@ -24,6 +25,8 @@ import { createDocsMcpExpressHandler } from './mcp/docs/createDocsMcpExpressHand
 import { createDocsMcpAuthMiddleware } from './middlewares/docsMcpAuth';
 import { docsMcpRateLimit } from './middlewares/docsMcpRateLimit';
 import { McpOAuthService } from './services/McpOAuthService';
+import { SystemAdminAuthService } from './services/SystemAdminAuthService';
+import { AdminService } from './services/AdminService';
 import { createMcpOAuthPublicRouter } from './routes/mcpOAuth.routes';
 import { defaultOAuthExchanger, type OAuthExchanger } from './oauth/providers';
 import { convertBlockPagesIfNeeded } from './convert/convertBlockPages';
@@ -49,6 +52,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   );
   app.use(express.json({ limit: '1.5mb' }));
   app.use(express.urlencoded({ extended: true }));
+  app.use(requestTiming);
 
   try {
     await convertBlockPagesIfNeeded(db, pool);
@@ -75,6 +79,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
     (process.env.API_PUBLIC_URL ?? '').trim().replace(/\/$/, '') || `http://localhost:${env.port}`;
   const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl, mcpTokenService);
   const shareService = new ShareService(db, authService, pageService);
+  const systemAdminAuthService = new SystemAdminAuthService(db);
+  const adminService = new AdminService(db);
   const aiService =
     options.aiService ??
     new AiService(pageService, {
@@ -82,6 +88,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       baseUrl: env.ai.baseUrl,
       model: env.ai.model,
     });
+
+  if (env.systemAdminEmail && env.systemAdminPassword) {
+    try {
+      await systemAdminAuthService.bootstrapFromEnv(env.systemAdminEmail, env.systemAdminPassword);
+    } catch (error) {
+      console.warn('System admin bootstrap skipped', error);
+    }
+  }
 
   app.get('/health', getHealth);
   app.use(
@@ -96,7 +110,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       cryptoService,
       oauthService,
       mcpTokenService,
-      mcpOAuthService
+      mcpOAuthService,
+      systemAdminAuthService,
+      adminService
     )
   );
 

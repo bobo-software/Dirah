@@ -11,6 +11,7 @@ export const pool = new Pool({
   password: env.db.password,
   database: env.db.database,
   max: getMcpConfig().poolLimit,
+  connectionTimeoutMillis: 5_000,
 });
 
 export const db = drizzle(pool, { schema });

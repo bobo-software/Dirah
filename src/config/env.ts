@@ -14,10 +14,19 @@ export const env = {
     if (cors && cors !== '*') return cors.replace(/\/$/, '');
     return 'http://localhost:5181';
   })(),
-  smtpUrl: process.env.SMTP_URL ?? '',
-  smtpFrom: process.env.SMTP_FROM ?? 'Dira <dira@localhost>',
+  smtp: {
+    host: (process.env.SMTP_HOST ?? '').trim(),
+    port: Number(process.env.SMTP_PORT ?? 465),
+    secure: (process.env.SMTP_SECURE ?? 'true').toLowerCase() !== 'false',
+    user: (process.env.SMTP_USER ?? '').trim(),
+    password: process.env.SMTP_PASSWORD ?? '',
+    from: (process.env.SMTP_FROM ?? 'Dira <dira@localhost>').trim(),
+  },
+  smtpConfigured: Boolean((process.env.SMTP_HOST ?? '').trim()),
   jwtSecret: process.env.JWT_SECRET ?? 'dev-jwt-secret-change-me',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? 'dev-jwt-refresh-secret-change-me',
+  systemAdminEmail: (process.env.SYSTEM_ADMIN_EMAIL ?? '').trim(),
+  systemAdminPassword: process.env.SYSTEM_ADMIN_PASSWORD ?? '',
   blobDir: path.resolve(process.env.BLOB_DIR ?? 'uploads'),
   ai: {
     apiKey: process.env.AI_API_KEY ?? '',

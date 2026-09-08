@@ -14,7 +14,7 @@ const roleSchema = z.object({
 });
 
 const acceptSchema = z.object({
-  password: z.string().min(1),
+  password: z.string().min(1).optional(),
 });
 
 export function createMemberController(members: MemberService) {
@@ -43,9 +43,6 @@ export function createMemberController(members: MemberService) {
         parsed.data.email,
         parsed.data.role
       );
-      if (outcome.kind === 'member') {
-        return ResponseUtils.success(res, 'Member added', { member: outcome.member }, 201);
-      }
       return ResponseUtils.success(res, 'Invite created', { invite: outcome.invite }, 201);
     }),
 
@@ -73,9 +70,13 @@ export function createMemberController(members: MemberService) {
       if (!token) {
         return ResponseUtils.error(res, 'Invite token is required', null, 400);
       }
+      if (req.user?.userId) {
+        const result = await members.acceptAsUser(token, req.user.userId);
+        return ResponseUtils.success(res, 'Joined workspace', result, 201);
+      }
       const parsed = acceptSchema.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        return ResponseUtils.error(res, 'Password is required', parsed.error.flatten(), 400);
+      if (!parsed.success || !parsed.data.password) {
+        return ResponseUtils.error(res, 'Password is required', parsed.success ? null : parsed.error.flatten(), 400);
       }
       const result = await members.accept(token, parsed.data.password);
       return ResponseUtils.success(res, 'Joined workspace', result, 201);
