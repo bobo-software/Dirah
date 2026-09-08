@@ -1,4 +1,5 @@
 export { useAuthStore, REFRESH_KEY } from './data/authStore';
+export { useAdminAuthStore, ADMIN_REFRESH_KEY } from './data/adminAuthStore';
 export { useWorkspaceStore } from './data/workspaceStore';
 export { usePageStore, EMPTY_PAGES } from './data/pageStore';
 export { useMarkdownContentStore } from './data/markdownContentStore';

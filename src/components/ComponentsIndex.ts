@@ -9,6 +9,8 @@ import WorkspacesModal from './WorkspacesModal';
 import ProfileMenu from './ProfileMenu';
 import TokenAccessFields from './TokenAccessFields';
 import { Logo, BrandLink } from './Logo';
+import DataTable from './DataTable';
+import RequestLogDetailModal from './RequestLogDetailModal';
 
 export {
   Sidebar,
@@ -23,7 +25,11 @@ export {
   TokenAccessFields,
   Logo,
   BrandLink,
+  DataTable,
+  RequestLogDetailModal,
 };
+
+export type { DataTableColumn, DataTableProps, DataTableSelectFilterOption } from './DataTable';
 
 const components = {
   Sidebar,
@@ -38,6 +44,8 @@ const components = {
   TokenAccessFields,
   Logo,
   BrandLink,
+  DataTable,
+  RequestLogDetailModal,
 };
 
 export default components;

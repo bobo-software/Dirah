@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
 import { THEME_OPTIONS, useTheme } from '../theme/ThemeContext';
 
@@ -14,6 +15,7 @@ function UserIcon() {
 export function ProfileMenu() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const navigate = useNavigate();
   const { preference, setPreference } = useTheme();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +85,7 @@ export function ProfileMenu() {
             className="profile-menu-item"
             onClick={() => {
               setOpen(false);
-              void logout();
+              void logout().then(() => navigate('/'));
             }}
           >
             Log out

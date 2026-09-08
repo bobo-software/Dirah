@@ -13,6 +13,7 @@ type AuthState = {
   initAuth: () => Promise<void>;
   register: (email: string, password: string) => Promise<PublicWorkspace>;
   acceptInvite: (token: string, password: string) => Promise<PublicWorkspace>;
+  acceptInviteAsSession: (token: string) => Promise<PublicWorkspace>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -78,6 +79,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     );
     set({ accessToken: data.tokens.accessToken, user: data.user });
     localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
+    return data.workspace;
+  },
+
+  acceptInviteAsSession: async (token) => {
+    set({ error: null });
+    const accessToken = useAuthStore.getState().accessToken;
+    if (!accessToken) throw new Error('Not signed in');
+    const data = await apiRequest<{ user: PublicUser; workspace: PublicWorkspace }>(
+      `/api/invites/${token}/accept`,
+      { method: 'POST', accessToken, body: JSON.stringify({}) }
+    );
+    set({ user: data.user });
     return data.workspace;
   },
 

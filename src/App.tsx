@@ -2,10 +2,16 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './stores/StoresIndex';
 import { AppFrame, RequireAuth } from './layout/AppFrame';
+import { AdminShell, RequireSystemAdmin } from './layout/AdminShell';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { InvitePage } from './pages/InvitePage';
 import { OAuthCatchPage } from './pages/OAuthCatchPage';
+import { AdminLoginPage } from './pages/admin/AdminLoginPage';
+import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { AdminEmailsPage } from './pages/admin/AdminEmailsPage';
+import { AdminRequestLogsPage } from './pages/admin/AdminRequestLogsPage';
 import { HomeRedirect, SettingsRedirect } from './components/ComponentsIndex';
 import { SettingsPage } from './pages/SettingsPage';
 import { McpTokenDetailPage } from './pages/McpTokenDetailPage';
@@ -45,6 +51,15 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route path="/oauth" element={<OAuthCatchPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route element={<RequireSystemAdmin />}>
+          <Route path="/admin" element={<AdminShell />}>
+            <Route index element={<AdminOverviewPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="emails" element={<AdminEmailsPage />} />
+            <Route path="request-logs" element={<AdminRequestLogsPage />} />
+          </Route>
+        </Route>
         <Route
           path="/s/:token"
           element={

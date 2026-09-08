@@ -38,11 +38,10 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
     setMessage(null);
     try {
       const result = await inviteMember(workspaceId, email, role);
-      if (result.member) {
-        setEmail('');
-      } else if (result.invite) {
+      if (result.invite) {
         setEmail('');
         await copyUrl(result.invite.inviteUrl);
+        setMessage(result.invite.mailed ? 'Invite emailed. Link also copied.' : 'Invite created. Link copied.');
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not invite');

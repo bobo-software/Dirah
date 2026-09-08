@@ -9,6 +9,7 @@ export function InvitePage() {
   const user = useAuthStore((state) => state.user);
   const ready = useAuthStore((state) => state.ready);
   const acceptInvite = useAuthStore((state) => state.acceptInvite);
+  const acceptInviteAsSession = useAuthStore((state) => state.acceptInviteAsSession);
   const logout = useAuthStore((state) => state.logout);
   const fetchPreview = useInviteStore((state) => state.fetchPreview);
   const [preview, setPreview] = useState<InvitePreview | null>(null);
@@ -46,13 +47,28 @@ export function InvitePage() {
   }
   if (!preview) return <p className="muted">Loading invite…</p>;
   const inviteToken = token;
+  const invitePath = `/invite/${inviteToken}`;
+  const emailMatch = Boolean(user && user.email.toLowerCase() === preview.email.toLowerCase());
 
-  async function onSubmit(event: FormEvent) {
+  async function onCreateAccount(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setMessage(null);
     try {
       const workspace = await acceptInvite(inviteToken, password);
+      setNextPath(`/w/${workspace.id}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not join');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onAcceptAsSession() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const workspace = await acceptInviteAsSession(inviteToken);
       setNextPath(`/w/${workspace.id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not join');
@@ -68,11 +84,26 @@ export function InvitePage() {
       </div>
       <h1>Join {preview.workspaceName}</h1>
       <p className="muted">
-        Invited as {preview.role}: {preview.email}
+        <strong>{preview.invitedByEmail}</strong> invited you as <strong>{preview.role}</strong> (
+        {preview.email}).
       </p>
-      {user ? (
+
+      {user && emailMatch ? (
         <>
-          <p className="muted">You are signed in as {user.email}. Sign out to accept this invite.</p>
+          <p className="muted">You are signed in as {user.email}. Accept to join this workspace.</p>
+          {message ? <p className="error">{message}</p> : null}
+          <button type="button" disabled={busy} onClick={() => void onAcceptAsSession()}>
+            {busy ? 'Joining…' : 'Accept invite'}
+          </button>
+        </>
+      ) : null}
+
+      {user && !emailMatch ? (
+        <>
+          <p className="muted">
+            You are signed in as {user.email}, but this invite is for {preview.email}. Sign out to continue
+            with the invited account.
+          </p>
           <button
             type="button"
             disabled={busy}
@@ -83,8 +114,22 @@ export function InvitePage() {
             Sign out
           </button>
         </>
-      ) : (
-        <form onSubmit={(event) => void onSubmit(event)}>
+      ) : null}
+
+      {!user && preview.accountExists ? (
+        <>
+          <p className="muted">You already have a Dira account. Sign in to accept this invite.</p>
+          <p>
+            <Link to="/login" state={{ from: invitePath }}>
+              Log in to continue
+            </Link>
+          </p>
+        </>
+      ) : null}
+
+      {!user && !preview.accountExists ? (
+        <form onSubmit={(event) => void onCreateAccount(event)}>
+          <p className="muted">Create an account with this email to view the workspace.</p>
           <label>
             Password
             <input
@@ -99,10 +144,10 @@ export function InvitePage() {
           </label>
           {message ? <p className="error">{message}</p> : null}
           <button type="submit" disabled={busy}>
-            {busy ? 'Joining…' : 'Join workspace'}
+            {busy ? 'Creating account…' : 'Create account & join'}
           </button>
         </form>
-      )}
+      ) : null}
     </main>
   );
 }

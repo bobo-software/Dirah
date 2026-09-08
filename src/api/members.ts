@@ -20,11 +20,11 @@ export type InvitePreview = {
   workspaceName: string;
   role: string;
   expiresAt: string;
+  invitedByEmail: string;
+  accountExists: boolean;
 };
 
-export type InviteResult =
-  | { member: PublicMember; invite?: undefined }
-  | { invite: PublicInvite; member?: undefined };
+export type InviteResult = { invite: PublicInvite; member?: undefined };
 
 export async function listMembers(
   accessToken: string,
