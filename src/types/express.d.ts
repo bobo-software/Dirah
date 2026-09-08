@@ -4,7 +4,9 @@ declare global {
   namespace Express {
     interface Request {
       user?: JwtPayload;
+      systemAdmin?: { adminId: string };
       mcpAuth?: { userId: string; tokenId: string | null; defaultWorkspaceId: string | null };
+      startTime?: number;
     }
   }
 }

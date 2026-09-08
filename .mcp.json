@@ -2,9 +2,9 @@
   "mcpServers": {
     "dira-postgres": {
       "type": "http",
-      "url": "http://127.0.0.1:4000/mcp/protocol",
+      "url": "http://127.0.0.1:4002/mcp/protocol",
       "headers": {
-        "Authorization": "Bearer ${env:MCP_API_KEY}"
+        "Authorization": "Bearer dev-mcp-key-change-in-production"
       }
     }
   }

@@ -16,8 +16,8 @@ async function main(): Promise<void> {
       Boolean(env.minio.secretKey.trim());
     console.log(minioReady ? `Blobs: MinIO bucket ${env.minio.bucket}` : `Blobs: disk ${env.blobDir}`);
     console.log(
-      env.smtpUrl.trim()
-        ? `Invites: SMTP (${env.appPublicUrl})`
+      env.smtpConfigured
+        ? `Invites: SMTP ${env.smtp.host}:${env.smtp.port} (${env.appPublicUrl})`
         : `Invites: copy-link (${env.appPublicUrl})`
     );
     const oauth = {

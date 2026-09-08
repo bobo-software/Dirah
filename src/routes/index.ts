@@ -7,6 +7,7 @@ import { createBlobRouter } from './blob.routes';
 import { createPublicRouter } from './public.routes';
 import { createInviteRouter } from './invite.routes';
 import { createAiRouter } from './ai.routes';
+import { createAdminRouter } from './admin.routes';
 import type { AuthService } from '../services/AuthService';
 import type { PageService } from '../services/PageService';
 import type { BlobService } from '../services/BlobService';
@@ -17,6 +18,8 @@ import type { CryptoService } from '../services/CryptoService';
 import type { OAuthService } from '../services/OAuthService';
 import type { McpTokenService } from '../services/McpTokenService';
 import type { McpOAuthService } from '../services/McpOAuthService';
+import type { SystemAdminAuthService } from '../services/SystemAdminAuthService';
+import type { AdminService } from '../services/AdminService';
 import { createMcpSettingsRouter } from './mcpSettings.routes';
 import { createMcpOAuthApproveRouter } from './mcpOAuth.routes';
 
@@ -30,7 +33,9 @@ export function createApiRouter(
   cryptoService: CryptoService,
   oauthService: OAuthService,
   mcpTokenService: McpTokenService,
-  mcpOAuthService: McpOAuthService
+  mcpOAuthService: McpOAuthService,
+  systemAdminAuthService: SystemAdminAuthService,
+  adminService: AdminService
 ): Router {
   const router = Router();
   router.use('/health', healthRouter);
@@ -43,5 +48,6 @@ export function createApiRouter(
   router.use('/ai', createAiRouter(aiService));
   router.use('/mcp', createMcpSettingsRouter(mcpTokenService));
   router.use('/mcp', createMcpOAuthApproveRouter(mcpOAuthService));
+  router.use('/admin', createAdminRouter(systemAdminAuthService, adminService));
   return router;
 }

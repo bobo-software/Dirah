@@ -134,6 +134,13 @@
       "when": 1756537800000,
       "tag": "0018_drop_mcp_workspace_access",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1756537900000,
+      "tag": "0019_system_admin_console",
+      "breakpoints": true
     }
   ]
 }
