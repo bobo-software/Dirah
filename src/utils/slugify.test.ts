@@ -3,8 +3,10 @@ import {
   hashMarkdown,
   markdownSearchText,
   markdownSlugFromSegment,
+  normalizeDocsSearchQuery,
   parseDocsPath,
   slugify,
+  stripSearchHeadlineMarkers,
 } from './slugify';
 
 describe('slugify', () => {
@@ -23,5 +25,12 @@ describe('slugify', () => {
   it('hashes markdown and strips fences for search', () => {
     expect(hashMarkdown('')).toHaveLength(64);
     expect(markdownSearchText('# Title\n```js\nsecret()\n```\nhello')).toBe('# Title hello');
+  });
+
+  it('folds hyphens in search queries and strips headline markers', () => {
+    expect(normalizeDocsSearchQuery('PP-B4')).toEqual({ raw: 'PP-B4', fts: 'PP B4', compact: 'PPB4' });
+    expect(normalizeDocsSearchQuery('PP - B4')?.fts).toBe('PP B4');
+    expect(normalizeDocsSearchQuery('  ')).toBeNull();
+    expect(stripSearchHeadlineMarkers('see <<hl>>B4<</hl>> next')).toBe('see B4 next');
   });
 });

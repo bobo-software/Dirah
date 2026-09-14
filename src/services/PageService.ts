@@ -1,7 +1,15 @@
 import { and, asc, eq, ilike, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import { markdownBodies, pageFavorites, pages, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
-import { hashMarkdown, markdownSearchText, slugify } from '../utils/slugify';
+import {
+  hashMarkdown,
+  markdownSearchText,
+  SEARCH_HEADLINE_START,
+  SEARCH_HEADLINE_STOP,
+  slugify,
+  stripSearchHeadlineMarkers,
+  normalizeDocsSearchQuery,
+} from '../utils/slugify';
 import { type AuthService, type Database } from './AuthService';
 
 export const PAGE_STATUSES = ['', 'todo', 'doing', 'done'] as const;
@@ -113,12 +121,8 @@ export class PageService {
     }
     const q = query.q?.trim();
     if (q) {
-      const safe = q.replace(/[%_]/g, '').slice(0, 100);
-      if (safe) {
-        const titleMatch = ilike(pages.title, `%${safe}%`);
-        const bodyMatch = sql`pages.search_tsv @@ plainto_tsquery('english', ${safe})`;
-        filters.push(or(titleMatch, bodyMatch)!);
-      }
+      const match = this.markdownSearchPredicate(q);
+      if (match) filters.push(match);
     }
 
     const rows = await this.database
@@ -144,16 +148,17 @@ export class PageService {
     limit = 20
   ): Promise<MarkdownSearchHit[]> {
     await this.auth.requireMember(userId, workspaceId);
-    const safe = q.replace(/[%_]/g, '').slice(0, 100).trim();
-    if (!safe) return [];
+    const parsed = normalizeDocsSearchQuery(q);
+    if (!parsed) return [];
     const cap = Math.min(50, Math.max(1, limit));
-    const titleMatch = ilike(pages.title, `%${safe}%`);
-    const bodyMatch = sql`pages.search_tsv @@ plainto_tsquery('english', ${safe})`;
+    const match = this.markdownSearchPredicate(q);
+    if (!match) return [];
+    const headlineOpts = `MaxFragments=2,MaxWords=24,MinWords=5,StartSel=${SEARCH_HEADLINE_START},StopSel=${SEARCH_HEADLINE_STOP}`;
     const snippetExpr = sql<string>`ts_headline(
       'english',
       coalesce(${pages.searchText}, ''),
-      plainto_tsquery('english', ${safe}),
-      'MaxFragments=2,MaxWords=24,MinWords=5'
+      plainto_tsquery('english', ${parsed.fts}),
+      ${headlineOpts}
     )`;
     const rows = await this.database
       .select({
@@ -163,18 +168,28 @@ export class PageService {
       })
       .from(pages)
       .where(
-        and(
-          eq(pages.workspaceId, workspaceId),
-          isNull(pages.deletedAt),
-          eq(pages.kind, 'markdown'),
-          or(titleMatch, bodyMatch)!
-        )
+        and(eq(pages.workspaceId, workspaceId), isNull(pages.deletedAt), eq(pages.kind, 'markdown'), match)
       )
       .limit(cap);
-    return rows.map((row) => ({
-      page: this.toPublic(row, false),
-      snippet: (row.snippet && row.snippet.trim()) || row.searchText.slice(0, 160) || row.title,
-    }));
+    return rows.map((row) => {
+      const rawSnippet = stripSearchHeadlineMarkers(row.snippet ?? '').trim();
+      return {
+        page: this.toPublic(row, false),
+        snippet: rawSnippet || row.searchText.slice(0, 160) || row.title,
+      };
+    });
+  }
+
+  private markdownSearchPredicate(q: string) {
+    const parsed = normalizeDocsSearchQuery(q);
+    if (!parsed) return undefined;
+    const titleMatch = ilike(pages.title, `%${parsed.raw}%`);
+    const compactMatch = parsed.compact
+      ? sql`regexp_replace(${pages.title}, '[-_[:space:]]+', '', 'g') ILIKE ${`%${parsed.compact}%`}`
+      : undefined;
+    const bodyMatch = sql`pages.search_tsv @@ plainto_tsquery('english', ${parsed.fts})`;
+    if (compactMatch) return or(titleMatch, compactMatch, bodyMatch);
+    return or(titleMatch, bodyMatch);
   }
 
   async create(

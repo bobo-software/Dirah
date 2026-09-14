@@ -509,6 +509,35 @@ describe('docs MCP protocol', () => {
     const otherHit = hits.find((hit) => hit.path === 'docs/deep/conventions.md');
     expect(otherHit?.readWhen).toBe('Conventions');
 
+    const ticketNote = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 44,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { path: 'docs/pp-b4.md', content: '# PP - B4\n\nTicket body for hyphen folding.\n' },
+      },
+    });
+    expect(toolResult(ticketNote).success).toBe(true);
+
+    for (const [id, q] of [
+      [45, 'PP-B4'],
+      [46, 'pp-b4'],
+      [47, 'PP - B4'],
+    ] as const) {
+      const found = await mcpPost(app, secret, {
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: { name: 'search_docs', arguments: { q } },
+      });
+      const ticketHits = toolResult(found).data as Array<{ path: string; snippet: string }>;
+      const ticketHit = ticketHits.find((hit) => hit.path === 'docs/pp-b4.md');
+      expect(ticketHit, `expected hit for query ${q}`).toBeTruthy();
+      expect(ticketHit?.snippet).toMatch(/B4/i);
+      expect(ticketHit?.snippet).not.toContain('<b>');
+    }
+
     const neitherArg = await mcpPost(app, secret, {
       jsonrpc: '2.0',
       id: 43,
@@ -596,6 +625,62 @@ describe('docs MCP protocol', () => {
     expect(staleDetails.currentHash).toBe(readData.hash);
     expect(staleDetails.diffPreview).toContain('qux bar');
     expect(staleDetails.hint).toContain('read_file');
+
+    const missing = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 55,
+      method: 'tools/call',
+      params: {
+        name: 'edit_file',
+        arguments: { path: 'dup.md', oldString: 'this-string-is-not-there', newString: 'x' },
+      },
+    });
+    const missingResult = toolResult(missing);
+    expect(missingResult.success).toBe(false);
+    expect(missingResult.error).toBe('PATCH_NOT_FOUND');
+    const missingDetails = missingResult.details as { currentHash: string; path: string; nearbySnippet: string };
+    expect(missingDetails.currentHash).toBe(readData.hash);
+    expect(missingDetails.path).toBe('dup.md');
+    expect(missingDetails.nearbySnippet).toContain('qux bar');
+
+    const patched = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 56,
+      method: 'tools/call',
+      params: {
+        name: 'edit_file',
+        arguments: {
+          path: 'dup.md',
+          hash: readData.hash,
+          patches: [
+            { oldString: 'qux bar', newString: 'alpha bar' },
+            { oldString: 'qux baz', newString: 'beta baz' },
+          ],
+        },
+      },
+    });
+    const patchedResult = toolResult(patched);
+    expect(patchedResult.success).toBe(true);
+    const patchedHash = (patchedResult.data as { hash: string }).hash;
+
+    const appended = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 57,
+      method: 'tools/call',
+      params: {
+        name: 'edit_file',
+        arguments: { path: 'dup.md', hash: patchedHash, append: '## End\n' },
+      },
+    });
+    expect(toolResult(appended).success).toBe(true);
+
+    const finalRead = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 58,
+      method: 'tools/call',
+      params: { name: 'read_file', arguments: { path: 'dup.md' } },
+    });
+    expect((toolResult(finalRead).data as { content: string }).content).toBe('alpha bar\nbeta baz\n## End\n');
   });
 
   it('list_tree sorts by path, defaults depth to 2, supports a kind filter, and surfaces headings', async () => {
@@ -989,5 +1074,57 @@ describe('docs MCP protocol', () => {
     const writeResult = toolResult(write);
     expect(writeResult.success).toBe(false);
     expect(writeResult.error).toBe('MCP_READ_ONLY');
+  });
+
+  it('warns when a new docs path is not linked from the agent index', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase8-index-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'agent-index' });
+    const secret = tokenRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+
+    await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 120,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { path: 'readme.md', content: '# Index\n\n- [Known](docs/known.md)\n' },
+      },
+    });
+
+    const known = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 121,
+      method: 'tools/call',
+      params: { name: 'write_file', arguments: { path: 'docs/known.md', content: '# Known\n' } },
+    });
+    const knownWarnings = (toolResult(known).data as { warnings?: string[] }).warnings ?? [];
+    expect(knownWarnings.some((w) => w.includes('not linked'))).toBe(false);
+
+    const orphan = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 122,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { path: 'docs/testing/unit/foo.md', content: '# Foo tests\n' },
+      },
+    });
+    const orphanWarnings = (toolResult(orphan).data as { warnings?: string[] }).warnings ?? [];
+    expect(orphanWarnings.some((w) => w.includes('docs/testing/unit/foo.md') && w.includes('readme.md'))).toBe(
+      true
+    );
   });
 });

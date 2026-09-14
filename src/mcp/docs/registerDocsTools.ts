@@ -202,7 +202,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'write_file',
     {
       title: 'Write markdown file',
-      description: 'Create or replace a markdown file. Creates parent folders by default. Pass hash to avoid clobbering. Omit workspace when the token has one workspace.',
+      description: 'Create or replace a markdown file. Creates parent folders by default. Pass hash to avoid clobbering. Warns when a new path is not linked from the workspace index. Omit workspace when the token has one workspace.',
       inputSchema: z.object({
         ...workspaceFields,
         path: z.string().min(1),
@@ -229,15 +229,26 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     {
       title: 'Patch markdown file',
       description:
-        'Replace oldString with newString. Include hash from read_file. If oldString occurs more than once, this fails with PATCH_AMBIGUOUS unless replaceAll is set.',
+        'Replace oldString with newString, apply patches[] in order, or append. Include hash from read_file. Several replacements share one hash. If oldString occurs more than once, this fails with PATCH_AMBIGUOUS unless replaceAll is set. Failed patches return currentHash and a nearbySnippet.',
       inputSchema: z.object({
         ...workspaceFields,
         path: z.string().optional(),
         nodeId: z.string().uuid().optional(),
-        oldString: z.string().min(1),
-        newString: z.string(),
+        oldString: z.string().min(1).optional(),
+        newString: z.string().optional(),
         hash: z.string().optional(),
         replaceAll: z.boolean().optional(),
+        patches: z
+          .array(
+            z.object({
+              oldString: z.string().min(1),
+              newString: z.string(),
+              replaceAll: z.boolean().optional(),
+            })
+          )
+          .min(1)
+          .optional(),
+        append: z.string().min(1).optional(),
       }),
     },
     (async (args: {
@@ -245,10 +256,12 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       workspace?: string;
       path?: string;
       nodeId?: string;
-      oldString: string;
-      newString: string;
+      oldString?: string;
+      newString?: string;
       hash?: string;
       replaceAll?: boolean;
+      patches?: { oldString: string; newString: string; replaceAll?: boolean }[];
+      append?: string;
     }) =>
       inWorkspace(
         'edit_file',
@@ -354,7 +367,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     {
       title: 'Search markdown docs',
       description:
-        'Full-text search with snippets, readWhen hints, and app URLs. Accepts q or query. Omit workspace to search all allowlisted workspaces. Omit workspaceId when the token has one workspace.',
+        'Full-text search with plain-text snippets, readWhen hints, and app URLs. Hyphens and spaces in ticket ids fold (PP-B4 matches "PP - B4"). Accepts q or query. Omit workspace to search all allowlisted workspaces. Omit workspaceId when the token has one workspace.',
       inputSchema: z.object({
         ...workspaceFields,
         q: z.string().min(1).optional(),
