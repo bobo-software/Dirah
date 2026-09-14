@@ -111,4 +111,40 @@ describe('full-text search API', () => {
     expect(byTitle.body.data.pages).toHaveLength(1);
     expect(byTitle.body.data.pages[0].id).toBe(pageId);
   });
+
+  it('finds a spaced ticket heading with hyphenated ?q=', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `phase5g-ticket-${stamp}@example.com`, password });
+    expect(owner.status).toBe(201);
+    const ownerToken = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    const page = await request(app)
+      .post(`/api/workspaces/${workspaceId}/pages`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: 'PP - B4', kind: 'markdown' });
+    expect(page.status).toBe(201);
+    const pageId = page.body.data.page.id as string;
+
+    const empty = await request(app)
+      .get(`/api/pages/${pageId}/markdown`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    const written = await request(app)
+      .put(`/api/pages/${pageId}/markdown`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ content: '# PP - B4\n\nShipped notes.\n', hash: empty.body.data.hash });
+    expect(written.status).toBe(200);
+
+    for (const q of ['PP-B4', 'pp-b4', 'PP - B4']) {
+      const found = await request(app)
+        .get(`/api/workspaces/${workspaceId}/pages`)
+        .query({ q })
+        .set('Authorization', `Bearer ${ownerToken}`);
+      expect(found.status).toBe(200);
+      expect(found.body.data.pages.some((p: { id: string }) => p.id === pageId)).toBe(true);
+    }
+  });
 });

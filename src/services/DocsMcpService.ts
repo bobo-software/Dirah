@@ -114,6 +114,51 @@ function boostAgentIndexHits<T extends { path: string }>(hits: T[]): T[] {
   return [...boosted, ...rest];
 }
 
+export type EditPatch = { oldString: string; newString: string; replaceAll?: boolean };
+
+function nearbySnippet(content: string, oldString: string): string {
+  const lines = content.split('\n');
+  const needle = oldString.split('\n').find((line) => line.trim().length > 0) ?? oldString;
+  let idx = needle ? lines.findIndex((line) => line.includes(needle)) : -1;
+  if (idx < 0 && needle.length > 8) {
+    const prefix = needle.slice(0, Math.min(24, needle.length));
+    idx = lines.findIndex((line) => line.includes(prefix));
+  }
+  const start = idx < 0 ? 0 : Math.max(0, idx - 2);
+  const end = idx < 0 ? Math.min(lines.length, 8) : Math.min(lines.length, idx + 4);
+  return lines.slice(start, end).join('\n').slice(0, 400);
+}
+
+function applyOnePatch(content: string, patch: EditPatch, path: string, hash: string): string {
+  const occurrences = content.split(patch.oldString).length - 1;
+  const details = {
+    currentHash: hash,
+    path,
+    nearbySnippet: nearbySnippet(content, patch.oldString),
+    hint: 'Retry with this currentHash; re-read only if nearbySnippet is not enough to craft oldString.',
+  };
+  if (occurrences === 0) {
+    throw new HttpError('oldString was not found', 400, 'PATCH_NOT_FOUND', details);
+  }
+  if (occurrences > 1 && !patch.replaceAll) {
+    throw new HttpError(
+      `oldString occurs ${occurrences} times — pass replaceAll: true or narrow oldString to a unique match`,
+      400,
+      'PATCH_AMBIGUOUS',
+      { ...details, occurrences }
+    );
+  }
+  return patch.replaceAll
+    ? content.split(patch.oldString).join(patch.newString)
+    : content.replace(patch.oldString, patch.newString);
+}
+
+function appendToMarkdown(content: string, addition: string): string {
+  if (!addition) return content;
+  if (!content) return addition;
+  return content.endsWith('\n') ? content + addition : `${content}\n${addition}`;
+}
+
 export class DocsMcpService {
   constructor(
     private readonly pages: PageService,
@@ -149,11 +194,8 @@ export class DocsMcpService {
     const agentIndexPaths = await this.tokens.getAgentIndexPaths(rows.map((row) => row.workspaceId));
     const workspaces = await Promise.all(
       rows.map(async (row) => {
-        const override = agentIndexPaths.get(row.workspaceId);
-        const candidates = override ? [normalizePrefix(override).toLowerCase()] : AGENT_INDEX_FALLBACK_CHAIN;
         const tree = await this.loadTree(userId, tokenId, row.workspaceId);
-        const paths = new Set(tree.map((node) => node.path));
-        const startAt = candidates.find((candidate) => paths.has(candidate)) ?? null;
+        const startAt = this.resolveAgentIndexPath(tree, agentIndexPaths.get(row.workspaceId));
         return {
           workspaceId: row.workspaceId,
           slug: row.slug,
@@ -376,7 +418,12 @@ export class DocsMcpService {
       }));
     const body = await this.pages.putMarkdown(userId, page.id, input.content, input.hash);
     const path = segments.join('/');
-    const warnings = await this.checkLinks(userId, tokenId, workspaceId, path, input.content);
+    const tree = await this.loadTree(userId, tokenId, workspaceId);
+    const warnings = this.checkLinks(tree, path, input.content);
+    if (!existing) {
+      const indexWarning = await this.missingIndexLinkWarning(userId, tokenId, workspaceId, tree, path);
+      if (indexWarning) warnings.push(indexWarning);
+    }
     return {
       id: page.id,
       title: page.title,
@@ -388,16 +435,15 @@ export class DocsMcpService {
     };
   }
 
-  private async checkLinks(
-    userId: string,
-    tokenId: string | null,
-    workspaceId: string,
-    filePath: string,
-    content: string
-  ): Promise<string[]> {
+  private resolveAgentIndexPath(tree: DocsTreeNode[], override?: string | null): string | null {
+    const candidates = override ? [normalizePrefix(override).toLowerCase()] : AGENT_INDEX_FALLBACK_CHAIN;
+    const paths = new Set(tree.map((node) => node.path));
+    return candidates.find((candidate) => paths.has(candidate)) ?? null;
+  }
+
+  private checkLinks(tree: DocsTreeNode[], filePath: string, content: string): string[] {
     const links = extractMarkdownLinks(content);
     if (!links.length) return [];
-    const tree = await this.loadTree(userId, tokenId, workspaceId);
     const known = new Set(tree.map((node) => node.path));
     const fileDir = filePath.split('/').slice(0, -1).join('/');
     const warnings: string[] = [];
@@ -410,6 +456,27 @@ export class DocsMcpService {
     return warnings;
   }
 
+  private async missingIndexLinkWarning(
+    userId: string,
+    tokenId: string | null,
+    workspaceId: string,
+    tree: DocsTreeNode[],
+    newPath: string
+  ): Promise<string | null> {
+    const overrides = await this.tokens.getAgentIndexPaths([workspaceId]);
+    const indexPath = this.resolveAgentIndexPath(tree, overrides.get(workspaceId));
+    if (!indexPath || indexPath === newPath) return null;
+    const indexNode = tree.find((node) => node.path === indexPath);
+    if (!indexNode) return null;
+    const indexBody = await this.pages.getMarkdown(userId, indexNode.id);
+    const fileDir = indexPath.split('/').slice(0, -1).join('/');
+    const linked = extractMarkdownLinks(indexBody.content).some(
+      (link) => resolveLinkTarget(fileDir, link.target) === newPath
+    );
+    if (linked) return null;
+    return `Created ${newPath} but it is not linked from ${indexPath}`;
+  }
+
   async editFile(
     userId: string,
     tokenId: string | null,
@@ -417,34 +484,44 @@ export class DocsMcpService {
     input: {
       path?: string;
       nodeId?: string;
-      oldString: string;
-      newString: string;
+      oldString?: string;
+      newString?: string;
       hash?: string;
       replaceAll?: boolean;
+      patches?: EditPatch[];
+      append?: string;
     }
   ) {
     await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
-    if (!input.oldString) {
-      throw new HttpError('oldString is required', 400, 'INVALID_PATCH');
-    }
     const current = await this.readFile(userId, tokenId, workspaceId, input);
-    const occurrences = current.content.split(input.oldString).length - 1;
-    if (occurrences === 0) {
-      throw new HttpError('oldString was not found', 400, 'PATCH_NOT_FOUND');
-    }
-    if (occurrences > 1 && !input.replaceAll) {
+    const hasSingle = Boolean(input.oldString);
+    const hasPatches = Boolean(input.patches?.length);
+    const hasAppend = typeof input.append === 'string' && input.append.length > 0;
+    const modes = [hasSingle, hasPatches, hasAppend].filter(Boolean).length;
+    if (modes !== 1) {
       throw new HttpError(
-        `oldString occurs ${occurrences} times — pass replaceAll: true or narrow oldString to a unique match`,
+        'Provide exactly one of oldString/newString, patches, or append',
         400,
-        'PATCH_AMBIGUOUS',
-        { occurrences }
+        'INVALID_PATCH'
       );
     }
-    const next = input.replaceAll
-      ? current.content.split(input.oldString).join(input.newString)
-      : current.content.replace(input.oldString, input.newString);
+    let next = current.content;
+    if (hasAppend) {
+      next = appendToMarkdown(current.content, input.append!);
+    } else {
+      const patches: EditPatch[] = hasPatches
+        ? input.patches!
+        : [{ oldString: input.oldString!, newString: input.newString ?? '', replaceAll: input.replaceAll }];
+      for (const patch of patches) {
+        if (!patch.oldString) {
+          throw new HttpError('oldString is required', 400, 'INVALID_PATCH');
+        }
+        next = applyOnePatch(next, patch, current.path, current.hash);
+      }
+    }
     const body = await this.pages.putMarkdown(userId, current.id, next, input.hash ?? current.hash);
-    const warnings = await this.checkLinks(userId, tokenId, workspaceId, current.path, next);
+    const tree = await this.loadTree(userId, tokenId, workspaceId);
+    const warnings = this.checkLinks(tree, current.path, next);
     return {
       id: current.id,
       path: current.path,
