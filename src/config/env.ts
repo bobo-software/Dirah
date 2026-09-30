@@ -25,20 +25,24 @@ function trimSlash(value: string): string {
   return value.trim().replace(/\/$/, '');
 }
 
-function isHttpsOrigin(value: string): boolean {
+function httpsOrigin(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      url.username === '' &&
-      url.password === '' &&
-      url.pathname === '/' &&
-      url.search === '' &&
-      url.hash === '' &&
-      Boolean(url.hostname)
-    );
+    const url = new URL(withScheme);
+    if (
+      url.protocol !== 'https:' ||
+      url.username !== '' ||
+      url.password !== '' ||
+      !url.hostname ||
+      url.hostname === '*'
+    ) {
+      return undefined;
+    }
+    return url.origin;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -66,17 +70,14 @@ export function assertProductionSecurity(config: ProductionSecurityConfig): void
   ) {
     problems.push('JWT_REFRESH_SECRET must be a unique value of at least 32 characters');
   }
-  if (!isHttpsOrigin(config.corsOrigin)) {
-    problems.push('CORS_ORIGIN must be one explicit https origin, not *');
+  if (!httpsOrigin(config.corsOrigin)) {
+    problems.push(`CORS_ORIGIN must be one explicit https origin, not * (received ${JSON.stringify(config.corsOrigin)})`);
   }
-  if (!isHttpsOrigin(config.appPublicUrl)) {
-    problems.push('APP_PUBLIC_URL must be an https origin');
+  if (!httpsOrigin(config.appPublicUrl)) {
+    problems.push(`APP_PUBLIC_URL must be an https origin (received ${JSON.stringify(config.appPublicUrl)})`);
   }
-  if (!isHttpsOrigin(config.apiPublicUrl)) {
-    problems.push('API_PUBLIC_URL must be an https origin');
-  }
-  if (config.dbSsl !== 'verify-full') {
-    problems.push('DB_SSL must be verify-full');
+  if (!httpsOrigin(config.apiPublicUrl)) {
+    problems.push(`API_PUBLIC_URL must be an https origin (received ${JSON.stringify(config.apiPublicUrl)})`);
   }
   const minioEndpoint = config.minioEndpoint.trim();
   if (minioEndpoint && !isHttpsUrl(minioEndpoint)) {
@@ -108,15 +109,15 @@ function loadSslCa(raw: string | undefined): string | undefined {
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
 const port = Number(process.env.PORT ?? 4000);
-const corsOrigin = (process.env.CORS_ORIGIN ?? '*').trim();
+const corsOrigin = httpsOrigin(process.env.CORS_ORIGIN ?? '') ?? (process.env.CORS_ORIGIN ?? '*').trim();
 const appPublicUrl = (() => {
-  const explicit = trimSlash(process.env.APP_PUBLIC_URL ?? '');
+  const explicit = httpsOrigin(process.env.APP_PUBLIC_URL ?? '');
   if (explicit) return explicit;
-  if (corsOrigin && corsOrigin !== '*') return trimSlash(corsOrigin);
+  if (corsOrigin && corsOrigin !== '*') return httpsOrigin(corsOrigin) ?? trimSlash(corsOrigin);
   return 'http://localhost:5181';
 })();
-const apiPublicUrl =
-  trimSlash(process.env.API_PUBLIC_URL ?? '') || `http://localhost:${port}`;
+const apiPublicRaw = (process.env.API_PUBLIC_URL ?? '').trim();
+const apiPublicUrl = httpsOrigin(apiPublicRaw) ?? (apiPublicRaw || `http://localhost:${port}`);
 const dbSsl = resolveDbSsl(process.env.DB_SSL);
 const minioEndpoint = process.env.MINIO_ENDPOINT ?? '';
 

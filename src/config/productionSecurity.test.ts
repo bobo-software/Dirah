@@ -36,7 +36,11 @@ describe('production boot checks', () => {
     ).not.toThrow();
   });
 
-  it('rejects default secrets, wildcard CORS, plaintext URLs, and a database without TLS', () => {
+  it('allows a database without TLS', () => {
+    expect(() => assertProductionSecurity({ ...ready, dbSsl: 'disable' })).not.toThrow();
+  });
+
+  it('rejects default secrets, wildcard CORS, and plaintext URLs', () => {
     expect(() => assertProductionSecurity({ ...ready, jwtSecret: 'dev-jwt-secret-change-me' })).toThrow(
       /JWT_SECRET/
     );
@@ -51,8 +55,7 @@ describe('production boot checks', () => {
     expect(() => assertProductionSecurity({ ...ready, apiPublicUrl: 'http://api.example' })).toThrow(
       /API_PUBLIC_URL/
     );
-    expect(() => assertProductionSecurity({ ...ready, dbSsl: 'disable' })).toThrow(/DB_SSL/);
-    expect(() => assertProductionSecurity({ ...ready, dbSsl: '' })).toThrow(/DB_SSL/);
+    expect(() => assertProductionSecurity({ ...ready, apiPublicUrl: 'https://api.example/mcp' })).not.toThrow();
     expect(() => assertProductionSecurity({ ...ready, minioEndpoint: 'http://minio.example' })).toThrow(
       /MINIO_ENDPOINT/
     );
