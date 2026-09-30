@@ -8,6 +8,8 @@ async function main(): Promise<void> {
 
   server.listen(env.port, () => {
     console.log(`Dirah API listening on http://localhost:${env.port}`);
+    console.log(`Database: ${env.db.host}:${env.db.port} ssl=${env.db.sslMode}`);
+    console.log(`Live database: ${env.liveDb.host}:${env.liveDb.port} ssl=${env.liveDb.sslMode}`);
     console.log(`MCP docs at http://localhost:${env.port}/mcp`);
     console.log(`MCP protocol at http://localhost:${env.port}/mcp/protocol`);
     const minioReady =

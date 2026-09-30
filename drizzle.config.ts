@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+const { resolveDatabaseConfig } = require('./src/config/databaseEnv');
+
 interface DBCredentials {
   host: string;
   port: number;
@@ -15,16 +17,19 @@ interface Config {
   dbCredentials: DBCredentials;
 }
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const database = resolveDatabaseConfig(nodeEnv, process.env);
+
 const config: Config = {
   schema: './src/db/schemas/**/*.ts',
   out: './drizzle/migrations',
   dialect: 'postgresql',
   dbCredentials: {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432', 10),
-    user: process.env.DB_USERNAME || 'dirah',
-    password: process.env.DB_PASSWORD || 'dirah',
-    database: process.env.DB_DATABASE || 'dirah',
+    host: database.host,
+    port: database.port,
+    user: database.user,
+    password: database.password,
+    database: database.database,
   },
 };
 

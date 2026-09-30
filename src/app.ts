@@ -2,7 +2,7 @@ import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env';
-import { db, pool } from './db';
+import { db, livePool, pool } from './db';
 import { createApiRouter } from './routes';
 import { getHealth } from './controllers/health.controller';
 import { errorHandler } from './middlewares/errorHandler';
@@ -34,6 +34,7 @@ import { convertBlockPagesIfNeeded } from './convert/convertBlockPages';
 
 export interface CreateAppOptions {
   pgMcpService?: PgMcpService;
+  livePgMcpService?: PgMcpService;
   authService?: AuthService;
   pageService?: PageService;
   blobService?: BlobService;
@@ -141,8 +142,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       pool,
       database: env.db.database,
     });
+  const livePgMcpService =
+    options.livePgMcpService ??
+    new PgMcpService({
+      pool: livePool,
+      database: env.liveDb.database,
+    });
 
-  const mcpHandler = await createDirahMcpExpressHandler({ pg: pgMcpService });
+  const mcpHandler = await createDirahMcpExpressHandler({
+    pg: pgMcpService,
+    livePg: livePgMcpService,
+  });
   app.all('/mcp/protocol', mcpApiKeyMiddleware, mcpHandler);
 
   const docsMcpHandler = await createDocsMcpExpressHandler(docsMcpService);
