@@ -90,6 +90,7 @@ function TokenDetailBody({
   const tokenAccess = useMcpStore((state) => state.tokenAccess);
   const tokenAccessLoading = useMcpStore((state) => state.tokenAccessLoading);
   const updateToken = useMcpStore((state) => state.updateToken);
+  const rotateToken = useMcpStore((state) => state.rotateToken);
   const revokeToken = useMcpStore((state) => state.revokeToken);
   const setTokenAccess = useMcpStore((state) => state.setTokenAccess);
   const rows = tokenAccess[token.id];
@@ -97,6 +98,8 @@ function TokenDetailBody({
   const [name, setName] = useState(token.name);
   const [message, setMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [shownSecret, setShownSecret] = useState<string | null>(secretFromCreation);
+  const [secretNotice, setSecretNotice] = useState('Token created. Copy it now — it will not be shown again.');
 
   const mcpConfigSnippet = useMemo(
     () =>
@@ -159,6 +162,19 @@ function TokenDetailBody({
     }
   }
 
+  async function onRotate() {
+    if (!window.confirm('Replace this token? The current secret will stop working immediately.')) return;
+    try {
+      const rotated = await rotateToken(token.id);
+      setShownSecret(rotated.secret);
+      setSecretNotice('Token replaced. Copy the new secret now — the previous one no longer works, and this one will not be shown again.');
+      setCopied(false);
+      setMessage(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not rotate token');
+    }
+  }
+
   async function onRevoke() {
     if (!window.confirm('Revoke this MCP token?')) return;
     try {
@@ -194,9 +210,9 @@ function TokenDetailBody({
         </p>
       ) : null}
 
-      {secretFromCreation ? (
+      {shownSecret ? (
         <div className="settings-section">
-          <CopyTokenOnce secret={secretFromCreation} onCopied={() => setCopied(true)} />
+          <CopyTokenOnce secret={shownSecret} notice={secretNotice} onCopied={() => setCopied(true)} />
           {copied ? (
             <p className="muted" role="status">
               Token copied. It will not be shown again.
@@ -250,6 +266,9 @@ function TokenDetailBody({
 
       <div className="settings-section">
         <h2>Danger zone</h2>
+        <button type="button" onClick={() => void onRotate()}>
+          Rotate token
+        </button>
         <button type="button" className="danger-btn" onClick={() => void onRevoke()}>
           Revoke token
         </button>

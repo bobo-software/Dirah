@@ -3,6 +3,7 @@ import {
   listMcpTokens,
   createMcpToken,
   updateMcpToken,
+  rotateMcpToken,
   revokeMcpToken,
   listTokenAccess,
   setTokenAccess,
@@ -26,6 +27,7 @@ type McpState = {
     workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>
   ) => Promise<McpToken>;
   updateToken: (id: string, input: { name?: string; defaultWorkspaceId?: string | null }) => Promise<void>;
+  rotateToken: (id: string) => Promise<McpToken & { secret: string }>;
   revokeToken: (id: string) => Promise<void>;
   fetchTokenAccess: (tokenId: string) => Promise<void>;
   setTokenAccess: (tokenId: string, items: Array<{ workspaceId: string; canWrite?: boolean }>) => Promise<void>;
@@ -69,6 +71,16 @@ export const useMcpStore = create<McpState>((set, get) => ({
   updateToken: async (id, input) => {
     await updateMcpToken(token(), id, input);
     await get().fetchAll();
+  },
+
+  rotateToken: async (id) => {
+    const rotated = await rotateMcpToken(token(), id);
+    set((state) => ({
+      tokens: state.tokens.map((item) =>
+        item.id === id ? { ...item, ...rotated, secret: undefined } : item
+      ),
+    }));
+    return rotated;
   },
 
   revokeToken: async (id) => {

@@ -56,6 +56,14 @@ export async function updateMcpToken(
   return data.token;
 }
 
+export async function rotateMcpToken(accessToken: string, id: string): Promise<McpToken & { secret: string }> {
+  const data = await apiRequest<{ token: McpToken & { secret: string } }>(`/api/mcp/tokens/${id}/rotate`, {
+    method: 'POST',
+    accessToken,
+  });
+  return data.token;
+}
+
 export async function revokeMcpToken(accessToken: string, id: string): Promise<void> {
   await apiRequest(`/api/mcp/tokens/${id}`, { method: 'DELETE', accessToken });
 }

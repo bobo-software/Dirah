@@ -3,9 +3,11 @@ import { useState } from 'react';
 export default function CopyTokenOnce({
   secret,
   onCopied,
+  notice = 'Token created. Copy it now — it will not be shown again.',
 }: {
   secret: string;
   onCopied: () => void;
+  notice?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -26,7 +28,7 @@ export default function CopyTokenOnce({
   return (
     <div className="copy-token-once">
       <p className="muted" role="status">
-        Token created. Copy it now — it will not be shown again.
+        {notice}
       </p>
       <button type="button" onClick={() => void copy()} disabled={busy}>
         {busy ? 'Copying…' : 'Copy token'}
