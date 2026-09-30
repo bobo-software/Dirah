@@ -27,7 +27,10 @@ FROM node:26-alpine
 
 # Secrets are injected at start by the CLI. The app never calls Infisical itself.
 # Pin matches the npm package; the preinstall script downloads the platform binary.
-RUN npm install -g @infisical/cli@0.43.138 && npm cache clean --force
+# curl is what the Coolify/Docker healthcheck runs inside the container.
+RUN apk add --no-cache curl \
+  && npm install -g @infisical/cli@0.43.138 \
+  && npm cache clean --force
 
 WORKDIR /app
 
@@ -41,5 +44,10 @@ COPY scripts/infisical-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 4002
+
+# Coolify uses this instruction and ignores a dashboard healthcheck on a Dockerfile app.
+# PORT is the port the process listens on; 4000 matches the app default when it is unset.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl --fail --silent "http://127.0.0.1:${PORT:-4000}/health" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
