@@ -98,6 +98,66 @@ describe('MCP PAT and allowlist API', () => {
       .delete(`/api/mcp/tokens/${tokenId}`)
       .set('Authorization', `Bearer ${ownerToken}`);
     expect(revoked.status).toBe(200);
+
+    const rotatedAfterRevoke = await request(app)
+      .post(`/api/mcp/tokens/${tokenId}/rotate`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(rotatedAfterRevoke.status).toBe(404);
+  });
+
+  it('replaces a token secret and keeps the same access', async () => {
+    if (!dbReady) return;
+
+    const email = `phase6-pat-rotate-${Date.now()}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    const created = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Cursor', defaultWorkspaceId: workspaceId, workspaceAccess: [{ workspaceId, canWrite: true }] });
+    expect(created.status).toBe(201);
+    const tokenId = created.body.data.token.id as string;
+    const oldSecret = created.body.data.token.secret as string;
+
+    const rotated = await request(app)
+      .post(`/api/mcp/tokens/${tokenId}/rotate`)
+      .set('Authorization', `Bearer ${jwt}`);
+    expect(rotated.status).toBe(200);
+    const newSecret = rotated.body.data.token.secret as string;
+    expect(rotated.body.data.token.id).toBe(tokenId);
+    expect(rotated.body.data.token.name).toBe('Cursor');
+    expect(rotated.body.data.token.defaultWorkspaceId).toBe(workspaceId);
+    expect(rotated.body.data.token.lastUsedAt).toBeNull();
+    expect(newSecret.startsWith('dirah_mcp_')).toBe(true);
+    expect(newSecret).not.toBe(oldSecret);
+    expect(rotated.body.data.token.tokenPrefix).toBe(newSecret.slice(0, 16));
+
+    const access = await request(app)
+      .get(`/api/mcp/tokens/${tokenId}/access`)
+      .set('Authorization', `Bearer ${jwt}`);
+    const row = access.body.data.workspaces.find(
+      (item: { workspaceId: string }) => item.workspaceId === workspaceId
+    );
+    expect(row.allowlisted).toBe(true);
+    expect(row.canWrite).toBe(true);
+
+    const stale = await request(app)
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Authorization', `Bearer ${oldSecret}`)
+      .send({ jsonrpc: '2.0', id: 1, method: 'ping' });
+    expect(stale.status).toBe(401);
+
+    const fresh = await request(app)
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Authorization', `Bearer ${newSecret}`)
+      .send({ jsonrpc: '2.0', id: 1, method: 'ping' });
+    expect(fresh.status).not.toBe(401);
   });
 
   it('owner can disable MCP for a workspace', async () => {

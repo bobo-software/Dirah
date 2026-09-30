@@ -223,6 +223,44 @@ export class McpTokenService {
     return row;
   }
 
+  async rotateToken(userId: string, tokenId: string): Promise<PublicMcpToken & { secret: string }> {
+    const [existing] = await this.database
+      .select({
+        id: mcpTokens.id,
+        revokedAt: mcpTokens.revokedAt,
+        oauthClientId: mcpTokens.oauthClientId,
+      })
+      .from(mcpTokens)
+      .where(and(eq(mcpTokens.id, tokenId), eq(mcpTokens.userId, userId)))
+      .limit(1);
+    if (!existing || existing.revokedAt) {
+      throw new HttpError('Token not found', 404, 'TOKEN_NOT_FOUND');
+    }
+    if (existing.oauthClientId) {
+      throw new HttpError('OAuth tokens cannot be rotated', 409, 'OAUTH_TOKEN');
+    }
+
+    const secret = TOKEN_PREFIX + crypto.randomBytes(24).toString('base64url');
+    const [row] = await this.database
+      .update(mcpTokens)
+      .set({
+        tokenHash: hashToken(secret),
+        tokenPrefix: secret.slice(0, 16),
+        lastUsedAt: null,
+      })
+      .where(eq(mcpTokens.id, tokenId))
+      .returning({
+        id: mcpTokens.id,
+        name: mcpTokens.name,
+        tokenPrefix: mcpTokens.tokenPrefix,
+        defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
+        createdAt: mcpTokens.createdAt,
+        lastUsedAt: mcpTokens.lastUsedAt,
+        revokedAt: mcpTokens.revokedAt,
+      });
+    return { ...row, secret };
+  }
+
   async revokeToken(userId: string, tokenId: string): Promise<void> {
     const [row] = await this.database
       .select({ id: mcpTokens.id })
