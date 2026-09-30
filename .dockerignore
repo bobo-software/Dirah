@@ -3,6 +3,7 @@ npm-debug.log
 dist
 build
 .env
+.infisical.json
 Dockerfile
 .git
 .gitignore
