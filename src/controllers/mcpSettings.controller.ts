@@ -65,6 +65,15 @@ export function createMcpSettingsController(tokens: McpTokenService) {
       return ResponseUtils.success(res, 'Token updated', { token });
     }),
 
+    rotateToken: asyncHandler(async (req: Request, res: Response) => {
+      const id = req.params.id;
+      if (!tokenIdSchema.safeParse(id).success) {
+        return ResponseUtils.error(res, 'Token not found', null, 404);
+      }
+      const token = await tokens.rotateToken(req.user!.userId, id);
+      return ResponseUtils.success(res, 'Token rotated', { token });
+    }),
+
     revokeToken: asyncHandler(async (req: Request, res: Response) => {
       const id = req.params.id;
       if (!tokenIdSchema.safeParse(id).success) {
