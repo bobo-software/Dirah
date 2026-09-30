@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { env } from '../config/env';
 import { getMcpConfig } from '../config/mcp';
+import { postgresSslOptions } from './postgresSsl';
 import * as schema from './schemas';
 
 export const pool = new Pool({
@@ -12,13 +13,7 @@ export const pool = new Pool({
   database: env.db.database,
   max: getMcpConfig().poolLimit,
   connectionTimeoutMillis: 5_000,
-  ssl:
-    env.db.sslMode === 'disable'
-      ? false
-      : {
-          rejectUnauthorized: true,
-          ...(env.db.sslCa ? { ca: env.db.sslCa } : {}),
-        },
+  ssl: env.db.sslMode === 'disable' ? false : postgresSslOptions(env.db.host, env.db.sslCa),
 });
 
 export const db = drizzle(pool, { schema });

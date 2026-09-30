@@ -147,7 +147,7 @@ export const env = {
     model: process.env.AI_MODEL ?? 'gpt-4o-mini',
   },
   db: {
-    host: process.env.DB_HOST ?? 'localhost',
+    host: (process.env.DB_HOST ?? '').trim() || 'localhost',
     port: Number(process.env.DB_PORT ?? 5432),
     user: process.env.DB_USERNAME ?? 'dirah',
     password: process.env.DB_PASSWORD ?? 'dirah',
