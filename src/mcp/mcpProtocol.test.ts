@@ -142,12 +142,15 @@ async function mcpPost(
 describe('MCP protocol endpoint', () => {
   let app: Express;
   let service: PgMcpService;
+  let liveService: PgMcpService;
 
   beforeAll(async () => {
     process.env.MCP_API_KEY = API_KEY;
     service = mockService();
+    liveService = mockService();
     app = await createApp({
       pgMcpService: service,
+      livePgMcpService: liveService,
     });
   });
 
@@ -231,6 +234,7 @@ describe('MCP protocol endpoint', () => {
     };
     const uris = (result.resources ?? []).map((resource) => resource.uri);
     expect(uris).toContain('postgres://schema');
+    expect(uris).toContain('postgres://schema/live');
   });
 
   it('calls pg_list_tables', async () => {
@@ -255,6 +259,31 @@ describe('MCP protocol endpoint', () => {
     const payload = JSON.parse(result.content?.[0]?.text ?? '{}') as McpToolResult;
     expect(payload.success).toBe(true);
     expect(service.listTables).toHaveBeenCalled();
+    expect(liveService.listTables).not.toHaveBeenCalled();
+  });
+
+  it('calls pg_list_tables on the live database when target is live', async () => {
+    const res = await mcpPost(
+      app,
+      {
+        jsonrpc: '2.0',
+        id: 41,
+        method: 'tools/call',
+        params: { name: 'pg_list_tables', arguments: { target: 'live' } },
+      },
+      { Authorization: `Bearer ${API_KEY}` }
+    );
+
+    expect(res.status).toBe(200);
+    const body = parseMcpBody(res.body?.result ? res.body : res.text);
+    const result = (body.result ?? body) as {
+      content?: Array<{ text?: string }>;
+      isError?: boolean;
+    };
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(result.content?.[0]?.text ?? '{}') as McpToolResult;
+    expect(payload.success).toBe(true);
+    expect(liveService.listTables).toHaveBeenCalled();
   });
 
   it('rejects unconfirmed writes via tool call', async () => {

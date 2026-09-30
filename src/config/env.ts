@@ -1,14 +1,15 @@
 import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveDatabaseConfig, resolveLiveDatabaseConfig } from './databaseEnv';
 
 dotenv.config();
+
+export type { DbSslMode } from './databaseEnv';
 
 const DEFAULT_JWT_SECRET = 'dev-jwt-secret-change-me';
 const DEFAULT_JWT_REFRESH_SECRET = 'dev-jwt-refresh-secret-change-me';
 const MIN_SECRET_LENGTH = 32;
-
-export type DbSslMode = 'disable' | 'verify-full';
 
 export type ProductionSecurityConfig = {
   nodeEnv: string;
@@ -89,13 +90,6 @@ export function assertProductionSecurity(config: ProductionSecurityConfig): void
   }
 }
 
-function resolveDbSsl(raw: string | undefined): DbSslMode {
-  const value = (raw ?? '').trim().toLowerCase();
-  if (value === 'verify-full') return 'verify-full';
-  if (value === '' || value === 'disable') return 'disable';
-  throw new Error('DB_SSL must be "disable" or "verify-full"');
-}
-
 function loadSslCa(raw: string | undefined): string | undefined {
   const value = (raw ?? '').trim();
   if (!value) return undefined;
@@ -118,7 +112,8 @@ const appPublicUrl = (() => {
 })();
 const apiPublicRaw = (process.env.API_PUBLIC_URL ?? '').trim();
 const apiPublicUrl = httpsOrigin(apiPublicRaw) ?? (apiPublicRaw || `http://localhost:${port}`);
-const dbSsl = resolveDbSsl(process.env.DB_SSL);
+const database = resolveDatabaseConfig(nodeEnv, process.env);
+const liveDatabase = resolveLiveDatabaseConfig(process.env);
 const minioEndpoint = process.env.MINIO_ENDPOINT ?? '';
 
 export const env = {
@@ -147,13 +142,12 @@ export const env = {
     model: process.env.AI_MODEL ?? 'gpt-4o-mini',
   },
   db: {
-    host: (process.env.DB_HOST ?? '').trim() || 'localhost',
-    port: Number(process.env.DB_PORT ?? 5432),
-    user: process.env.DB_USERNAME ?? 'dirah',
-    password: process.env.DB_PASSWORD ?? 'dirah',
-    database: process.env.DB_DATABASE ?? 'dirah',
-    sslMode: dbSsl,
-    sslCa: dbSsl === 'verify-full' ? loadSslCa(process.env.DB_SSL_CA) : undefined,
+    ...database,
+    sslCa: database.sslMode === 'verify-full' ? loadSslCa(process.env.DB_SSL_CA) : undefined,
+  },
+  liveDb: {
+    ...liveDatabase,
+    sslCa: liveDatabase.sslMode === 'verify-full' ? loadSslCa(process.env.DB_SSL_CA) : undefined,
   },
   minio: {
     endpoint: minioEndpoint,

@@ -4,6 +4,7 @@ import { registerPgTools, type PgMcpServerHost } from './registerPgTools';
 
 export interface DirahMcpHandlerOptions {
   pg: PgMcpService;
+  livePg?: PgMcpService;
 }
 
 /**
@@ -25,7 +26,7 @@ export async function createDirahMcpExpressHandler(
         version: '1.0.0',
       });
       const host = server as unknown as PgMcpServerHost;
-      registerPgTools(host, options.pg);
+      registerPgTools(host, { local: options.pg, live: options.livePg ?? options.pg });
       return server;
     },
     {

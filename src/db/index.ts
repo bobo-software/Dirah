@@ -5,16 +5,21 @@ import { getMcpConfig } from '../config/mcp';
 import { postgresSslOptions } from './postgresSsl';
 import * as schema from './schemas';
 
-export const pool = new Pool({
-  host: env.db.host,
-  port: env.db.port,
-  user: env.db.user,
-  password: env.db.password,
-  database: env.db.database,
-  max: getMcpConfig().poolLimit,
-  connectionTimeoutMillis: 5_000,
-  ssl: env.db.sslMode === 'disable' ? false : postgresSslOptions(env.db.host, env.db.sslCa),
-});
+function createPool(database: typeof env.db): Pool {
+  return new Pool({
+    host: database.host,
+    port: database.port,
+    user: database.user,
+    password: database.password,
+    database: database.database,
+    max: getMcpConfig().poolLimit,
+    connectionTimeoutMillis: 5_000,
+    ssl: database.sslMode === 'disable' ? false : postgresSslOptions(database.host, database.sslCa),
+  });
+}
+
+export const pool = createPool(env.db);
+export const livePool = createPool(env.liveDb);
 
 export const db = drizzle(pool, { schema });
 export { schema };
