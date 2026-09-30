@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
@@ -8,7 +8,9 @@ import { useOutletContext, useParams } from 'react-router-dom';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { pageKind } from './pageKind';
 import { AskPanel } from './AskPanel';
+import { provisionAccount, useEncryptionStore } from '../crypto/workspaceCrypto';
 import { useTheme } from '../theme/ThemeContext';
+import { useWorkspaceStore } from '../stores/data/workspaceStore';
 import {
   EMPTY_PAGES,
   useAiStatusStore,
@@ -38,6 +40,13 @@ export function MarkdownEditorPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [askOpen, setAskOpen] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const encrypted = useWorkspaceStore((state) =>
+    state.workspaces.some((workspace) => workspace.id === workspaceId && workspace.encrypted)
+  );
+  const unlocked = useEncryptionStore((state) => state.unlocked);
+  const locking = useEncryptionStore((state) => state.lockingWorkspaceId === workspaceId);
   const timer = useRef<number | null>(null);
   const hashRef = useRef<string | undefined>(undefined);
   const contentRef = useRef(content);
@@ -54,17 +63,33 @@ export function MarkdownEditorPage() {
   }, [pageId, loadContent]);
 
   useEffect(() => {
+    if (locking || (encrypted && !unlocked)) return;
     void load().catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : 'Could not load markdown');
     });
-  }, [load]);
+  }, [load, locking, encrypted, unlocked]);
 
   useEffect(() => {
     void fetchAiStatus();
   }, [fetchAiStatus]);
 
+  async function onUnlock(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken) return;
+    setUnlocking(true);
+    setMessage(null);
+    try {
+      await provisionAccount(accessToken, unlockPassword);
+      setUnlockPassword('');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not unlock pages');
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   async function save(next = content) {
-    if (!pageId || !editable) return;
+    if (!pageId || !editable || locking) return;
     setSaving(true);
     try {
       const entry = await saveContent(pageId, next, hashRef.current);
@@ -82,7 +107,7 @@ export function MarkdownEditorPage() {
   function onChange(value: string) {
     setContent(value);
     setDirty(true);
-    if (!editable) return;
+    if (!editable || locking) return;
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       void save(value);
@@ -112,6 +137,37 @@ export function MarkdownEditorPage() {
     return <p className="muted">This is not a markdown document.</p>;
   }
 
+  if (locking) {
+    return <p className="muted">Encrypting pages…</p>;
+  }
+
+  if (encrypted && !unlocked) {
+    return (
+      <form className="auth-card" onSubmit={(event) => void onUnlock(event)}>
+        <h1>Unlock encrypted pages</h1>
+        <p className="muted">Enter your password to decrypt pages in this tab. It is not stored.</p>
+        <label>
+          Password
+          <input
+            type="password"
+            value={unlockPassword}
+            onChange={(event) => setUnlockPassword(event.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </label>
+        {message ? (
+          <p className="error" role="alert">
+            {message}
+          </p>
+        ) : null}
+        <button type="submit" disabled={unlocking}>
+          {unlocking ? 'Unlocking…' : 'Unlock'}
+        </button>
+      </form>
+    );
+  }
+
   return (
     <>
       <div className="editor-toolbar">
@@ -135,7 +191,7 @@ export function MarkdownEditorPage() {
         ) : (
           <span className="muted">View only</span>
         )}
-        {accessToken && aiEnabled ? (
+        {accessToken && aiEnabled && !encrypted ? (
           <button
             type="button"
             className={`linkish${askOpen ? ' on' : ''}`}

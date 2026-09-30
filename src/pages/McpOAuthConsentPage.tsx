@@ -36,7 +36,7 @@ export function McpOAuthConsentPage() {
 
   return (
     <section className="settings-page">
-      <h1>Connect Dira MCP</h1>
+      <h1>Connect Dirah MCP</h1>
       <p className="muted">An MCP client wants to access markdown docs in workspaces you allowlist.</p>
       <p>
         Client: <code>{clientId || 'unknown'}</code>

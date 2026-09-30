@@ -46,7 +46,7 @@ export function AdminLoginPage() {
       <div className="auth-card-corner">
         <ThemeToggle />
       </div>
-      <h1 className="auth-brand" aria-label="Dira">
+      <h1 className="auth-brand" aria-label="Dirah">
         <Logo size="lg" decorative />
       </h1>
       <p className="muted">System admin sign in</p>

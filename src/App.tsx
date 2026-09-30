@@ -12,7 +12,11 @@ import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminEmailsPage } from './pages/admin/AdminEmailsPage';
 import { AdminRequestLogsPage } from './pages/admin/AdminRequestLogsPage';
-import { HomeRedirect, SettingsRedirect } from './components/ComponentsIndex';
+import { SettingsRedirect } from './components/ComponentsIndex';
+import { HomeGate } from './pages/HomePage';
+import { PrivacyPage } from './pages/legal/PrivacyPage';
+import { TermsPage } from './pages/legal/TermsPage';
+import { CookiesPage } from './pages/legal/CookiesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { McpTokenDetailPage } from './pages/McpTokenDetailPage';
 import { McpTokenCreatePage } from './pages/McpTokenCreatePage';
@@ -47,8 +51,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<HomeGate />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/cookies" element={<CookiesPage />} />
         <Route path="/invite/:token" element={<InvitePage />} />
         <Route path="/oauth" element={<OAuthCatchPage />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -70,7 +78,6 @@ export default function App() {
         />
         <Route element={<RequireAuth />}>
           <Route element={<AppFrame />}>
-            <Route path="/" element={<HomeRedirect />} />
             <Route path="/settings" element={<SettingsRedirect />} />
             <Route path="/settings/mcp-oauth" element={<McpOAuthConsentPage />} />
             <Route path="/w/:workspaceId" element={<WorkspaceShellPage />}>

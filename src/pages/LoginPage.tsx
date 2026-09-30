@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
 import { OAuthButtons } from './OAuthButtons';
-import { Logo } from '../components/Logo';
+import { BrandLink } from '../components/Logo';
 import { ThemeToggle } from '../components/ThemeToggle';
 
 export function LoginPage() {
@@ -43,8 +43,8 @@ export function LoginPage() {
       <div className="auth-card-corner">
         <ThemeToggle />
       </div>
-      <h1 className="auth-brand" aria-label="Dira">
-        <Logo size="lg" decorative />
+      <h1 className="auth-brand">
+        <BrandLink to="/" size="lg" />
       </h1>
       <p className="muted">Sign in to your workspace</p>
       <OAuthButtons />

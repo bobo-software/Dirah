@@ -118,7 +118,7 @@ export function InvitePage() {
 
       {!user && preview.accountExists ? (
         <>
-          <p className="muted">You already have a Dira account. Sign in to accept this invite.</p>
+          <p className="muted">You already have a Dirah account. Sign in to accept this invite.</p>
           <p>
             <Link to="/login" state={{ from: invitePath }}>
               Log in to continue

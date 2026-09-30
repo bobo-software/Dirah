@@ -90,17 +90,17 @@ export async function adminLogin(email: string, password: string) {
   });
 }
 
-export async function adminRefresh(refreshToken: string) {
+export async function adminRefresh(legacyRefreshToken?: string) {
   return apiRequest<{ tokens: AuthTokens }>('/api/admin/auth/refresh', {
     method: 'POST',
-    body: JSON.stringify({ refreshToken }),
+    body: JSON.stringify(legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {}),
   });
 }
 
-export async function adminLogout(refreshToken: string) {
+export async function adminLogout() {
   return apiRequest('/api/admin/auth/logout', {
     method: 'POST',
-    body: JSON.stringify({ refreshToken }),
+    body: JSON.stringify({}),
   });
 }
 

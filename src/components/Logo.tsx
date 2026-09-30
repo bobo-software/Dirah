@@ -11,7 +11,7 @@ export function Logo({
 }) {
   return (
     <span className={`logo logo-${size}`} aria-hidden={decorative ? true : undefined} translate="no">
-      DIRA
+      DIRAH
     </span>
   );
 }
@@ -24,7 +24,7 @@ export function BrandLink({
   size?: LogoSize;
 }) {
   return (
-    <Link to={to} className="brand" aria-label="Dira home">
+    <Link to={to} className="brand" aria-label="Dirah home">
       <Logo size={size} decorative />
     </Link>
   );

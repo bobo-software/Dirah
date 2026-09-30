@@ -103,7 +103,7 @@ function TokenDetailBody({
       JSON.stringify(
         {
           mcpServers: {
-            dira: {
+            dirah: {
               url: `${API_URL}/mcp`,
               headers: { Authorization: `Bearer ${token.tokenPrefix}…` },
             },
@@ -174,7 +174,7 @@ function TokenDetailBody({
     allowlisted.find((row) => row.workspaceId === token.defaultWorkspaceId) ??
     (allowlisted.length === 1 ? allowlisted[0] : undefined);
   const snippet = snippetWorkspace
-    ? `Canonical docs: Dira workspace \`${snippetWorkspace.slug}\`. Call dira_guide, then search_docs before inventing APIs or duplicating existing docs.`
+    ? `Canonical docs: Dirah workspace \`${snippetWorkspace.slug}\`. Call dirah_guide, then search_docs before inventing APIs or duplicating existing docs.`
     : null;
 
   return (

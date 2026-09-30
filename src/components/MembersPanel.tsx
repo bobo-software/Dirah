@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { EMPTY_INVITES, EMPTY_MEMBERS, useMembersStore } from '../stores/StoresIndex';
+import { encryptWorkspace, isUnlocked, provisionAccount, syncMemberKeys, useEncryptionStore } from '../crypto/workspaceCrypto';
+import { EMPTY_INVITES, EMPTY_MEMBERS, useAuthStore, useMarkdownContentStore, useMembersStore, useWorkspaceStore } from '../stores/StoresIndex';
 
 export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
   const members = useMembersStore((state) => state.byWorkspace[workspaceId]?.members ?? EMPTY_MEMBERS);
@@ -14,12 +15,25 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [passphrase, setPassphrase] = useState('');
+  const [sealError, setSealError] = useState<string | null>(null);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const workspace = useWorkspaceStore((state) => state.workspaces.find((item) => item.id === workspaceId));
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const unlocked = useEncryptionStore((state) => state.unlocked);
+  const locking = useEncryptionStore((state) => state.lockingWorkspaceId === workspaceId);
+  const encrypted = Boolean(workspace?.encrypted);
 
   useEffect(() => {
     void fetchMembers(workspaceId).catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : 'Could not load members');
     });
   }, [workspaceId, fetchMembers]);
+
+  useEffect(() => {
+    if (!accessToken || !encrypted || !unlocked) return;
+    void syncMemberKeys(accessToken, workspaceId).catch(() => undefined);
+  }, [accessToken, encrypted, unlocked, workspaceId, members]);
 
   async function copyUrl(url: string) {
     try {
@@ -29,6 +43,30 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
     } catch {
       setCopiedUrl(url);
       setMessage('Copy the invite link below.');
+    }
+  }
+
+  async function onEncrypt(password?: string) {
+    if (!accessToken) return;
+    setBusy(true);
+    setSealError(null);
+    setMessage(null);
+    try {
+      if (!isUnlocked()) {
+        if (!password) {
+          setSealError('Enter your password to encrypt pages.');
+          return;
+        }
+        await provisionAccount(accessToken, password);
+      }
+      await encryptWorkspace(accessToken, workspaceId);
+      useMarkdownContentStore.getState().clearAll();
+      await setActiveWorkspace(workspaceId);
+      setPassphrase('');
+    } catch (error) {
+      setSealError(error instanceof Error ? error.message : 'Could not encrypt pages');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -55,6 +93,41 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
       <div className="settings-section-head">
         <h2>Members</h2>
       </div>
+      {encrypted && !sealError ? (
+        <p className="muted">Pages are encrypted. Search, Ask, and public share are off for this workspace.</p>
+      ) : (
+        <form
+          className="invite-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onEncrypt(isUnlocked() ? undefined : passphrase);
+          }}
+        >
+          <p className="muted">
+            Encrypt page bodies in this browser. This cannot be turned off. Titles stay visible.
+          </p>
+          {encrypted ? <p className="muted">Finish sealing pages that are still plaintext.</p> : null}
+          {!unlocked ? (
+            <input
+              type="password"
+              value={passphrase}
+              onChange={(event) => setPassphrase(event.target.value)}
+              placeholder="Account password"
+              aria-label="Password to encrypt pages"
+              autoComplete="current-password"
+              required
+            />
+          ) : null}
+          <button type="submit" disabled={busy || locking}>
+            {locking || busy ? 'Encrypting pages…' : encrypted ? 'Finish encrypting pages' : 'Encrypt pages'}
+          </button>
+          {sealError ? (
+            <p className="error" role="alert">
+              {sealError}
+            </p>
+          ) : null}
+        </form>
+      )}
       <ul className="member-list">
         {members.map((member) => (
           <li key={member.userId}>

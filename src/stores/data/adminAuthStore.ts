@@ -1,14 +1,7 @@
 import { create } from 'zustand';
-import type { AuthTokens } from '../../api/client';
-import {
-  adminLogin,
-  adminLogout,
-  adminMe,
-  adminRefresh,
-  type PublicSystemAdmin,
-} from '../../api/admin';
+import { adminLogin, adminLogout, adminMe, adminRefresh, type PublicSystemAdmin } from '../../api/admin';
 
-export const ADMIN_REFRESH_KEY = 'dira.admin.refreshToken';
+export const ADMIN_REFRESH_KEY = 'dirah.admin.refreshToken';
 
 type AdminAuthState = {
   admin: PublicSystemAdmin | null;
@@ -22,10 +15,15 @@ type AdminAuthState = {
 
 let initPromise: Promise<void> | null = null;
 
-async function applyTokens(tokens: AuthTokens, set: (partial: Partial<AdminAuthState>) => void) {
-  set({ accessToken: tokens.accessToken });
-  localStorage.setItem(ADMIN_REFRESH_KEY, tokens.refreshToken);
-  const { admin } = await adminMe(tokens.accessToken);
+function takeLegacyRefresh(): string | null {
+  const existing = localStorage.getItem(ADMIN_REFRESH_KEY);
+  if (existing) localStorage.removeItem(ADMIN_REFRESH_KEY);
+  return existing;
+}
+
+async function applyAccess(accessToken: string, set: (partial: Partial<AdminAuthState>) => void) {
+  set({ accessToken });
+  const { admin } = await adminMe(accessToken);
   set({ admin });
 }
 
@@ -38,16 +36,11 @@ export const useAdminAuthStore = create<AdminAuthState>((set) => ({
   initAdminAuth: () => {
     if (!initPromise) {
       initPromise = (async () => {
-        const existing = localStorage.getItem(ADMIN_REFRESH_KEY);
-        if (!existing) {
-          set({ ready: true });
-          return;
-        }
+        const legacy = takeLegacyRefresh();
         try {
-          const { tokens } = await adminRefresh(existing);
-          await applyTokens(tokens, set);
+          const { tokens } = await adminRefresh(legacy ?? undefined);
+          await applyAccess(tokens.accessToken, set);
         } catch {
-          localStorage.removeItem(ADMIN_REFRESH_KEY);
           set({ admin: null, accessToken: null });
         } finally {
           set({ ready: true });
@@ -60,15 +53,13 @@ export const useAdminAuthStore = create<AdminAuthState>((set) => ({
   login: async (email, password) => {
     set({ error: null });
     const data = await adminLogin(email, password);
-    await applyTokens(data.tokens, set);
+    localStorage.removeItem(ADMIN_REFRESH_KEY);
+    await applyAccess(data.tokens.accessToken, set);
   },
 
   logout: async () => {
-    const refreshToken = localStorage.getItem(ADMIN_REFRESH_KEY);
     try {
-      if (refreshToken) {
-        await adminLogout(refreshToken);
-      }
+      await adminLogout();
     } finally {
       localStorage.removeItem(ADMIN_REFRESH_KEY);
       set({ accessToken: null, admin: null });

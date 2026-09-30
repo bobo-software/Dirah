@@ -30,7 +30,6 @@ export type PublicPage = {
 
 export type AuthTokens = {
   accessToken: string;
-  refreshToken: string;
 };
 
 export type ApiSuccess<T> = {
@@ -56,6 +55,7 @@ export async function apiRequest<T>(
   const { accessToken, headers, ...rest } = options;
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),

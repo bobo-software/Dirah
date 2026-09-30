@@ -15,7 +15,7 @@ export const useEditorViewStore = create<EditorViewState>()(
       setShowSource: (value) => set({ showSource: value }),
     }),
     {
-      name: 'dira.editorShowSource',
+      name: 'dirah.editorShowSource',
       storage: createJSONStorage(() => localStorage),
     }
   )

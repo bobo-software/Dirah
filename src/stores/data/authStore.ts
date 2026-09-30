@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { apiRequest, type AuthTokens, type PublicUser, type PublicWorkspace } from '../../api/client';
+import { clearCryptoSession, provisionAccount } from '../../crypto/workspaceCrypto';
+import { useMarkdownContentStore } from './markdownContentStore';
 import { useWorkspaceStore } from './workspaceStore';
 import { usePageStore } from './pageStore';
 
-export const REFRESH_KEY = 'dira.refreshToken';
+export const REFRESH_KEY = 'dirah.refreshToken';
 
 type AuthState = {
   user: PublicUser | null;
@@ -20,13 +22,31 @@ type AuthState = {
 
 let initPromise: Promise<void> | null = null;
 
-async function applyTokens(tokens: AuthTokens, set: (partial: Partial<AuthState>) => void) {
-  set({ accessToken: tokens.accessToken });
-  localStorage.setItem(REFRESH_KEY, tokens.refreshToken);
-  const { user } = await apiRequest<{ user: PublicUser }>('/api/auth/me', {
-    accessToken: tokens.accessToken,
-  });
+function takeLegacyRefresh(): string | null {
+  const existing = localStorage.getItem(REFRESH_KEY);
+  if (existing) localStorage.removeItem(REFRESH_KEY);
+  return existing;
+}
+
+async function unlockWithPassword(accessToken: string, password: string) {
+  try {
+    await provisionAccount(accessToken, password);
+  } catch {
+    clearCryptoSession();
+  }
+}
+
+async function applyAccess(accessToken: string, set: (partial: Partial<AuthState>) => void) {
+  set({ accessToken });
+  const { user } = await apiRequest<{ user: PublicUser }>('/api/auth/me', { accessToken });
   set({ user });
+}
+
+async function refreshSession(legacyRefreshToken: string | null) {
+  return apiRequest<{ tokens: AuthTokens }>('/api/auth/refresh', {
+    method: 'POST',
+    body: JSON.stringify(legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {}),
+  });
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -38,19 +58,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initAuth: () => {
     if (!initPromise) {
       initPromise = (async () => {
-        const existing = localStorage.getItem(REFRESH_KEY);
-        if (!existing) {
-          set({ ready: true });
-          return;
-        }
+        const legacy = takeLegacyRefresh();
         try {
-          const { tokens } = await apiRequest<{ tokens: AuthTokens }>('/api/auth/refresh', {
-            method: 'POST',
-            body: JSON.stringify({ refreshToken: existing }),
-          });
-          await applyTokens(tokens, set);
+          const { tokens } = await refreshSession(legacy);
+          await applyAccess(tokens.accessToken, set);
         } catch {
-          localStorage.removeItem(REFRESH_KEY);
           set({ user: null, accessToken: null });
         } finally {
           set({ ready: true });
@@ -66,8 +78,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       '/api/auth/register',
       { method: 'POST', body: JSON.stringify({ email, password }) }
     );
+    localStorage.removeItem(REFRESH_KEY);
     set({ accessToken: data.tokens.accessToken, user: data.user });
-    localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
+    await unlockWithPassword(data.tokens.accessToken, password);
     return data.workspace;
   },
 
@@ -77,8 +90,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       `/api/invites/${token}/accept`,
       { method: 'POST', body: JSON.stringify({ password }) }
     );
+    localStorage.removeItem(REFRESH_KEY);
     set({ accessToken: data.tokens.accessToken, user: data.user });
-    localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
+    await unlockWithPassword(data.tokens.accessToken, password);
     return data.workspace;
   },
 
@@ -100,20 +114,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    await applyTokens(data.tokens, set);
+    localStorage.removeItem(REFRESH_KEY);
+    await applyAccess(data.tokens.accessToken, set);
+    await unlockWithPassword(data.tokens.accessToken, password);
   },
 
   logout: async () => {
-    const refreshToken = localStorage.getItem(REFRESH_KEY);
     try {
-      if (refreshToken) {
-        await apiRequest('/api/auth/logout', {
-          method: 'POST',
-          body: JSON.stringify({ refreshToken }),
-        });
-      }
+      await apiRequest('/api/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
     } finally {
       localStorage.removeItem(REFRESH_KEY);
+      clearCryptoSession();
+      useMarkdownContentStore.getState().clearAll();
       set({ accessToken: null, user: null });
       useWorkspaceStore.getState().reset();
       usePageStore.getState().reset();

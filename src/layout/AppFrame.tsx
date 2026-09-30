@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore, useWorkspaceStore } from '../stores/StoresIndex';
 import { BrandLink } from '../components/Logo';
@@ -51,6 +51,7 @@ function TopbarWorkspaceSwitcher() {
             {initial}
           </span>
           <span className="workspace-switcher-name">{workspace?.name ?? 'Workspaces'}</span>
+          {workspace?.encrypted ? <span className="kind-chip">Encrypted</span> : null}
           <span className="workspace-switcher-caret" aria-hidden="true" />
         </button>
       ) : (
@@ -89,7 +90,7 @@ function TopbarWorkspaceSwitcher() {
   );
 }
 
-export function AppFrame() {
+export function AppFrame({ children }: { children?: ReactNode }) {
   return (
     <div className="app">
       <header className="topbar">
@@ -99,7 +100,7 @@ export function AppFrame() {
           <ProfileMenu />
         </div>
       </header>
-      <Outlet />
+      {children ?? <Outlet />}
     </div>
   );
 }

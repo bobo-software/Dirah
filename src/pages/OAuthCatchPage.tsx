@@ -1,17 +1,25 @@
-import { useLayoutEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { REFRESH_KEY } from '../stores/StoresIndex';
+import { useEffect, useLayoutEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { REFRESH_KEY, useAuthStore } from '../stores/StoresIndex';
 import { Logo } from '../components/Logo';
 
 export function OAuthCatchPage() {
+  const navigate = useNavigate();
+
   useLayoutEffect(() => {
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const refresh = params.get('refreshToken');
     if (refresh) {
       localStorage.setItem(REFRESH_KEY, refresh);
-      window.location.replace('/');
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
   }, []);
+
+  useEffect(() => {
+    void useAuthStore.getState().initAuth().finally(() => {
+      navigate('/', { replace: true });
+    });
+  }, [navigate]);
 
   return (
     <main className="auth-card">

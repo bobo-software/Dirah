@@ -188,7 +188,7 @@ export function SettingsPage() {
           {activeTab === 'appearance' ? (
             <div className="settings-section">
               <h2>Appearance</h2>
-              <p className="muted">Choose how Dira looks on this device.</p>
+              <p className="muted">Choose how Dirah looks on this device.</p>
               <div className="theme-segmented settings-theme-segmented" role="group" aria-label="Theme">
                 {THEME_OPTIONS.map((option) => (
                   <button

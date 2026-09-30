@@ -9,7 +9,7 @@ export const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: 'Dark' },
 ];
 
-const STORAGE_KEY = 'dira.theme';
+const STORAGE_KEY = 'dirah.theme';
 
 type ThemeState = {
   preference: ThemePreference;
