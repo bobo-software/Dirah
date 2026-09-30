@@ -17,7 +17,7 @@ export async function createDocsMcpExpressHandler(service: DocsMcpService): Prom
       const auth = currentDocsAuth();
       const guide = await service.buildGuide(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
       const server = new McpServer(
-        { name: 'dira-docs', version: '1.0.0' },
+        { name: 'dirah-docs', version: '1.0.0' },
         { instructions: buildDynamicInstructions(guide) } as { instructions?: string }
       );
       registerDocsTools(server as unknown as PgMcpServerHost, service);

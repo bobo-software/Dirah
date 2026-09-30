@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { userCrypto, workspaceMemberKeys, workspaceMembers, workspaces } from '../db/schemas';
+import { pages, userCrypto, workspaceMemberKeys, workspaceMembers, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { type AuthService, type Database } from './AuthService';
 
@@ -94,6 +94,31 @@ export class CryptoService {
         hasDek: dekByUser.has(row.userId),
       })),
     };
+  }
+
+  async enable(actorId: string, workspaceId: string, wrappedDek: string): Promise<void> {
+    const workspace = await this.auth.requireWorkspaceOwner(actorId, workspaceId);
+    if (workspace.encrypted) {
+      throw new HttpError('Workspace is already encrypted', 409, 'ALREADY_ENCRYPTED');
+    }
+    if (!wrappedDek.trim()) {
+      throw new HttpError('wrappedDek is required', 400, 'INVALID_CRYPTO');
+    }
+    const now = new Date();
+    await this.database.transaction(async (tx) => {
+      await tx
+        .update(workspaces)
+        .set({ encrypted: true, updatedAt: now })
+        .where(eq(workspaces.id, workspaceId));
+      await tx
+        .insert(workspaceMemberKeys)
+        .values({ workspaceId, userId: actorId, wrappedDek })
+        .onConflictDoUpdate({
+          target: [workspaceMemberKeys.workspaceId, workspaceMemberKeys.userId],
+          set: { wrappedDek },
+        });
+      await tx.update(pages).set({ searchText: '' }).where(eq(pages.workspaceId, workspaceId));
+    });
   }
 
   async putMemberDek(

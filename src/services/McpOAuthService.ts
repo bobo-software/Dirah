@@ -33,7 +33,7 @@ export class McpOAuthService {
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code'],
       token_endpoint_auth_methods_supported: ['none'],
-      scopes_supported: ['dira.docs'],
+      scopes_supported: ['dirah.docs'],
     };
   }
 
@@ -42,7 +42,7 @@ export class McpOAuthService {
       resource: `${this.apiPublicUrl}/mcp`,
       authorization_servers: [this.apiPublicUrl],
       bearer_methods_supported: ['header'],
-      scopes_supported: ['dira.docs'],
+      scopes_supported: ['dirah.docs'],
     };
   }
 
@@ -51,7 +51,7 @@ export class McpOAuthService {
     if (!redirectUris.length) {
       throw new HttpError('redirect_uris is required', 400, 'INVALID_CLIENT');
     }
-    const id = `dira_${crypto.randomBytes(12).toString('hex')}`;
+    const id = `dirah_${crypto.randomBytes(12).toString('hex')}`;
     await this.database.insert(mcpOauthClients).values({
       id,
       clientName: input.client_name?.trim() || 'MCP client',
@@ -145,7 +145,7 @@ export class McpOAuthService {
       access_token: signMcpAccessToken(row.userId, token.id),
       token_type: 'Bearer',
       expires_in: 8 * 60 * 60,
-      scope: 'dira.docs',
+      scope: 'dirah.docs',
     };
   }
 

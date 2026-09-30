@@ -6,7 +6,7 @@ import { createDiskBlobStore, createBlobStore } from './blobStore';
 
 describe('disk blob store', () => {
   it('puts, gets, and removes bytes', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dira-blobs-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dirah-blobs-'));
     const store = createDiskBlobStore(root);
     await store.put('ws/a', Buffer.from('hello-minio-guide'), 'text/plain');
     expect(await store.get('ws/a')).toEqual(Buffer.from('hello-minio-guide'));
@@ -21,7 +21,7 @@ describe('disk blob store', () => {
         endpoint: 'https://minio.example',
         accessKey: 'key',
         secretKey: 'secret',
-        bucket: 'dira',
+        bucket: 'dirah',
         region: 'us-east-1',
       },
     });
@@ -36,7 +36,7 @@ describe('MinIO blob store', () => {
     if (store.kind !== 's3') {
       return;
     }
-    const key = `dira-phase5l/${Date.now()}`;
+    const key = `dirah-phase5l/${Date.now()}`;
     const payload = Buffer.from('minio-roundtrip-zymurgy');
     await store.put(key, payload, 'text/plain');
     expect(await store.get(key)).toEqual(payload);

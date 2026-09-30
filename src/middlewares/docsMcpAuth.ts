@@ -5,7 +5,7 @@ import type { McpTokenService } from '../services/McpTokenService';
 function unauthorized(res: Response, apiPublicUrl: string): void {
   res.setHeader(
     'WWW-Authenticate',
-    `Bearer realm="dira-docs", resource_metadata="${apiPublicUrl}/.well-known/oauth-protected-resource"`
+    `Bearer realm="dirah-docs", resource_metadata="${apiPublicUrl}/.well-known/oauth-protected-resource"`
   );
   res.status(401).json({
     success: false,

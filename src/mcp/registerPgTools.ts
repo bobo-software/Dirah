@@ -31,7 +31,7 @@ export function registerPgTools(server: PgMcpServerHost, service: PgMcpService):
     'pg_list_tables',
     {
       title: 'List Postgres tables',
-      description: 'List tables in the configured Dira PostgreSQL database (public schema).',
+      description: 'List tables in the configured Dirah PostgreSQL database (public schema).',
       inputSchema: z.object({}),
     },
     (async () => asToolContent(await service.listTables())) as never
@@ -195,7 +195,7 @@ export function registerPgTools(server: PgMcpServerHost, service: PgMcpService):
     'postgres-schema',
     'postgres://schema',
     {
-      title: 'Dira Postgres schema',
+      title: 'Dirah Postgres schema',
       description: 'Current database tables and column metadata for AI context.',
       mimeType: 'application/json',
     },

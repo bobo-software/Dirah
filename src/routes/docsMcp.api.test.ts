@@ -103,7 +103,7 @@ describe('docs MCP protocol', () => {
       params: {
         protocolVersion: '2025-03-26',
         capabilities: {},
-        clientInfo: { name: 'dira-tests', version: '1.0.0' },
+        clientInfo: { name: 'dirah-tests', version: '1.0.0' },
       },
     });
     expect(init.status).toBe(200);
@@ -368,7 +368,7 @@ describe('docs MCP protocol', () => {
       jsonrpc: '2.0',
       id: 29,
       method: 'tools/call',
-      params: { name: 'dira_guide', arguments: {} },
+      params: { name: 'dirah_guide', arguments: {} },
     });
     const guideData = toolResult(guide).data as {
       instructions: string;
@@ -389,7 +389,7 @@ describe('docs MCP protocol', () => {
       params: {
         protocolVersion: '2025-03-26',
         capabilities: {},
-        clientInfo: { name: 'dira-tests', version: '1.0.0' },
+        clientInfo: { name: 'dirah-tests', version: '1.0.0' },
       },
     });
     const initBody = parseMcpBody(init.body?.result ? init.body : init.text);
@@ -749,7 +749,7 @@ describe('docs MCP protocol', () => {
     expect(folderNodes.some((node) => node.path === 'b')).toBe(true);
   });
 
-  it('exposes dira://guide and per-workspace readme resources', async () => {
+  it('exposes dirah://guide and per-workspace readme resources', async () => {
     if (!dbReady) return;
 
     const owner = await request(app)
@@ -777,14 +777,14 @@ describe('docs MCP protocol', () => {
     const list = await mcpPost(app, secret, { jsonrpc: '2.0', id: 71, method: 'resources/list', params: {} });
     const listBody = parseMcpBody(list.body?.result ? list.body : list.text);
     const listResult = (listBody.result ?? listBody) as { resources: Array<{ uri: string }> };
-    expect(listResult.resources.some((r) => r.uri === 'dira://guide')).toBe(true);
-    expect(listResult.resources.some((r) => r.uri === 'dira://my-workspace/readme.md')).toBe(true);
+    expect(listResult.resources.some((r) => r.uri === 'dirah://guide')).toBe(true);
+    expect(listResult.resources.some((r) => r.uri === 'dirah://my-workspace/readme.md')).toBe(true);
 
     const guideRead = await mcpPost(app, secret, {
       jsonrpc: '2.0',
       id: 72,
       method: 'resources/read',
-      params: { uri: 'dira://guide' },
+      params: { uri: 'dirah://guide' },
     });
     const guideBody = parseMcpBody(guideRead.body?.result ? guideRead.body : guideRead.text);
     const guideResult = (guideBody.result ?? guideBody) as { contents: Array<{ text: string }> };
@@ -794,7 +794,7 @@ describe('docs MCP protocol', () => {
       jsonrpc: '2.0',
       id: 73,
       method: 'resources/read',
-      params: { uri: 'dira://my-workspace/readme.md' },
+      params: { uri: 'dirah://my-workspace/readme.md' },
     });
     const docBody = parseMcpBody(docRead.body?.result ? docRead.body : docRead.text);
     const docResult = (docBody.result ?? docBody) as { contents: Array<{ text: string }> };

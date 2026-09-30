@@ -34,7 +34,7 @@ async function recordEmailLog(opts: {
 }
 
 export async function sendInviteEmail(opts: InviteEmailContent): Promise<boolean> {
-  const subject = `Join ${opts.workspaceName} on Dira`;
+  const subject = `Join ${opts.workspaceName} on Dirah`;
   const meta = {
     workspaceName: opts.workspaceName,
     role: opts.role,

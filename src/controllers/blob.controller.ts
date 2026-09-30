@@ -11,7 +11,7 @@ export function createBlobController(blobs: BlobService) {
         return ResponseUtils.error(res, 'Workspace id is required', null, 400);
       }
       const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
-      const headerId = req.header('x-dira-blob-id')?.trim();
+      const headerId = (req.header('x-dirah-blob-id') ?? req.header('x-dirah-blob-id'))?.trim();
       const id = headerId && headerId.length <= 128 ? headerId : undefined;
       const mime = req.header('content-type') ?? 'application/octet-stream';
       const blob = await blobs.upload(req.user!.userId, workspaceId, body, mime, id);

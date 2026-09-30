@@ -11,6 +11,15 @@ const oauthEmail = `oauth-new-${stamp}@example.com`;
 const existingEmail = `oauth-existing-${stamp}@example.com`;
 const password = 'password12';
 
+function refreshCookiePair(setCookie: string | string[] | undefined): string {
+  const list = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
+  const raw = list.find((line) => line.startsWith('dirah_refresh='));
+  expect(raw).toBeTruthy();
+  expect(raw).toMatch(/HttpOnly/i);
+  expect(raw).toMatch(/Path=\/api\/auth/);
+  return (raw ?? '').split(';')[0] ?? '';
+}
+
 const exchanger: OAuthExchanger = async ({ code }) => {
   if (code === 'unverified') {
     const err = new Error('unverified') as Error & { code?: string };
@@ -77,12 +86,11 @@ describe('oauth API', () => {
     expect(first.status).toBe(302);
     const firstUrl = new URL(first.headers.location ?? '');
     expect(firstUrl.pathname).toBe('/oauth');
-    const refresh = firstUrl.hash.replace(/^#/, '').split('refreshToken=')[1];
-    expect(refresh).toBeTruthy();
+    expect(firstUrl.hash).toBe('');
+    expect(firstUrl.search).not.toContain('refreshToken');
+    const refreshCookie = refreshCookiePair(first.headers['set-cookie']);
 
-    const session = await request(appOn)
-      .post('/api/auth/refresh')
-      .send({ refreshToken: decodeURIComponent(refresh ?? '') });
+    const session = await request(appOn).post('/api/auth/refresh').set('Cookie', refreshCookie);
     expect(session.status).toBe(200);
     const access = session.body.data.tokens.accessToken as string;
     const me = await request(appOn).get('/api/auth/me').set('Authorization', `Bearer ${access}`);
@@ -106,12 +114,10 @@ describe('oauth API', () => {
       code: 'new',
       state: state2,
     });
-    const refresh2 = new URL(second.headers.location ?? '').hash
-      .replace(/^#/, '')
-      .split('refreshToken=')[1];
+    expect(new URL(second.headers.location ?? '').hash).toBe('');
     const session2 = await request(appOn)
       .post('/api/auth/refresh')
-      .send({ refreshToken: decodeURIComponent(refresh2 ?? '') });
+      .set('Cookie', refreshCookiePair(second.headers['set-cookie']));
     const me2 = await request(appOn)
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${session2.body.data.tokens.accessToken}`);
@@ -129,12 +135,10 @@ describe('oauth API', () => {
       code: 'existing',
       state: state3,
     });
-    const refresh3 = new URL(linked.headers.location ?? '').hash
-      .replace(/^#/, '')
-      .split('refreshToken=')[1];
+    expect(new URL(linked.headers.location ?? '').hash).toBe('');
     const session3 = await request(appOn)
       .post('/api/auth/refresh')
-      .send({ refreshToken: decodeURIComponent(refresh3 ?? '') });
+      .set('Cookie', refreshCookiePair(linked.headers['set-cookie']));
     const me3 = await request(appOn)
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${session3.body.data.tokens.accessToken}`);

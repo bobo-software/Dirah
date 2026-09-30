@@ -100,14 +100,14 @@ function inWorkspace<T>(
 export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpService): void {
   serviceRef = service;
   server.registerTool(
-    'dira_guide',
+    'dirah_guide',
     {
-      title: 'How to use Dira docs MCP',
+      title: 'How to use Dirah docs MCP',
       description: 'Short instructions for coding agents: search first, omit workspace when the token has one workspace, pass hash on writes.',
       inputSchema: z.object({}),
     },
     (async () =>
-      run('dira_guide', async () => {
+      run('dirah_guide', async () => {
         const auth = currentDocsAuth();
         const guide = await serviceRef!.buildGuide(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
         return { instructions: buildDynamicInstructions(guide), workspaces: guide.workspaces };
@@ -117,7 +117,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
   server.registerTool(
     'list_workspaces',
     {
-      title: 'List Dira workspaces',
+      title: 'List Dirah workspaces',
       description: 'List workspaces allowlisted for this MCP token. Includes slug (use as workspace) and default when only one is allowlisted.',
       inputSchema: z.object({}),
     },

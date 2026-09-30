@@ -12,6 +12,13 @@ export const pool = new Pool({
   database: env.db.database,
   max: getMcpConfig().poolLimit,
   connectionTimeoutMillis: 5_000,
+  ssl:
+    env.db.sslMode === 'disable'
+      ? false
+      : {
+          rejectUnauthorized: true,
+          ...(env.db.sslCa ? { ca: env.db.sslCa } : {}),
+        },
 });
 
 export const db = drizzle(pool, { schema });

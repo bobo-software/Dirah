@@ -420,12 +420,20 @@ export class PageService {
     if (!current) {
       throw new HttpError('Markdown body not found', 404, 'MARKDOWN_NOT_FOUND');
     }
+    const encrypted = await this.isWorkspaceEncrypted(page.workspaceId);
     if (expectedHash && expectedHash !== current.contentHash) {
-      throw new HttpError('Markdown was updated elsewhere', 409, 'HASH_MISMATCH', {
-        currentHash: current.contentHash,
-        diffPreview: diffPreview(current.content, content),
-        hint: 'Re-read this path with read_file and retry your edit against the fresh hash.',
-      });
+      throw new HttpError(
+        'Markdown was updated elsewhere',
+        409,
+        'HASH_MISMATCH',
+        encrypted
+          ? { currentHash: current.contentHash }
+          : {
+              currentHash: current.contentHash,
+              diffPreview: diffPreview(current.content, content),
+              hint: 'Re-read this path with read_file and retry your edit against the fresh hash.',
+            }
+      );
     }
     const hash = hashMarkdown(content);
     const now = new Date();
@@ -434,7 +442,7 @@ export class PageService {
       .set({ content, contentHash: hash, updatedAt: now })
       .where(eq(markdownBodies.pageId, pageId))
       .returning();
-    await this.setSearchText(pageId, markdownSearchText(content));
+    await this.setSearchText(pageId, encrypted ? '' : markdownSearchText(content));
     return { page, content: updated.content, hash: updated.contentHash, updatedAt: updated.updatedAt };
   }
 

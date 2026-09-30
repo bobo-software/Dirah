@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express';
 import type { PgMcpService } from '../services/mcp/PgMcpService';
 import { registerPgTools, type PgMcpServerHost } from './registerPgTools';
 
-export interface DiraMcpHandlerOptions {
+export interface DirahMcpHandlerOptions {
   pg: PgMcpService;
 }
 
@@ -10,8 +10,8 @@ export interface DiraMcpHandlerOptions {
  * Build an Express-compatible MCP Streamable HTTP handler.
  * MCP v2 packages are ESM-only; load them via dynamic import from CommonJS.
  */
-export async function createDiraMcpExpressHandler(
-  options: DiraMcpHandlerOptions
+export async function createDirahMcpExpressHandler(
+  options: DirahMcpHandlerOptions
 ): Promise<RequestHandler> {
   const [{ createMcpHandler, McpServer }, { toNodeHandler }] = await Promise.all([
     import('@modelcontextprotocol/server'),
@@ -21,7 +21,7 @@ export async function createDiraMcpExpressHandler(
   const handler = createMcpHandler(
     () => {
       const server = new McpServer({
-        name: 'dira-postgres',
+        name: 'dirah-postgres',
         version: '1.0.0',
       });
       const host = server as unknown as PgMcpServerHost;

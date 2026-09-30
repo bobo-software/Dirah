@@ -1,6 +1,6 @@
 import type { DocsGuide } from '../../services/DocsMcpService';
 
-export const DIRA_DOCS_INSTRUCTIONS = `Dira is the team's markdown knowledge base (Postgres-backed virtual paths, not a git working tree).
+export const DIRA_DOCS_INSTRUCTIONS = `Dirah is the team's markdown knowledge base (Postgres-backed virtual paths, not a git working tree).
 
 - Prefer search_docs before inventing APIs, runbooks, or architecture. Hyphens and spaces in ticket ids fold together (PP-B4 matches "PP - B4"). Snippets are plain text (safe to copy into oldString).
 - Prefer path (e.g. docs/api/auth.md) over UUIDs.
@@ -12,7 +12,7 @@ export const DIRA_DOCS_INSTRUCTIONS = `Dira is the team's markdown knowledge bas
 
 export function buildDynamicInstructions(guide: DocsGuide): string {
   if (!guide.workspaces.length) {
-    return `${DIRA_DOCS_INSTRUCTIONS}\n\nNo workspaces are allowlisted for this token yet — ask an owner to grant access in Dira settings.`;
+    return `${DIRA_DOCS_INSTRUCTIONS}\n\nNo workspaces are allowlisted for this token yet — ask an owner to grant access in Dirah settings.`;
   }
   const lines = guide.workspaces.map((ws) => {
     const marker = ws.default ? ' (default)' : '';

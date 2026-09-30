@@ -1,7 +1,7 @@
 {
-  "name": "dira_backend",
+  "name": "dirah_backend",
   "version": "1.0.0",
-  "description": "Dira API",
+  "description": "Dirah API",
   "type": "commonjs",
   "main": "dist/server.js",
   "scripts": {
@@ -27,6 +27,7 @@
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.33.0",
     "express": "^4.19.2",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "node-sql-parser": "^5.4.0",
     "nodemailer": "^9.0.6",

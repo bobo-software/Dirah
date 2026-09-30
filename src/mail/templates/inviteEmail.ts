@@ -17,7 +17,7 @@ export type InviteEmailContent = {
 
 export function buildInviteEmailText(opts: InviteEmailContent): string {
   return [
-    `${opts.invitedByEmail} invited you to ${opts.workspaceName} on Dira as ${opts.role}.`,
+    `${opts.invitedByEmail} invited you to ${opts.workspaceName} on Dirah as ${opts.role}.`,
     '',
     'Open this link to review the invite and create an account or sign in:',
     opts.inviteUrl,
@@ -41,7 +41,7 @@ export function buildInviteEmailHtml(opts: InviteEmailContent): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
-  <title>Join ${workspaceName} on Dira</title>
+  <title>Join ${workspaceName} on Dirah</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f2ef;-webkit-font-smoothing:antialiased;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f2ef;padding:32px 16px;">
@@ -51,7 +51,7 @@ export function buildInviteEmailHtml(opts: InviteEmailContent): string {
           <tr>
             <td style="padding:28px 32px 20px;border-bottom:1px solid #e2ddd6;">
               <p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.2;color:#2f5d50;letter-spacing:0.02em;">
-                Dira
+                Dirah
               </p>
             </td>
           </tr>
@@ -67,7 +67,7 @@ export function buildInviteEmailHtml(opts: InviteEmailContent): string {
                 <strong style="color:#141218;">${invitedByEmail}</strong>
                 invited you to join
                 <strong style="color:#141218;">${workspaceName}</strong>
-                on Dira as
+                on Dirah as
                 <strong style="color:#141218;">${role}</strong>.
               </p>
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;">
@@ -93,7 +93,7 @@ export function buildInviteEmailHtml(opts: InviteEmailContent): string {
           <tr>
             <td style="padding:18px 32px;background:#f8f5f1;border-top:1px solid #e2ddd6;">
               <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#948e9c;">
-                © ${year} Dira · Sent to ${escapeHtml(opts.to)}
+                © ${year} Dirah · Sent to ${escapeHtml(opts.to)}
               </p>
             </td>
           </tr>

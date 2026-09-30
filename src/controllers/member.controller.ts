@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { MemberService } from '../services/MemberService';
 import ResponseUtils from '../utils/ResponseUtils';
 import { asyncHandler } from '../utils/asyncHandler';
+import { withRefreshCookie } from '../auth/sessionCookie';
 
 const inviteSchema = z.object({
   email: z.string().min(3),
@@ -79,7 +80,7 @@ export function createMemberController(members: MemberService) {
         return ResponseUtils.error(res, 'Password is required', parsed.success ? null : parsed.error.flatten(), 400);
       }
       const result = await members.accept(token, parsed.data.password);
-      return ResponseUtils.success(res, 'Joined workspace', result, 201);
+      return ResponseUtils.success(res, 'Joined workspace', withRefreshCookie(res, 'user', result), 201);
     }),
 
     setRole: asyncHandler(async (req: Request, res: Response) => {

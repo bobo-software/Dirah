@@ -184,8 +184,8 @@ export class OAuthService {
     return { user, tokens, workspace: workspacesForUser[0] ?? null };
   }
 
-  appRedirect(refreshToken: string): string {
-    return `${env.appPublicUrl}/oauth#refreshToken=${encodeURIComponent(refreshToken)}`;
+  appRedirect(): string {
+    return `${env.appPublicUrl}/oauth`;
   }
 
   private redirectUri(provider: OAuthProvider): string {

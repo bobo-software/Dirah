@@ -7,7 +7,7 @@ async function main(): Promise<void> {
   const server = http.createServer(app);
 
   server.listen(env.port, () => {
-    console.log(`Dira API listening on http://localhost:${env.port}`);
+    console.log(`Dirah API listening on http://localhost:${env.port}`);
     console.log(`MCP docs at http://localhost:${env.port}/mcp`);
     console.log(`MCP protocol at http://localhost:${env.port}/mcp/protocol`);
     const minioReady =
@@ -33,6 +33,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error('Failed to start Dira API:', error);
+  console.error('Failed to start Dirah API:', error);
   process.exit(1);
 });

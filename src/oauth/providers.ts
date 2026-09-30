@@ -1,3 +1,5 @@
+import { env } from '../config/env';
+
 export type OAuthProvider = 'google' | 'github';
 
 export type OAuthProfile = {
@@ -26,9 +28,6 @@ export function oauthConfigFromEnv(): {
   github: { clientId: string; clientSecret: string };
   apiPublicUrl: string;
 } {
-  const port = Number(process.env.PORT ?? 4000);
-  const api =
-    (process.env.API_PUBLIC_URL ?? '').trim().replace(/\/$/, '') || `http://localhost:${port}`;
   return {
     google: {
       clientId: (process.env.GOOGLE_CLIENT_ID ?? '').trim(),
@@ -38,7 +37,7 @@ export function oauthConfigFromEnv(): {
       clientId: (process.env.GITHUB_CLIENT_ID ?? '').trim(),
       clientSecret: (process.env.GITHUB_CLIENT_SECRET ?? '').trim(),
     },
-    apiPublicUrl: api,
+    apiPublicUrl: env.apiPublicUrl,
   };
 }
 
@@ -100,7 +99,7 @@ async function githubProfile(code: string, redirectUri: string, clientId: string
     throw new Error('GitHub token exchange failed');
   }
   const userRes = await fetch('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${access}`, Accept: 'application/json', 'User-Agent': 'dira' },
+    headers: { Authorization: `Bearer ${access}`, Accept: 'application/json', 'User-Agent': 'dirah' },
   });
   const user = asRecord(await userRes.json());
   if (!userRes.ok) {
@@ -110,7 +109,7 @@ async function githubProfile(code: string, redirectUri: string, clientId: string
   let email = str(user.email).trim().toLowerCase();
   if (!email || !email.includes('@')) {
     const emailsRes = await fetch('https://api.github.com/user/emails', {
-      headers: { Authorization: `Bearer ${access}`, Accept: 'application/json', 'User-Agent': 'dira' },
+      headers: { Authorization: `Bearer ${access}`, Accept: 'application/json', 'User-Agent': 'dirah' },
     });
     const emails = (await emailsRes.json()) as Array<Record<string, unknown>>;
     const primary = emails.find((row) => row.primary === true && row.verified === true) ??
