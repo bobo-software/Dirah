@@ -6,7 +6,7 @@ import { HttpError } from '../utils/HttpError';
 import { slugify } from '../utils/slugify';
 import { type AuthService, type Database, type PublicWorkspace } from './AuthService';
 
-const TOKEN_PREFIX = 'dira_mcp_';
+const TOKEN_PREFIX = 'dirah_mcp_';
 
 export interface PublicMcpToken {
   id: string;

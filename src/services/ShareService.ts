@@ -32,6 +32,13 @@ export class ShareService {
     const page = await this.pages.requireMemberPage(userId, pageId);
     await this.pages.requireMarkdownPage(page);
     await this.auth.requireWorkspaceOwner(userId, page.workspaceId);
+    if (await this.pages.isWorkspaceEncrypted(page.workspaceId)) {
+      throw new HttpError(
+        'Sharing is unavailable because this workspace is encrypted',
+        409,
+        'WORKSPACE_ENCRYPTED'
+      );
+    }
     const existing = await this.activeLink(pageId);
     if (existing) {
       return existing;
@@ -109,6 +116,13 @@ export class ShareService {
   }> {
     const page = await this.requireActive(token);
     await this.pages.requireMarkdownPage(page);
+    if (await this.pages.isWorkspaceEncrypted(page.workspaceId)) {
+      throw new HttpError(
+        'Sharing is unavailable because this workspace is encrypted',
+        409,
+        'WORKSPACE_ENCRYPTED'
+      );
+    }
     const body = await this.pages.loadMarkdownBody(page.id);
     if (!body) {
       throw new HttpError('Markdown body not found', 404, 'MARKDOWN_NOT_FOUND');

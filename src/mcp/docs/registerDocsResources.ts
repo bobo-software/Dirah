@@ -12,9 +12,9 @@ export function registerDocsResources(
   ) => unknown
 ): void {
   server.registerResource(
-    'dira-guide',
-    'dira://guide',
-    { title: 'Dira usage guide', description: 'Search-first guidance and this token\'s allowlisted workspaces.', mimeType: 'text/plain' },
+    'dirah-guide',
+    'dirah://guide',
+    { title: 'Dirah usage guide', description: 'Search-first guidance and this token\'s allowlisted workspaces.', mimeType: 'text/plain' },
     (async (uri: URL) => {
       const auth = currentDocsAuth();
       const guide = await service.buildGuide(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
@@ -23,20 +23,20 @@ export function registerDocsResources(
   );
 
   server.registerResource(
-    'dira-doc',
-    new ResourceTemplate('dira://{workspace}/{+path}', {
+    'dirah-doc',
+    new ResourceTemplate('dirah://{workspace}/{+path}', {
       list: async () => {
         const auth = currentDocsAuth();
         const rows = await service.listWorkspaces(auth.userId, auth.tokenId);
         return {
           resources: rows.map((row) => ({
-            uri: `dira://${row.slug}/readme.md`,
+            uri: `dirah://${row.slug}/readme.md`,
             name: `${row.name} README`,
           })),
         };
       },
     }),
-    { title: 'Dira document', description: 'A markdown document addressed by workspace slug and path.', mimeType: 'text/markdown' },
+    { title: 'Dirah document', description: 'A markdown document addressed by workspace slug and path.', mimeType: 'text/markdown' },
     (async (uri: URL, variables?: Record<string, string | string[]>) => {
       const auth = currentDocsAuth();
       const workspaceRef = Array.isArray(variables?.workspace) ? variables?.workspace[0] : variables?.workspace;

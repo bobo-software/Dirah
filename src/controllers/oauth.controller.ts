@@ -4,6 +4,7 @@ import ResponseUtils from '../utils/ResponseUtils';
 import { asyncHandler } from '../utils/asyncHandler';
 import { env } from '../config/env';
 import { HttpError } from '../utils/HttpError';
+import { setRefreshCookie } from '../auth/sessionCookie';
 
 function failRedirect(message: string): string {
   return `${env.appPublicUrl}/login?oauth=${encodeURIComponent(message)}`;
@@ -30,7 +31,8 @@ export function createOAuthController(oauth: OAuthService) {
       }
       try {
         const result = await oauth.finish(provider, code, state);
-        return res.redirect(302, oauth.appRedirect(result.tokens.refreshToken));
+        setRefreshCookie(res, 'user', result.tokens.refreshToken);
+        return res.redirect(302, oauth.appRedirect());
       } catch (error) {
         if (error instanceof HttpError && (error.status === 400 || error.status === 502 || error.status === 503)) {
           if (req.accepts('html')) {

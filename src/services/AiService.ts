@@ -23,6 +23,13 @@ export class AiService {
 
   async ask(userId: string, pageId: string, prompt: string, context: string): Promise<string> {
     const page = await this.pages.requireMemberPage(userId, pageId);
+    if (await this.pages.isWorkspaceEncrypted(page.workspaceId)) {
+      throw new HttpError(
+        'Ask is unavailable because this workspace is encrypted',
+        409,
+        'WORKSPACE_ENCRYPTED'
+      );
+    }
     if (!this.enabled()) {
       throw new HttpError(
         'AI is not configured. Set AI_API_KEY on the server to enable Ask.',

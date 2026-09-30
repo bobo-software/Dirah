@@ -5,6 +5,20 @@ import { createApp } from '../app';
 import { pool } from '../db';
 import { runPendingMigrations } from '../db/migrationRunner';
 import { db } from '../db';
+import { env } from '../config/env';
+
+function refreshCookieLine(setCookie: string | string[] | undefined): string {
+  const list = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
+  const raw = list.find((line) => line.startsWith('dirah_refresh='));
+  if (!raw) {
+    throw new Error(`missing dirah_refresh cookie: ${list.join(' | ')}`);
+  }
+  return raw;
+}
+
+function cookiePair(setCookieLine: string): string {
+  return setCookieLine.split(';')[0] ?? '';
+}
 
 const email = `phase0-${Date.now()}@example.com`;
 const password = 'password12';
@@ -47,8 +61,14 @@ describe('auth and workspaces API', () => {
 
     expect(registered.status).toBe(201);
     expect(registered.body.success).toBe(true);
-    expect(registered.body.data.tokens.accessToken).toBeTruthy();
-    expect(registered.body.data.tokens.refreshToken).toBeTruthy();
+    expect(registered.body.data.tokens).toEqual({ accessToken: expect.any(String) });
+    expect(registered.body.data.tokens.refreshToken).toBeUndefined();
+    const issued = refreshCookieLine(registered.headers['set-cookie']);
+    expect(issued).toMatch(/HttpOnly/i);
+    expect(issued).toMatch(/SameSite=Lax/i);
+    expect(issued).toMatch(/Path=\/api\/auth/);
+    expect(issued).not.toMatch(/;\s*Secure/i);
+    expect(registered.text).not.toContain(decodeURIComponent(cookiePair(issued).slice('dirah_refresh='.length)));
     expect(registered.body.data.workspace.name).toBe('My workspace');
 
     const duplicate = await request(app)
@@ -62,7 +82,7 @@ describe('auth and workspaces API', () => {
     expect(badLogin.status).toBe(401);
 
     const access = registered.body.data.tokens.accessToken as string;
-    const refresh = registered.body.data.tokens.refreshToken as string;
+    const legacyRefresh = decodeURIComponent(cookiePair(issued).slice('dirah_refresh='.length));
 
     const list = await request(app)
       .get('/api/workspaces')
@@ -78,25 +98,48 @@ describe('auth and workspaces API', () => {
     expect(one.status).toBe(200);
     expect(one.body.data.workspace.id).toBe(workspaceId);
 
-    const refreshed = await request(app)
+    const upgraded = await request(app)
       .post('/api/auth/refresh')
-      .send({ refreshToken: refresh });
-    expect(refreshed.status).toBe(200);
-    expect(refreshed.body.data.tokens.accessToken).toBeTruthy();
+      .send({ refreshToken: legacyRefresh });
+    expect(upgraded.status).toBe(200);
+    expect(upgraded.body.data.tokens).toEqual({ accessToken: expect.any(String) });
+    expect(upgraded.text).not.toContain(legacyRefresh);
+    const rotated = refreshCookieLine(upgraded.headers['set-cookie']);
 
     const reused = await request(app)
       .post('/api/auth/refresh')
-      .send({ refreshToken: refresh });
+      .send({ refreshToken: legacyRefresh });
     expect(reused.status).toBe(401);
 
-    await request(app).post('/api/auth/logout').send({
-      refreshToken: refreshed.body.data.tokens.refreshToken,
-    });
+    const refreshed = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', cookiePair(rotated));
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.data.tokens.refreshToken).toBeUndefined();
+    const current = refreshCookieLine(refreshed.headers['set-cookie']);
+
+    const loggedOut = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', cookiePair(current));
+    expect(loggedOut.status).toBe(200);
+    expect(refreshCookieLine(loggedOut.headers['set-cookie'])).toMatch(/dirah_refresh=;/);
 
     const afterLogout = await request(app)
       .post('/api/auth/refresh')
-      .send({ refreshToken: refreshed.body.data.tokens.refreshToken });
+      .set('Cookie', cookiePair(current));
     expect(afterLogout.status).toBe(401);
+  });
+
+  it('rejects a session post from a different origin', async () => {
+    if (env.corsOrigin === '*') {
+      return;
+    }
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('Origin', 'https://evil.example')
+      .send({ email: 'someone@example.com', password: 'password12' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('ORIGIN_NOT_ALLOWED');
   });
 
   it('owner can rename and delete a workspace', async () => {

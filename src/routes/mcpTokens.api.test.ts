@@ -42,7 +42,7 @@ describe('MCP PAT and allowlist API', () => {
     expect(created.status).toBe(201);
     const secret = created.body.data.token.secret as string;
     const tokenId = created.body.data.token.id as string;
-    expect(secret.startsWith('dira_mcp_')).toBe(true);
+    expect(secret.startsWith('dirah_mcp_')).toBe(true);
     expect(created.body.data.token).not.toHaveProperty('tokenHash');
 
     const listed = await request(app)

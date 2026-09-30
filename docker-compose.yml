@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: dira
-      POSTGRES_PASSWORD: dira
-      POSTGRES_DB: dira
+      POSTGRES_USER: dirah
+      POSTGRES_PASSWORD: dirah
+      POSTGRES_DB: dirah
     ports:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U dira -d dira']
+      test: ['CMD-SHELL', 'pg_isready -U dirah -d dirah']
       interval: 5s
       timeout: 5s
       retries: 10

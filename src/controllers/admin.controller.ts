@@ -4,14 +4,16 @@ import type { SystemAdminAuthService } from '../services/SystemAdminAuthService'
 import type { AdminService } from '../services/AdminService';
 import ResponseUtils from '../utils/ResponseUtils';
 import { asyncHandler } from '../utils/asyncHandler';
+import {
+  clearRefreshCookie,
+  refreshTokenFromRequest,
+  setRefreshCookie,
+  withRefreshCookie,
+} from '../auth/sessionCookie';
 
 const credentialsSchema = z.object({
   email: z.string().min(1),
   password: z.string().min(1),
-});
-
-const refreshSchema = z.object({
-  refreshToken: z.string().min(1),
 });
 
 const paginationSchema = z.object({
@@ -41,23 +43,27 @@ export function createAdminController(
         return ResponseUtils.error(res, 'Email and password are required', parsed.error.flatten(), 400);
       }
       const result = await adminAuth.login(parsed.data.email, parsed.data.password);
-      return ResponseUtils.success(res, 'Logged in', result);
+      return ResponseUtils.success(res, 'Logged in', withRefreshCookie(res, 'admin', result));
     }),
 
     refresh: asyncHandler(async (req: Request, res: Response) => {
-      const parsed = refreshSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return ResponseUtils.error(res, 'refreshToken is required', parsed.error.flatten(), 400);
+      const refreshToken = refreshTokenFromRequest(req, 'admin');
+      if (!refreshToken) {
+        return ResponseUtils.error(res, 'refreshToken is required', null, 400);
       }
-      const tokens = await adminAuth.refresh(parsed.data.refreshToken);
-      return ResponseUtils.success(res, 'Token refreshed', { tokens });
+      const tokens = await adminAuth.refresh(refreshToken);
+      setRefreshCookie(res, 'admin', tokens.refreshToken);
+      return ResponseUtils.success(res, 'Token refreshed', {
+        tokens: { accessToken: tokens.accessToken },
+      });
     }),
 
     logout: asyncHandler(async (req: Request, res: Response) => {
-      const parsed = refreshSchema.safeParse(req.body);
-      if (parsed.success) {
-        await adminAuth.logout(parsed.data.refreshToken);
+      const refreshToken = refreshTokenFromRequest(req, 'admin');
+      if (refreshToken) {
+        await adminAuth.logout(refreshToken);
       }
+      clearRefreshCookie(res, 'admin');
       return ResponseUtils.success(res, 'Logged out');
     }),
 

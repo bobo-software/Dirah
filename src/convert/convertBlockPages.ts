@@ -259,13 +259,6 @@ export async function convertBlockPages(
     result.converted += 1;
   }
 
-  if (encryptedWorkspaces.size) {
-    await database
-      .update(workspaces)
-      .set({ encrypted: false, updatedAt: new Date() })
-      .where(eq(workspaces.encrypted, true));
-  }
-
   const leftover = await database.select({ id: pages.id }).from(pages).where(eq(pages.kind, 'page'));
   if (leftover.length === 0) {
     result.droppedYjs = await dropYjsSchema(queryable);

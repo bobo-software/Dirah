@@ -53,13 +53,6 @@ function logRequest(res: Response, success: boolean, message: string, payload: u
 
 class ResponseUtils {
   static success(res: Response, message: string, data: unknown = null, statusCode = 200) {
-    console.info({
-      success: true,
-      message,
-      data,
-      timestamp: new Date().toISOString(),
-    });
-
     logRequest(res, true, message, data);
 
     return res.status(statusCode).json({

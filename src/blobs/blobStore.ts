@@ -128,7 +128,7 @@ export function createBlobStore(input: {
       endpoint,
       accessKey,
       secretKey,
-      bucket: input.minio.bucket.trim() || 'dira',
+      bucket: input.minio.bucket.trim() || 'dirah',
       region: input.minio.region.trim() || 'us-east-1',
     });
   }

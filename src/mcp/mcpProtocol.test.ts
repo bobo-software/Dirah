@@ -44,8 +44,8 @@ function mockService(): PgMcpService {
     }),
     getSchemaResource: vi.fn(async () => ({
       success: true,
-      message: 'Schema for dira',
-      data: { database: 'dira', tables: [{ name: 'users', columns: [] }] },
+      message: 'Schema for dirah',
+      data: { database: 'dirah', tables: [{ name: 'users', columns: [] }] },
     })),
     migrationStatus: vi.fn(async () => ({
       success: true,
@@ -179,7 +179,7 @@ describe('MCP protocol endpoint', () => {
         params: {
           protocolVersion: '2025-03-26',
           capabilities: {},
-          clientInfo: { name: 'dira-tests', version: '1.0.0' },
+          clientInfo: { name: 'dirah-tests', version: '1.0.0' },
         },
       },
       { Authorization: `Bearer ${API_KEY}` }

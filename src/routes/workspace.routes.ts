@@ -41,6 +41,7 @@ export function createWorkspaceRouter(
   router.patch('/:id/members/:userId', members.setRole);
   router.delete('/:id/members/:userId', members.remove);
   router.get('/:id/crypto', crypto.getWorkspace);
+  router.post('/:id/crypto/enable', crypto.enable);
   router.put('/:id/crypto/keys', crypto.putMemberKey);
   router.get('/:id', controller.get);
   router.patch('/:id', controller.patch);
