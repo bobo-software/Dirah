@@ -6,13 +6,18 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon",
+    "dev:sec": "infisical run --env=dev -- npm run dev",
     "start": "node dist/server.js",
+    "start:sec": "infisical run --env=dev -- npm run start",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:sec": "infisical run --env=dev -- npm run test",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "ts-node --transpile-only scripts/migrate.ts"
+    "db:generate:sec": "infisical run --env=dev -- npm run db:generate",
+    "db:migrate": "ts-node --transpile-only scripts/migrate.ts",
+    "db:migrate:sec": "infisical run --env=dev -- npm run db:migrate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1121.0",

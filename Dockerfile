@@ -25,6 +25,10 @@ RUN npm prune --omit=dev
 # Stage 2: Production Stage (Uses a minimal Alpine image)
 FROM node:26-alpine
 
+# Secrets are injected at start by the CLI. The app never calls Infisical itself.
+# Pin matches the npm package; the preinstall script downloads the platform binary.
+RUN npm install -g @infisical/cli@0.43.138 && npm cache clean --force
+
 WORKDIR /app
 
 COPY --from=builder /app/package*.json ./
@@ -33,7 +37,9 @@ COPY --from=builder /app/dist ./dist
 
 # Migrations and other runtime assets that live outside dist
 COPY --from=builder /app/drizzle ./drizzle
+COPY scripts/infisical-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 4002
 
-CMD ["node", "dist/server.js"]
+ENTRYPOINT ["/entrypoint.sh"]
