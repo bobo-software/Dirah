@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { and, eq, isNull, or, gt } from 'drizzle-orm';
 import { pages, shareLinks } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
+import { excerptFromSearchText } from '../utils/slugify';
 import { type AuthService, type Database } from './AuthService';
 import { type PageService, type PublicPage } from './PageService';
 
@@ -90,6 +91,8 @@ export class ShareService {
         status: pages.status,
         kind: pages.kind,
         slug: pages.slug,
+        createdAt: pages.createdAt,
+        searchText: pages.searchText,
       })
       .from(pages)
       .where(eq(pages.id, link.pageId))
@@ -104,6 +107,7 @@ export class ShareService {
       kind,
       slug: page.slug,
       favorited: false,
+      excerpt: excerptFromSearchText(page.searchText),
       token: link.token,
     };
   }

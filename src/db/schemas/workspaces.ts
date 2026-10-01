@@ -4,6 +4,7 @@ import { users } from './users';
 export const workspaces = pgTable('workspaces', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  description: text('description'),
   encrypted: boolean('encrypted').notNull().default(false),
   mcpEnabled: boolean('mcp_enabled').notNull().default(true),
   agentIndexPath: text('agent_index_path'),

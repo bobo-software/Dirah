@@ -37,7 +37,7 @@ Point the checkout at the project (`infisical init`, or pass `--projectId` / `--
 
 Plain `npm run dev` still reads `.env` as usual. Infisical is optional locally. A blank `VITE_API_URL` is treated as unset and falls back to `http://localhost:4006`.
 
-When `NODE_ENV` is `development`, the API, Drizzle, and migrations connect with `DB_LOCAL_*` from `.env` and do not use TLS. Infisical can still inject the other secrets. The Postgres MCP (`/mcp/protocol`) can query either database: omit `target` or pass `"local"` for `DB_LOCAL_*`, or pass `"target": "live"` to use `DB_HOST`, `DB_SSL`, and `DB_SSL_CA`. `DB_SSL_CA` is the CA certificate PEM (a file path is also accepted). Those live settings also apply to the API outside development.
+The API, Drizzle, migrations, and both Postgres MCP targets (`local` and `live`) use `DB_*`, `DB_SSL`, and `DB_SSL_CA` in every environment. `DB_SSL_CA` is the CA certificate PEM (a file path is also accepted). Infisical can still inject the other secrets.
 
 ## dirah_backend in Docker / Coolify
 

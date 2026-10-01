@@ -13,6 +13,7 @@ import { createDirahMcpExpressHandler } from './mcp/createDirahMcpExpressHandler
 import { PgMcpService } from './services/mcp/PgMcpService';
 import { AuthService } from './services/AuthService';
 import { PageService } from './services/PageService';
+import { NoteService } from './services/NoteService';
 import { BlobService } from './services/BlobService';
 import { createBlobStore } from './blobs/blobStore';
 import { MemberService } from './services/MemberService';
@@ -81,6 +82,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
 
   const authService = options.authService ?? new AuthService(db);
   const pageService = options.pageService ?? new PageService(db, authService);
+  const noteService = new NoteService(db, authService);
   const blobService =
     options.blobService ?? new BlobService(db, authService, createBlobStore(env));
   const memberService = new MemberService(db, authService);
@@ -130,7 +132,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       mcpTokenService,
       mcpOAuthService,
       systemAdminAuthService,
-      adminService
+      adminService,
+      noteService
     )
   );
 

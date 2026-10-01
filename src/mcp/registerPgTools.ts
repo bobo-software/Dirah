@@ -38,7 +38,7 @@ const databaseTarget = z
   .optional()
   .default('local')
   .describe(
-    'local is the database this API process uses. live is the remote database (DB_* with DB_SSL / DB_SSL_CA). Defaults to local.'
+    'The database this process uses (DB_* with DB_SSL / DB_SSL_CA). local and live are the same database. Defaults to local.'
   );
 
 function serviceFor(databases: PgMcpToolDatabases, target: PgDatabaseTarget | undefined): PgMcpService {
@@ -51,7 +51,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'List Postgres tables',
       description:
-        'List tables in a Dirah PostgreSQL database (public schema). Pass target "live" for the remote database.',
+        'List tables in a Dirah PostgreSQL database (public schema).',
       inputSchema: z.object({ target: databaseTarget }),
     },
     (async ({ target }: { target?: PgDatabaseTarget }) =>
@@ -63,7 +63,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Describe Postgres table',
       description:
-        'Describe columns and indexes for a table. Table names must be simple identifiers. Pass target "live" for the remote database.',
+        'Describe columns and indexes for a table. Table names must be simple identifiers.',
       inputSchema: z.object({
         target: databaseTarget,
         tableName: z.string().min(1),
@@ -78,7 +78,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Get Postgres table DDL',
       description:
-        'Reconstruct CREATE TABLE DDL from pg_catalog for a validated table name. Pass target "live" for the remote database.',
+        'Reconstruct CREATE TABLE DDL from pg_catalog for a validated table name.',
       inputSchema: z.object({
         target: databaseTarget,
         tableName: z.string().min(1),
@@ -93,7 +93,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Run Postgres SELECT',
       description:
-        'Execute a single SELECT/WITH statement. Server enforces timeouts and row limits. Use ? placeholders with params. Pass target "live" for the remote database.',
+        'Execute a single SELECT/WITH statement. Server enforces timeouts and row limits. Use ? placeholders with params.',
       inputSchema: z.object({
         target: databaseTarget,
         sql: z.string().min(1),
@@ -109,7 +109,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Execute Postgres write',
       description:
-        'Execute INSERT/UPDATE/DELETE/CREATE/ALTER/DROP/TRUNCATE. Requires confirm:true. DROP/TRUNCATE also require allowDestructive:true. UPDATE/DELETE require a WHERE clause and are wrapped with a ctid LIMIT. target "live" writes to the remote database.',
+        'Execute INSERT/UPDATE/DELETE/CREATE/ALTER/DROP/TRUNCATE. Requires confirm:true. DROP/TRUNCATE also require allowDestructive:true. UPDATE/DELETE require a WHERE clause and are wrapped with a ctid LIMIT.',
       inputSchema: z.object({
         target: databaseTarget,
         sql: z.string().min(1),
@@ -145,7 +145,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Drizzle migration status',
       description:
-        'Report which Drizzle migrations (drizzle/migrations) are applied vs. pending, read-only. Safe when no migrations exist yet. Pass target "live" for the remote database.',
+        'Report which Drizzle migrations (drizzle/migrations) are applied vs. pending, read-only. Safe when no migrations exist yet.',
       inputSchema: z.object({ target: databaseTarget }),
     },
     (async ({ target }: { target?: PgDatabaseTarget }) =>
@@ -157,7 +157,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Run pending Drizzle migrations',
       description:
-        'Apply pending Drizzle migrations (same effect as `npm run db:migrate`). Requires confirm:true. Only replays already-committed .sql files under drizzle/migrations — no arbitrary SQL is accepted. target "live" migrates the remote database.',
+        'Apply pending Drizzle migrations (same effect as `npm run db:migrate`). Requires confirm:true. Only replays already-committed .sql files under drizzle/migrations — no arbitrary SQL is accepted.',
       inputSchema: z.object({
         target: databaseTarget,
         confirm: z.boolean(),
@@ -172,7 +172,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Bulk insert rows',
       description:
-        'Chunked, parameterized multi-row INSERT for a table. Requires confirm:true. All rows must share the same set of columns. Defaults to plain INSERT; pass upsert:true with conflictTarget columns for ON CONFLICT DO UPDATE. All-or-nothing per call (rolled back on any chunk failure). target "live" inserts into the remote database.',
+        'Chunked, parameterized multi-row INSERT for a table. Requires confirm:true. All rows must share the same set of columns. Defaults to plain INSERT; pass upsert:true with conflictTarget columns for ON CONFLICT DO UPDATE. All-or-nothing per call (rolled back on any chunk failure).',
       inputSchema: z.object({
         target: databaseTarget,
         tableName: z.string().min(1),
@@ -215,7 +215,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     {
       title: 'Postgres table row counts',
       description:
-        'Row counts per table (all public tables if none specified). Read-only; useful for verifying migrated-data completeness. Pass target "live" for the remote database.',
+        'Row counts per table (all public tables if none specified). Read-only; useful for verifying migrated-data completeness.',
       inputSchema: z.object({
         target: databaseTarget,
         tables: z.array(z.string().min(1)).optional(),
@@ -252,7 +252,7 @@ export function registerPgTools(server: PgMcpServerHost, databases: PgMcpToolDat
     'postgres://schema/live',
     {
       title: 'Live Dirah Postgres schema',
-      description: 'Tables and column metadata for the remote database.',
+      description: 'Tables and column metadata for the database this API process uses.',
       mimeType: 'application/json',
     },
     (async (uri: URL) => {

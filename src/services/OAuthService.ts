@@ -147,13 +147,20 @@ export class OAuthService {
           const [user] = await tx
             .insert(users)
             .values({ email, passwordHash: null })
-            .returning({ id: users.id, email: users.email });
+            .returning({
+              id: users.id,
+              email: users.email,
+              name: users.name,
+              role: users.role,
+              about: users.about,
+            });
           const [workspace] = await tx
             .insert(workspaces)
             .values({ name: 'My workspace' })
             .returning({
               id: workspaces.id,
               name: workspaces.name,
+              description: workspaces.description,
               encrypted: workspaces.encrypted,
               mcpEnabled: workspaces.mcpEnabled,
             });

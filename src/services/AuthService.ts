@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { db } from '../db';
-import { refreshTokens, users, workspaceMembers, workspaces } from '../db/schemas';
+import { refreshTokens, userCrypto, users, workspaceMembers, workspaces } from '../db/schemas';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { HttpError } from '../utils/HttpError';
 import { canAdminMembers, canEdit } from '../authz/roles';
@@ -20,11 +20,31 @@ export interface AuthTokens {
 export interface PublicUser {
   id: string;
   email: string;
+  name: string | null;
+  role: string | null;
+  about: string | null;
+  hasPassword?: boolean;
+}
+
+export interface ProfileUpdate {
+  name?: string | null;
+  role?: string | null;
+  about?: string | null;
+  email?: string;
+  currentPassword?: string;
+}
+
+export interface RewrappedCrypto {
+  publicKey: string;
+  wrappedPrivateKey: string;
+  kdfSalt: string;
+  kdfIterations: number;
 }
 
 export interface PublicWorkspace {
   id: string;
   name: string;
+  description: string | null;
   role: string;
   encrypted: boolean;
   mcpEnabled: boolean;
@@ -32,6 +52,20 @@ export interface PublicWorkspace {
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function optionalProfileText(
+  value: string | null | undefined,
+  max: number,
+  label: string
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return null;
+  if (trimmed.length > max) {
+    throw new HttpError(`${label} must be ${max} characters or fewer`, 400, 'INVALID_PROFILE');
+  }
+  return trimmed;
 }
 
 function hashRefreshToken(token: string): string {
@@ -65,7 +99,13 @@ export class AuthService {
         const [user] = await tx
           .insert(users)
           .values({ email, passwordHash })
-          .returning({ id: users.id, email: users.email });
+          .returning({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+            role: users.role,
+            about: users.about,
+          });
 
         const [workspace] = await tx
           .insert(workspaces)
@@ -73,6 +113,7 @@ export class AuthService {
           .returning({
             id: workspaces.id,
             name: workspaces.name,
+            description: workspaces.description,
             encrypted: workspaces.encrypted,
             mcpEnabled: workspaces.mcpEnabled,
           });
@@ -109,6 +150,9 @@ export class AuthService {
       .select({
         id: users.id,
         email: users.email,
+        name: users.name,
+        role: users.role,
+        about: users.about,
         passwordHash: users.passwordHash,
       })
       .from(users)
@@ -129,7 +173,7 @@ export class AuthService {
     }
 
     const tokens = await this.issueTokens(user.id);
-    return { user: { id: user.id, email: user.email }, tokens };
+    return { user: this.toPublicUser(user), tokens };
   }
 
   async refresh(refreshToken: string): Promise<AuthTokens> {
@@ -171,16 +215,188 @@ export class AuthService {
   }
 
   async me(userId: string): Promise<PublicUser> {
+    const user = await this.requireUser(userId);
+    return this.toPublicUser(user);
+  }
+
+  async updateProfile(userId: string, input: ProfileUpdate): Promise<PublicUser> {
+    const name = optionalProfileText(input.name, 80, 'Name');
+    const role = optionalProfileText(input.role, 80, 'Role');
+    const about = optionalProfileText(input.about, 280, 'About');
+    const user = await this.requireUser(userId);
+
+    let email = user.email;
+    if (input.email !== undefined) {
+      email = normalizeEmail(input.email);
+      if (!email || !email.includes('@')) {
+        throw new HttpError('A valid email is required', 400, 'INVALID_EMAIL');
+      }
+      if (email !== user.email) {
+        await this.assertCurrentPassword(user.passwordHash, input.currentPassword);
+      }
+    }
+
+    const patch: {
+      email?: string;
+      name?: string | null;
+      role?: string | null;
+      about?: string | null;
+      updatedAt: Date;
+    } = { updatedAt: new Date() };
+    if (email !== user.email) patch.email = email;
+    if (name !== undefined && name !== user.name) patch.name = name;
+    if (role !== undefined && role !== user.role) patch.role = role;
+    if (about !== undefined && about !== user.about) patch.about = about;
+    if (Object.keys(patch).length === 1) {
+      return this.toPublicUser(user);
+    }
+
+    try {
+      const [updated] = await this.database
+        .update(users)
+        .set(patch)
+        .where(eq(users.id, userId))
+        .returning({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+          about: users.about,
+          passwordHash: users.passwordHash,
+        });
+      if (!updated) {
+        throw new HttpError('User not found', 401, 'USER_NOT_FOUND');
+      }
+      return this.toPublicUser(updated);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new HttpError('Email already registered', 409, 'EMAIL_TAKEN');
+      }
+      throw error;
+    }
+  }
+
+  async changePassword(
+    userId: string,
+    newPassword: string,
+    currentPassword: string | undefined,
+    cryptoBundle: RewrappedCrypto | undefined,
+    keepRefreshToken?: string
+  ): Promise<PublicUser> {
+    if (newPassword.length < 8) {
+      throw new HttpError('Password must be at least 8 characters', 400, 'WEAK_PASSWORD');
+    }
+    const user = await this.requireUser(userId);
+    await this.assertCurrentPassword(user.passwordHash, currentPassword);
+    if (user.passwordHash && (await bcrypt.compare(newPassword, user.passwordHash))) {
+      throw new HttpError('Choose a different password', 400, 'PASSWORD_UNCHANGED');
+    }
+
+    const [existingCrypto] = await this.database
+      .select({ publicKey: userCrypto.publicKey })
+      .from(userCrypto)
+      .where(eq(userCrypto.userId, userId))
+      .limit(1);
+    if (existingCrypto) {
+      if (!cryptoBundle) {
+        throw new HttpError(
+          'Changing your password must also re-wrap your encryption key',
+          400,
+          'CRYPTO_REWRAP_REQUIRED'
+        );
+      }
+      if (cryptoBundle.publicKey !== existingCrypto.publicKey) {
+        throw new HttpError('Encryption key does not match this account', 400, 'CRYPTO_KEY_MISMATCH');
+      }
+    } else if (cryptoBundle) {
+      throw new HttpError('This account has no encryption key to update', 400, 'CRYPTO_NOT_FOUND');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    const now = new Date();
+    const keepHash = keepRefreshToken ? hashRefreshToken(keepRefreshToken) : null;
+
+    await this.database.transaction(async (tx) => {
+      await tx.update(users).set({ passwordHash, updatedAt: now }).where(eq(users.id, userId));
+      if (existingCrypto && cryptoBundle) {
+        await tx
+          .update(userCrypto)
+          .set({
+            wrappedPrivateKey: cryptoBundle.wrappedPrivateKey,
+            kdfSalt: cryptoBundle.kdfSalt,
+            kdfIterations: cryptoBundle.kdfIterations,
+            updatedAt: now,
+          })
+          .where(eq(userCrypto.userId, userId));
+      }
+      await tx
+        .update(refreshTokens)
+        .set({ revokedAt: now })
+        .where(
+          and(
+            eq(refreshTokens.userId, userId),
+            isNull(refreshTokens.revokedAt),
+            keepHash ? ne(refreshTokens.tokenHash, keepHash) : undefined
+          )
+        );
+    });
+
+    return this.toPublicUser({ ...user, passwordHash: 'set' });
+  }
+
+  private async requireUser(userId: string): Promise<{
+    id: string;
+    email: string;
+    name: string | null;
+    role: string | null;
+    about: string | null;
+    passwordHash: string | null;
+  }> {
     const [user] = await this.database
-      .select({ id: users.id, email: users.email })
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        about: users.about,
+        passwordHash: users.passwordHash,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-
     if (!user) {
       throw new HttpError('User not found', 401, 'USER_NOT_FOUND');
     }
     return user;
+  }
+
+  private toPublicUser(user: {
+    id: string;
+    email: string;
+    name: string | null;
+    role: string | null;
+    about: string | null;
+    passwordHash: string | null;
+  }): PublicUser {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      about: user.about,
+      hasPassword: Boolean(user.passwordHash),
+    };
+  }
+
+  private async assertCurrentPassword(passwordHash: string | null, currentPassword?: string): Promise<void> {
+    if (!passwordHash) return;
+    if (!currentPassword) {
+      throw new HttpError('Current password is required', 400, 'PASSWORD_REQUIRED');
+    }
+    const matches = await bcrypt.compare(currentPassword, passwordHash);
+    if (!matches) {
+      throw new HttpError('Current password is incorrect', 401, 'INVALID_CREDENTIALS');
+    }
   }
 
   async listWorkspaces(userId: string): Promise<PublicWorkspace[]> {
@@ -188,6 +404,7 @@ export class AuthService {
       .select({
         id: workspaces.id,
         name: workspaces.name,
+        description: workspaces.description,
         encrypted: workspaces.encrypted,
         mcpEnabled: workspaces.mcpEnabled,
         role: workspaceMembers.role,
@@ -212,6 +429,7 @@ export class AuthService {
         .returning({
           id: workspaces.id,
           name: workspaces.name,
+          description: workspaces.description,
           encrypted: workspaces.encrypted,
           mcpEnabled: workspaces.mcpEnabled,
         });
@@ -231,6 +449,7 @@ export class AuthService {
       .select({
         id: workspaces.id,
         name: workspaces.name,
+        description: workspaces.description,
         encrypted: workspaces.encrypted,
         mcpEnabled: workspaces.mcpEnabled,
         role: workspaceMembers.role,
@@ -283,6 +502,20 @@ export class AuthService {
     await this.database
       .update(workspaces)
       .set({ name, updatedAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
+    return this.getWorkspace(userId, workspaceId);
+  }
+
+  async updateWorkspaceDescription(
+    userId: string,
+    workspaceId: string,
+    descriptionRaw: string | null
+  ): Promise<PublicWorkspace> {
+    await this.requireWorkspaceOwner(userId, workspaceId);
+    const description = descriptionRaw === null ? null : descriptionRaw.trim() || null;
+    await this.database
+      .update(workspaces)
+      .set({ description, updatedAt: new Date() })
       .where(eq(workspaces.id, workspaceId));
     return this.getWorkspace(userId, workspaceId);
   }
