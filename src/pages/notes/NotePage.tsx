@@ -3,12 +3,14 @@ import { Link, useParams } from 'react-router-dom';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
+import { TableKit } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import { ApiError, type PublicNote } from '../../api/client';
 import type { NoteBody } from '../../api/notes';
 import { EMPTY_NOTES, useNoteStore, useWorkspaceStore } from '../../stores/StoresIndex';
 import { NoteGlyph } from './NoteTree';
+import { NoteToolbar } from './NoteToolbar';
 
 const SAVE_DELAY_MS = 800;
 
@@ -61,6 +63,8 @@ function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteId: stri
   const [conflict, setConflict] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [title, setTitle] = useState('');
+  // Stored markdown the editor couldn't render; editing would overwrite it.
+  const [unsupported, setUnsupported] = useState(false);
 
   // Save bookkeeping lives in refs so the editor callback never sees stale state.
   const hashRef = useRef<string | undefined>(undefined);
@@ -112,6 +116,7 @@ function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteId: stri
       StarterKit.configure({ link: { openOnClick: false } }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      TableKit.configure({ table: { resizable: false } }),
       Placeholder.configure({ placeholder: 'Start writing…' }),
       Markdown,
     ],
@@ -138,8 +143,15 @@ function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteId: stri
     setConflict(false);
     setSaveState('saved');
     setTitle(body.note.title);
-    editor.commands.setContent(body.content, { contentType: 'markdown', emitUpdate: false });
-    editor.setEditable(body.note.editable, false);
+    // Loading isn't an edit: keep it out of undo history so Undo can't blank the note.
+    editor
+      .chain()
+      .setMeta('addToHistory', false)
+      .setContent(body.content, { contentType: 'markdown', emitUpdate: false })
+      .run();
+    const lost = body.content.trim() !== '' && editor.getText().trim() === '';
+    setUnsupported(lost);
+    editor.setEditable(body.note.editable && !lost, false);
     // Compare against the editor's own serialisation, which may normalise the stored text.
     savedRef.current = editor.getMarkdown();
     setReady(true);
@@ -228,7 +240,7 @@ function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteId: stri
             <Link to={`/w/${workspaceId}/n/${item.id}`}>{item.title}</Link>
           </span>
         ))}
-        {ready && editable ? <span className={`note-save-state ${saveState}`}>{saveLabel(saveState)}</span> : null}
+        {ready && editable && !unsupported ? <span className={`note-save-state ${saveState}`}>{saveLabel(saveState)}</span> : null}
       </nav>
       {conflict ? (
         <div className="note-banner warning" role="alert">
@@ -242,6 +254,11 @@ function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteId: stri
         </div>
       ) : null}
       {ready && note && !editable ? <p className="note-banner">Shared by another member. View only.</p> : null}
+      {ready && unsupported ? (
+        <p className="note-banner warning" role="alert">
+          This note contains content the editor can’t display yet, so editing is turned off to protect it.
+        </p>
+      ) : null}
       {message ? (
         <p className="error" role="alert">
           {message}
@@ -262,6 +279,7 @@ function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteId: stri
         </form>
       </header>
       {!ready && !message ? <p className="muted">Loading note…</p> : null}
+      {ready && editable && !unsupported ? <NoteToolbar editor={editor} /> : null}
       <EditorContent editor={editor} className={ready ? 'note-editor' : 'note-editor hidden'} />
     </article>
   );
