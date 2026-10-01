@@ -4,7 +4,14 @@
       "type": "http",
       "url": "http://127.0.0.1:4002/mcp/protocol",
       "headers": {
-        "Authorization": "Bearer dev-mcp-key-change-in-production"
+        "Authorization": "Bearer 425b52bbfd46a8a3a45cb94d3f26d362db4967db07a4e64a111a618f9383ad25"
+      }
+    },
+    "dirah-docs": {
+      "type": "http",
+      "url": "https://api.dirah.co.za/mcp",
+      "headers": {
+        "Authorization": "Bearer dirah_mcp_-l8si-0NkbOktKZc-tW8mvF7_qBdLRTc"
       }
     }
   }

@@ -27,6 +27,8 @@ export function createAuthRouter(
   router.get('/oauth/:provider/start', oauth.start);
   router.get('/oauth/:provider/callback', oauth.callback);
   router.get('/me', requireAuth, controller.me);
+  router.patch('/me', requireAuth, requireSessionOrigin, authLoginRateLimit, controller.updateProfile);
+  router.post('/password', requireAuth, requireSessionOrigin, authLoginRateLimit, controller.changePassword);
   router.get('/crypto', requireAuth, crypto.getMine);
   router.put('/crypto', requireAuth, crypto.putMine);
 

@@ -196,4 +196,131 @@ describe('auth and workspaces API', () => {
       .set('Authorization', `Bearer ${access}`);
     expect(gone.status).toBe(404);
   });
+
+  it('updates email and password, and re-wraps an encryption key', async () => {
+    if (!dbReady) {
+      return;
+    }
+
+    const accountEmail = `profile-${Date.now()}@example.com`;
+    const registered = await request(app)
+      .post('/api/auth/register')
+      .send({ email: accountEmail, password });
+    expect(registered.status).toBe(201);
+    const access = registered.body.data.tokens.accessToken as string;
+    const auth = { Authorization: `Bearer ${access}` };
+
+    const me = await request(app).get('/api/auth/me').set(auth);
+    expect(me.status).toBe(200);
+    expect(me.body.data.user).toMatchObject({
+      email: accountEmail,
+      hasPassword: true,
+      name: null,
+      role: null,
+      about: null,
+    });
+
+    const profile = await request(app).patch('/api/auth/me').set(auth).send({
+      name: 'Ada Lovelace',
+      role: 'Engineer',
+      about: 'Writes the specs.',
+    });
+    expect(profile.status).toBe(200);
+    expect(profile.body.data.user).toMatchObject({
+      email: accountEmail,
+      name: 'Ada Lovelace',
+      role: 'Engineer',
+      about: 'Writes the specs.',
+    });
+
+    const tooLong = await request(app).patch('/api/auth/me').set(auth).send({ name: 'n'.repeat(81) });
+    expect(tooLong.status).toBe(400);
+
+    const missingPassword = await request(app)
+      .patch('/api/auth/me')
+      .set(auth)
+      .send({ email: `renamed-${accountEmail}` });
+    expect(missingPassword.status).toBe(400);
+    expect(missingPassword.body.error).toBe('PASSWORD_REQUIRED');
+
+    const wrongPassword = await request(app)
+      .patch('/api/auth/me')
+      .set(auth)
+      .send({ email: `renamed-${accountEmail}`, currentPassword: 'not-the-password' });
+    expect(wrongPassword.status).toBe(401);
+
+    const renamed = await request(app)
+      .patch('/api/auth/me')
+      .set(auth)
+      .send({ email: `renamed-${accountEmail}`, currentPassword: password });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.data.user.email).toBe(`renamed-${accountEmail}`);
+
+    const other = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `other-${accountEmail}`, password });
+    expect(other.status).toBe(201);
+    const conflict = await request(app)
+      .patch('/api/auth/me')
+      .set(auth)
+      .send({ email: `other-${accountEmail}`, currentPassword: password });
+    expect(conflict.status).toBe(409);
+
+    const storedKey = await request(app).put('/api/auth/crypto').set(auth).send({
+      publicKey: 'pk-profile',
+      wrappedPrivateKey: 'wrap-old',
+      kdfSalt: 'salt-old',
+      kdfIterations: 210000,
+    });
+    expect(storedKey.status).toBe(200);
+
+    const missingRewrap = await request(app)
+      .post('/api/auth/password')
+      .set(auth)
+      .send({ currentPassword: password, newPassword: 'newpassword1' });
+    expect(missingRewrap.status).toBe(400);
+    expect(missingRewrap.body.error).toBe('CRYPTO_REWRAP_REQUIRED');
+
+    const mismatch = await request(app).post('/api/auth/password').set(auth).send({
+      currentPassword: password,
+      newPassword: 'newpassword1',
+      crypto: {
+        publicKey: 'someone-else',
+        wrappedPrivateKey: 'wrap-new',
+        kdfSalt: 'salt-new',
+        kdfIterations: 210000,
+      },
+    });
+    expect(mismatch.status).toBe(400);
+    expect(mismatch.body.error).toBe('CRYPTO_KEY_MISMATCH');
+
+    const changed = await request(app).post('/api/auth/password').set(auth).send({
+      currentPassword: password,
+      newPassword: 'newpassword1',
+      crypto: {
+        publicKey: 'pk-profile',
+        wrappedPrivateKey: 'wrap-new',
+        kdfSalt: 'salt-new',
+        kdfIterations: 210000,
+      },
+    });
+    expect(changed.status).toBe(200);
+    expect(changed.body.data.user.hasPassword).toBe(true);
+
+    const oldLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: `renamed-${accountEmail}`, password });
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: `renamed-${accountEmail}`, password: 'newpassword1' });
+    expect(newLogin.status).toBe(200);
+
+    const bundle = await request(app)
+      .get('/api/auth/crypto')
+      .set('Authorization', `Bearer ${newLogin.body.data.tokens.accessToken as string}`);
+    expect(bundle.body.data.crypto.wrappedPrivateKey).toBe('wrap-new');
+    expect(bundle.body.data.crypto.publicKey).toBe('pk-profile');
+  });
 });

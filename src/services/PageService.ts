@@ -2,6 +2,7 @@ import { and, asc, eq, ilike, inArray, isNotNull, isNull, max, or, sql } from 'd
 import { markdownBodies, pageFavorites, pages, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import {
+  excerptFromSearchText,
   hashMarkdown,
   markdownSearchText,
   SEARCH_HEADLINE_START,
@@ -21,7 +22,7 @@ export type PageKind = (typeof PAGE_KINDS)[number];
 export const MAX_MARKDOWN_BYTES = 1_000_000;
 export const EMPTY_MARKDOWN_HASH = hashMarkdown('');
 
-function diffPreview(current: string, attempted: string): string {
+export function diffPreview(current: string, attempted: string): string {
   const a = current.split('\n');
   const b = attempted.split('\n');
   let i = 0;
@@ -42,6 +43,8 @@ export interface PublicPage {
   kind: PageKind;
   slug: string | null;
   favorited: boolean;
+  createdAt: Date;
+  excerpt: string;
 }
 
 export interface MarkdownBody {
@@ -74,6 +77,8 @@ const pageColumns = {
   status: pages.status,
   kind: pages.kind,
   slug: pages.slug,
+  createdAt: pages.createdAt,
+  searchTextPreview: sql<string>`left(${pages.searchText}, 400)`,
 };
 
 type PageRow = {
@@ -86,6 +91,8 @@ type PageRow = {
   status: string;
   kind: string;
   slug: string | null;
+  createdAt: Date;
+  searchTextPreview: string;
 };
 
 function asKind(value: string): PageKind {
@@ -524,6 +531,7 @@ export class PageService {
     const status = PAGE_STATUSES.includes(page.status as PageStatus)
       ? (page.status as PageStatus)
       : '';
+    const excerpt = 'excerpt' in page ? page.excerpt : excerptFromSearchText(page.searchTextPreview);
     return {
       id: page.id,
       workspaceId: page.workspaceId,
@@ -535,6 +543,8 @@ export class PageService {
       kind: asKind(page.kind),
       slug: page.slug,
       favorited,
+      createdAt: page.createdAt,
+      excerpt,
     };
   }
 

@@ -15,6 +15,33 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+const updateProfileSchema = z
+  .object({
+    name: z.string().max(80).nullable().optional(),
+    role: z.string().max(80).nullable().optional(),
+    about: z.string().max(280).nullable().optional(),
+    email: z.string().min(1).optional(),
+    currentPassword: z.string().optional(),
+  })
+  .refine(
+    (data) =>
+      data.name !== undefined || data.role !== undefined || data.about !== undefined || data.email !== undefined,
+    { message: 'Nothing to update' }
+  );
+
+const cryptoRewrapSchema = z.object({
+  publicKey: z.string().min(1),
+  wrappedPrivateKey: z.string().min(1),
+  kdfSalt: z.string().min(1),
+  kdfIterations: z.number().int().min(1000),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(1),
+  crypto: cryptoRewrapSchema.optional(),
+});
+
 export function createAuthController(authService: AuthService) {
   return {
     register: asyncHandler(async (req: Request, res: Response) => {
@@ -59,6 +86,30 @@ export function createAuthController(authService: AuthService) {
     me: asyncHandler(async (req: Request, res: Response) => {
       const user = await authService.me(req.user!.userId);
       return ResponseUtils.success(res, 'ok', { user });
+    }),
+
+    updateProfile: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = updateProfileSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Profile details are invalid', parsed.error.flatten(), 400);
+      }
+      const user = await authService.updateProfile(req.user!.userId, parsed.data);
+      return ResponseUtils.success(res, 'Profile updated', { user });
+    }),
+
+    changePassword: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = changePasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'A new password is required', parsed.error.flatten(), 400);
+      }
+      const user = await authService.changePassword(
+        req.user!.userId,
+        parsed.data.newPassword,
+        parsed.data.currentPassword,
+        parsed.data.crypto,
+        refreshTokenFromRequest(req, 'user') ?? undefined
+      );
+      return ResponseUtils.success(res, 'Password updated', { user });
     }),
   };
 }

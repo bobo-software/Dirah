@@ -4,6 +4,7 @@ import { blobs } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { type AuthService, type Database } from './AuthService';
 import type { BlobStore } from '../blobs/blobStore';
+import { blobObjectKey } from '../blobs/objectKey';
 
 export interface PublicBlob {
   id: string;
@@ -56,8 +57,14 @@ export class BlobService {
     if (!/^[A-Za-z0-9._~+=-]{1,128}$/.test(blobId)) {
       throw new HttpError('Invalid blob id', 400, 'INVALID_BLOB_ID');
     }
-    const storageKey = `${workspaceId}/${blobId}`;
-    await this.store.put(storageKey, body, mime || 'application/octet-stream');
+    const mimeType = mime || 'application/octet-stream';
+    let storageKey: string;
+    try {
+      storageKey = blobObjectKey({ userId, workspaceId, mime: mimeType, blobId });
+    } catch {
+      throw new HttpError('Invalid blob id', 400, 'INVALID_BLOB_ID');
+    }
+    await this.store.put(storageKey, body, mimeType);
 
     const [row] = await this.database
       .insert(blobs)
@@ -65,7 +72,7 @@ export class BlobService {
         id: blobId,
         workspaceId,
         contentHash,
-        mime: mime || 'application/octet-stream',
+        mime: mimeType,
         byteSize: body.length,
         storageKey,
       })

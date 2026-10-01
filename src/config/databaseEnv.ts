@@ -16,18 +16,7 @@ function sslMode(raw: string | undefined): DbSslMode {
   throw new Error('DB_SSL must be "disable" or "verify-full"');
 }
 
-export function resolveLocalDatabaseConfig(source: NodeJS.ProcessEnv): DatabaseConfig {
-  return {
-    host: (source.DB_LOCAL_HOST ?? '').trim() || 'localhost',
-    port: Number(source.DB_LOCAL_PORT ?? 5432),
-    user: source.DB_LOCAL_USERNAME || 'postgres',
-    password: source.DB_LOCAL_PASSWORD ?? '',
-    database: source.DB_LOCAL_DATABASE || 'dirah',
-    sslMode: 'disable',
-  };
-}
-
-/** Remote database from DB_*. Used by the deployed API and by the Postgres MCP `live` target. */
+/** Database from DB_*. The API and both Postgres MCP targets use this, including in development. */
 export function resolveLiveDatabaseConfig(source: NodeJS.ProcessEnv): DatabaseConfig {
   return {
     host: (source.DB_HOST ?? '').trim() || 'localhost',
@@ -39,7 +28,6 @@ export function resolveLiveDatabaseConfig(source: NodeJS.ProcessEnv): DatabaseCo
   };
 }
 
-export function resolveDatabaseConfig(nodeEnv: string, source: NodeJS.ProcessEnv): DatabaseConfig {
-  if (nodeEnv === 'development') return resolveLocalDatabaseConfig(source);
+export function resolveDatabaseConfig(_nodeEnv: string, source: NodeJS.ProcessEnv): DatabaseConfig {
   return resolveLiveDatabaseConfig(source);
 }

@@ -12,11 +12,13 @@ const createSchema = z.object({
 const patchSchema = z
   .object({
     name: z.string().min(1).optional(),
+    description: z.string().max(500).optional().nullable(),
     mcpEnabled: z.boolean().optional(),
   })
-  .refine((data) => data.name !== undefined || data.mcpEnabled !== undefined, {
-    message: 'Provide a name or mcpEnabled',
-  });
+  .refine(
+    (data) => data.name !== undefined || data.description !== undefined || data.mcpEnabled !== undefined,
+    { message: 'Provide a name, description or mcpEnabled' }
+  );
 
 export function createWorkspaceController(authService: AuthService, mcpTokens?: McpTokenService) {
   return {
@@ -55,6 +57,13 @@ export function createWorkspaceController(authService: AuthService, mcpTokens?: 
       let workspace;
       if (parsed.data.name !== undefined) {
         workspace = await authService.renameWorkspace(req.user!.userId, id, parsed.data.name);
+      }
+      if (parsed.data.description !== undefined) {
+        workspace = await authService.updateWorkspaceDescription(
+          req.user!.userId,
+          id,
+          parsed.data.description
+        );
       }
       if (parsed.data.mcpEnabled !== undefined) {
         if (!mcpTokens) {

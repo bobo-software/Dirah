@@ -141,6 +141,27 @@
       "when": 1756537900000,
       "tag": "0019_system_admin_console",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1756538000000,
+      "tag": "0020_workspace_description",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1756538100000,
+      "tag": "0021_user_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1756538200000,
+      "tag": "0022_notes",
+      "breakpoints": true
     }
   ]
 }

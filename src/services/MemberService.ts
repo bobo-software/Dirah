@@ -15,6 +15,7 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export interface PublicMember {
   userId: string;
   email: string;
+  name: string | null;
   role: string;
 }
 
@@ -80,6 +81,7 @@ export class MemberService {
       .select({
         userId: workspaceMembers.userId,
         email: users.email,
+        name: users.name,
         role: workspaceMembers.role,
       })
       .from(workspaceMembers)
@@ -262,7 +264,13 @@ export class MemberService {
         const [user] = await tx
           .insert(users)
           .values({ email: invite.email, passwordHash })
-          .returning({ id: users.id, email: users.email });
+          .returning({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+            role: users.role,
+            about: users.about,
+          });
         await tx.insert(workspaceMembers).values({
           workspaceId: invite.workspaceId,
           userId: user.id,
@@ -277,6 +285,7 @@ export class MemberService {
           workspace: {
             id: invite.workspaceId,
             name: invite.workspaceName,
+            description: invite.workspaceDescription,
             encrypted: invite.encrypted,
             mcpEnabled: invite.mcpEnabled ?? true,
             role: invite.role,
@@ -303,7 +312,13 @@ export class MemberService {
   ): Promise<{ user: PublicUser; workspace: PublicWorkspace }> {
     const invite = await this.requireOpenInvite(token);
     const [user] = await this.database
-      .select({ id: users.id, email: users.email })
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        about: users.about,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
@@ -335,6 +350,7 @@ export class MemberService {
         workspace: {
           id: invite.workspaceId,
           name: invite.workspaceName,
+          description: invite.workspaceDescription,
           encrypted: invite.encrypted,
           mcpEnabled: invite.mcpEnabled ?? true,
           role: invite.role,
@@ -359,6 +375,7 @@ export class MemberService {
       workspace: {
         id: invite.workspaceId,
         name: invite.workspaceName,
+        description: invite.workspaceDescription,
         encrypted: invite.encrypted,
         mcpEnabled: invite.mcpEnabled ?? true,
         role: invite.role,
@@ -370,6 +387,7 @@ export class MemberService {
     id: string;
     workspaceId: string;
     workspaceName: string;
+    workspaceDescription: string | null;
     encrypted: boolean;
     mcpEnabled: boolean;
     email: string;
@@ -387,6 +405,7 @@ export class MemberService {
         id: workspaceInvites.id,
         workspaceId: workspaceInvites.workspaceId,
         workspaceName: workspaces.name,
+        workspaceDescription: workspaces.description,
         encrypted: workspaces.encrypted,
         mcpEnabled: workspaces.mcpEnabled,
         email: workspaceInvites.email,
@@ -407,6 +426,7 @@ export class MemberService {
       id: row.id,
       workspaceId: row.workspaceId,
       workspaceName: row.workspaceName,
+      workspaceDescription: row.workspaceDescription,
       encrypted: row.encrypted,
       mcpEnabled: row.mcpEnabled,
       email: row.email,
@@ -444,11 +464,11 @@ export class MemberService {
         role: workspaceMembers.role,
       });
     const [user] = await this.database
-      .select({ email: users.email })
+      .select({ email: users.email, name: users.name })
       .from(users)
       .where(eq(users.id, updated.userId))
       .limit(1);
-    return { userId: updated.userId, email: user.email, role: updated.role };
+    return { userId: updated.userId, email: user.email, name: user.name, role: updated.role };
   }
 
   async remove(actorId: string, workspaceId: string, targetUserId: string): Promise<void> {

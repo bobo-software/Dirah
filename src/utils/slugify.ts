@@ -22,6 +22,22 @@ export function markdownSearchText(content: string): string {
   return content.replace(/```[\s\S]*?```/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+const MAX_EXCERPT = 180;
+
+/** Plain-text preview for a card/list UI. Input is normally `pages.search_text`. */
+export function excerptFromSearchText(text: string, maxLen = MAX_EXCERPT): string {
+  const plain = text
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/[*_`~>#]+/g, ' ')
+    .replace(/^\s*[-+]\s+/gm, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (plain.length <= maxLen) return plain;
+  return `${plain.slice(0, maxLen).trimEnd()}…`;
+}
+
 /** Markers used with ts_headline StartSel/StopSel, then stripped so snippets stay plain text. */
 export const SEARCH_HEADLINE_START = '<<hl>>';
 export const SEARCH_HEADLINE_STOP = '<</hl>>';
