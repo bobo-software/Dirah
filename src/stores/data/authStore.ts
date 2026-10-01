@@ -1,9 +1,12 @@
 import { create } from 'zustand';
 import { apiRequest, type AuthTokens, type PublicUser, type PublicWorkspace } from '../../api/client';
+import type { UserCryptoBundle } from '../../api/crypto';
+import { changePassword as changePasswordRequest, updateProfile as updateProfileRequest } from '../../api/profile';
 import { clearCryptoSession, provisionAccount } from '../../crypto/workspaceCrypto';
 import { useMarkdownContentStore } from './markdownContentStore';
 import { useWorkspaceStore } from './workspaceStore';
 import { usePageStore } from './pageStore';
+import { useNoteStore } from './noteStore';
 
 export const REFRESH_KEY = 'dirah.refreshToken';
 
@@ -18,6 +21,15 @@ type AuthState = {
   acceptInviteAsSession: (token: string) => Promise<PublicWorkspace>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  updateProfile: (input: {
+    name?: string | null;
+    role?: string | null;
+    about?: string | null;
+    email?: string;
+    currentPassword?: string;
+  }) => Promise<void>;
+  changePassword: (currentPassword: string | undefined, newPassword: string, crypto?: UserCryptoBundle) => Promise<void>;
 };
 
 let initPromise: Promise<void> | null = null;
@@ -119,6 +131,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await unlockWithPassword(data.tokens.accessToken, password);
   },
 
+  refreshUser: async () => {
+    const accessToken = get().accessToken;
+    if (!accessToken) throw new Error('Not signed in');
+    const { user } = await apiRequest<{ user: PublicUser }>('/api/auth/me', { accessToken });
+    set({ user });
+  },
+
+  updateProfile: async (input) => {
+    const accessToken = get().accessToken;
+    if (!accessToken) throw new Error('Not signed in');
+    const user = await updateProfileRequest(accessToken, input);
+    set({ user });
+  },
+
+  changePassword: async (currentPassword, newPassword, crypto) => {
+    const accessToken = get().accessToken;
+    if (!accessToken) throw new Error('Not signed in');
+    const user = await changePasswordRequest(accessToken, { currentPassword, newPassword, crypto });
+    set({ user });
+  },
+
   logout: async () => {
     try {
       await apiRequest('/api/auth/logout', {
@@ -132,6 +165,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ accessToken: null, user: null });
       useWorkspaceStore.getState().reset();
       usePageStore.getState().reset();
+      useNoteStore.getState().reset();
     }
   },
 }));

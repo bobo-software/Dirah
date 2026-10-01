@@ -4,11 +4,16 @@ export const API_URL = configuredApiUrl || 'http://localhost:4006';
 export type PublicUser = {
   id: string;
   email: string;
+  name?: string | null;
+  role?: string | null;
+  about?: string | null;
+  hasPassword?: boolean;
 };
 
 export type PublicWorkspace = {
   id: string;
   name: string;
+  description?: string | null;
   role: string;
   encrypted: boolean;
   mcpEnabled?: boolean;
@@ -27,6 +32,36 @@ export type PublicPage = {
   kind: PageKind;
   slug: string | null;
   favorited: boolean;
+  createdAt: string;
+  excerpt: string;
+};
+
+export type NoteVisibility = 'private' | 'workspace';
+
+export type PublicNote = {
+  id: string;
+  workspaceId: string;
+  authorId: string;
+  parentId: string | null;
+  title: string;
+  icon: string | null;
+  cover: string | null;
+  visibility: NoteVisibility;
+  position: number;
+  pinnedAt: string | null;
+  tagIds: string[];
+  editable: boolean;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  excerpt: string;
+};
+
+export type NoteTag = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string;
 };
 
 export type AuthTokens = {
@@ -44,6 +79,19 @@ export type ApiFailure = {
   message: string;
   error?: unknown;
 };
+
+/** A failed API call. `code` is the server's machine-readable error (e.g. `HASH_MISMATCH`). */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
 
 async function parseJson(res: Response): Promise<ApiSuccess<unknown> | ApiFailure> {
   return (await res.json()) as ApiSuccess<unknown> | ApiFailure;
@@ -65,7 +113,7 @@ export async function apiRequest<T>(
   });
   const body = await parseJson(res);
   if (!body.success) {
-    throw new Error(body.message);
+    throw new ApiError(body.message, res.status, typeof body.error === 'string' ? body.error : undefined);
   }
   return body.data as T;
 }

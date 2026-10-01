@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, Outlet, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore, useWorkspaceStore } from '../stores/StoresIndex';
 import type { PageKind, PublicPage } from '../api/client';
 import { Sidebar } from '../components/ComponentsIndex';
@@ -9,10 +9,21 @@ import { EmptyEditorPane } from './EmptyEditorPane';
 import { buildPageTree, draggedPageId, PageTree } from './PageTree';
 import { canEdit } from './workspaceContext';
 
+function HomeIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 10.5 12 4l8 6.5" />
+      <path d="M6.5 9.8V20h11V9.8" />
+    </svg>
+  );
+}
+
 export function WorkspaceShellPage() {
   const { workspaceId, pageId } = useParams();
   const navigate = useNavigate();
+  const isHome = Boolean(useMatch('/w/:workspaceId'));
   const isTrash = Boolean(useMatch('/w/:workspaceId/trash'));
+  const isNote = Boolean(useMatch('/w/:workspaceId/n/:noteId'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
   const isSettings = Boolean(useMatch('/w/:workspaceId/settings/*'));
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -54,7 +65,7 @@ export function WorkspaceShellPage() {
 
   useEffect(() => {
     setSidebarOpen(false);
-  }, [pageId, isTrash, isCollection, workspaceId, setSidebarOpen]);
+  }, [pageId, isHome, isTrash, isCollection, isNote, workspaceId, setSidebarOpen]);
 
   async function onCreateNode(kind: PageKind = 'markdown', parentId?: string | null) {
     if (!workspaceId) return;
@@ -178,6 +189,10 @@ export function WorkspaceShellPage() {
         narrow={narrow}
         onClose={() => setSidebarOpen(false)}
       >
+        <NavLink className="sidebar-home" to={`/w/${workspaceId}`} end>
+          <HomeIcon />
+          <span>Home</span>
+        </NavLink>
         <label className="sidebar-label" htmlFor="page-search">
           Search
         </label>
@@ -266,15 +281,19 @@ export function WorkspaceShellPage() {
           </button>
           {currentTitle ? (
             <span className="mobile-title">{currentTitle}</span>
+          ) : isHome ? (
+            <span className="mobile-title">{workspace.name}</span>
           ) : isCollection ? (
             <span className="mobile-title">Collection</span>
           ) : isTrash ? (
             <span className="mobile-title">Trash</span>
+          ) : isNote ? (
+            <span className="mobile-title">Notes</span>
           ) : isSettings ? (
             <span className="mobile-title">Settings</span>
           ) : null}
         </div>
-        {pageId || isTrash || isCollection || isSettings ? (
+        {pageId || isHome || isTrash || isCollection || isSettings || isNote ? (
           <Outlet
             context={{
               role: workspace.role,

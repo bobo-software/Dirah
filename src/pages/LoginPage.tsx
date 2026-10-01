@@ -39,44 +39,46 @@ export function LoginPage() {
   }
 
   return (
-    <main className="auth-card">
-      <div className="auth-card-corner">
-        <ThemeToggle />
-      </div>
-      <h1 className="auth-brand">
-        <BrandLink to="/" size="lg" />
-      </h1>
-      <p className="muted">Sign in to your workspace</p>
-      <OAuthButtons />
-      <form onSubmit={onSubmit}>
-        <label>
-          Email
-          <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
-        {message ? <p className="error">{message}</p> : null}
-        <button type="submit" disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
-      </form>
-      <p>
-        No account? <Link to="/register">Create one</Link>
-      </p>
-    </main>
+    <div className="auth-shell">
+      <main className="auth-card login-card">
+        <div className="auth-card-corner">
+          <ThemeToggle />
+        </div>
+        <h1 className="auth-brand">
+          <BrandLink to="/" size="lg" />
+        </h1>
+        <p className="muted">Sign in to your workspace</p>
+        <OAuthButtons />
+        <form onSubmit={onSubmit}>
+          <label>
+            Email
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </label>
+          {message ? <p className="error">{message}</p> : null}
+          <button type="submit" disabled={busy}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+        <p className="auth-foot">
+          No account? <Link to="/register">Create one</Link>
+        </p>
+      </main>
+    </div>
   );
 }

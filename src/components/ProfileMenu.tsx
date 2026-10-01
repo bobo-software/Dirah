@@ -45,7 +45,8 @@ export function ProfileMenu() {
     };
   }, [open]);
 
-  const initial = user?.email?.trim().charAt(0).toUpperCase() || '?';
+  const displayName = user?.name?.trim() ?? '';
+  const initial = (displayName || user?.email || '').trim().charAt(0).toUpperCase() || '?';
 
   return (
     <div className="profile-menu" ref={containerRef}>
@@ -62,7 +63,11 @@ export function ProfileMenu() {
       </button>
       {open ? (
         <div className="profile-dropdown" role="menu">
-          <p className="profile-dropdown-email">{user?.email}</p>
+          <div className="profile-dropdown-identity">
+            {displayName ? <p className="profile-dropdown-name">{displayName}</p> : null}
+            {user?.role?.trim() ? <p className="profile-dropdown-role">{user.role}</p> : null}
+            <p className="profile-dropdown-email">{user?.email}</p>
+          </div>
           <div className="profile-dropdown-section">
             <span className="sidebar-label">Theme</span>
             <div className="theme-segmented" role="group" aria-label="Theme">
@@ -79,6 +84,17 @@ export function ProfileMenu() {
               ))}
             </div>
           </div>
+          <button
+            type="button"
+            role="menuitem"
+            className="profile-menu-item"
+            onClick={() => {
+              setOpen(false);
+              navigate('/settings');
+            }}
+          >
+            Settings
+          </button>
           <button
             type="button"
             role="menuitem"

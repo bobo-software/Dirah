@@ -25,8 +25,9 @@ const SECTIONS: LegalSection[] = [
       <>
         <h3>Your account</h3>
         <p>
-          Your email address and a hashed version of your password. If you sign in with Google or GitHub, we receive
-          your email address and an account identifier from them. We never see your Google or GitHub password.
+          Your email address, a hashed version of your password, and the name, role, and about text you choose to add
+          to your profile. If you sign in with Google or GitHub, we receive your email address and an account
+          identifier from them. We never see your Google or GitHub password.
         </p>
         <h3>What you put in Dirah</h3>
         <p>

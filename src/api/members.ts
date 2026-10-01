@@ -3,6 +3,7 @@ import { apiRequest } from './client';
 export type PublicMember = {
   userId: string;
   email: string;
+  name?: string | null;
   role: string;
 };
 

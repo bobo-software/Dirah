@@ -95,7 +95,9 @@ function HomePage() {
               Pricing
             </a>
             <ThemeToggle />
-            <Link to="/login">Sign in</Link>
+            <Link className="home-bar-signin" to="/login">
+              Sign in
+            </Link>
           </div>
         </header>
         <main className="home-main">
@@ -112,7 +114,9 @@ function HomePage() {
                 <MotionLink className="home-primary" to="/register" {...press}>
                   Create your workspace
                 </MotionLink>
-                <Link to="/login">Sign in</Link>
+                <MotionLink className="home-secondary" to="/login" {...press}>
+                  Sign in
+                </MotionLink>
               </motion.div>
               <motion.p className="home-note" variants={heroItem}>
                 Nothing to install or host.

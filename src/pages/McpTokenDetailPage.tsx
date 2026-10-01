@@ -24,6 +24,7 @@ function rowsToValue(rows: TokenAccessRow[]): Map<string, TokenAccessValue> {
 
 export function McpTokenDetailPage() {
   const { workspaceId, tokenId } = useParams();
+  const backLink = workspaceId ? `/w/${workspaceId}/settings?tab=mcp` : '/settings';
   const location = useLocation();
   const tokens = useMcpStore((state) => state.tokens);
   const loaded = useMcpStore((state) => state.loaded);
@@ -33,7 +34,6 @@ export function McpTokenDetailPage() {
 
   const token = tokens.find((item) => item.id === tokenId);
   const secretFromCreation = (location.state as { secret?: string } | null)?.secret ?? null;
-  const backLink = `/w/${workspaceId}/settings?tab=mcp`;
 
   useEffect(() => {
     if (!loaded) {
@@ -72,17 +72,15 @@ export function McpTokenDetailPage() {
     );
   }
 
-  return <TokenDetailBody key={token.id} token={token} workspaceId={workspaceId ?? ''} backLink={backLink} secretFromCreation={secretFromCreation} />;
+  return <TokenDetailBody key={token.id} token={token} backLink={backLink} secretFromCreation={secretFromCreation} />;
 }
 
 function TokenDetailBody({
   token,
-  workspaceId,
   backLink,
   secretFromCreation,
 }: {
   token: McpToken;
-  workspaceId: string;
   backLink: string;
   secretFromCreation: string | null;
 }) {
@@ -179,7 +177,7 @@ function TokenDetailBody({
     if (!window.confirm('Revoke this MCP token?')) return;
     try {
       await revokeToken(token.id);
-      navigate(`/w/${workspaceId}/settings?tab=mcp`);
+      navigate(backLink);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not revoke token');
     }

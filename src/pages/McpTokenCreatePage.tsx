@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { useMcpStore, useWorkspaceStore } from '../stores/StoresIndex';
 import type { TokenAccessValue } from '../components/TokenAccessFields';
@@ -22,10 +22,12 @@ function KeyIcon() {
 }
 
 export function McpTokenCreatePage() {
-  const { workspaceId } = useOutletContext<WorkspaceOutlet>();
+  const outlet = useOutletContext<WorkspaceOutlet | null>();
+  const workspaceId = outlet?.workspaceId;
   const navigate = useNavigate();
   const createToken = useMcpStore((state) => state.createToken);
   const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
   const grantableWorkspaces = useMemo(() => workspaces.filter((w) => !w.encrypted), [workspaces]);
   const encryptedCount = workspaces.length - grantableWorkspaces.length;
 
@@ -34,8 +36,24 @@ export function McpTokenCreatePage() {
   const [defaultWorkspaceId, setDefaultWorkspaceId] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const seededWorkspace = useRef(false);
 
-  const backLink = `/w/${workspaceId}/settings?tab=mcp`;
+  const backLink = workspaceId ? `/w/${workspaceId}/settings?tab=mcp` : '/settings';
+  const detailPath = (tokenId: string) =>
+    workspaceId ? `/w/${workspaceId}/settings/mcp/${tokenId}` : `/settings/mcp/${tokenId}`;
+
+  useEffect(() => {
+    void fetchWorkspaces().catch(() => undefined);
+  }, [fetchWorkspaces]);
+
+  useEffect(() => {
+    if (!workspaceId || seededWorkspace.current) return;
+    const workspace = workspaces.find((item) => item.id === workspaceId);
+    if (!workspace || workspace.encrypted) return;
+    seededWorkspace.current = true;
+    setAccess(new Map([[workspaceId, { allowlisted: true, canWrite: workspace.role !== 'viewer' }]]));
+    setDefaultWorkspaceId(workspaceId);
+  }, [workspaceId, workspaces]);
 
   function onAccessChange(id: string, patch: Partial<TokenAccessValue>) {
     setAccess((prev) => {
@@ -58,7 +76,7 @@ export function McpTokenCreatePage() {
         .filter(([, v]) => v.allowlisted)
         .map(([id, v]) => ({ workspaceId: id, canWrite: v.canWrite }));
       const token = await createToken(name, defaultWorkspaceId, workspaceAccess);
-      navigate(`/w/${workspaceId}/settings/mcp/${token.id}`, { state: { secret: token.secret } });
+      navigate(detailPath(token.id), { state: { secret: token.secret } });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not create token');
       setBusy(false);

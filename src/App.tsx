@@ -12,7 +12,7 @@ import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminEmailsPage } from './pages/admin/AdminEmailsPage';
 import { AdminRequestLogsPage } from './pages/admin/AdminRequestLogsPage';
-import { SettingsRedirect } from './components/ComponentsIndex';
+import { AccountSettingsPage } from './pages/AccountSettingsPage';
 import { HomeGate } from './pages/HomePage';
 import { PrivacyPage } from './pages/legal/PrivacyPage';
 import { TermsPage } from './pages/legal/TermsPage';
@@ -41,6 +41,16 @@ const TrashPage = lazy(async () => {
 const CollectionPage = lazy(async () => {
   const mod = await import('./pages/CollectionPage');
   return { default: mod.CollectionPage };
+});
+
+const NotePage = lazy(async () => {
+  const mod = await import('./pages/notes/NotePage');
+  return { default: mod.NotePage };
+});
+
+const WorkspaceHomePage = lazy(async () => {
+  const mod = await import('./pages/WorkspaceHomePage');
+  return { default: mod.WorkspaceHomePage };
 });
 
 export default function App() {
@@ -78,14 +88,32 @@ export default function App() {
         />
         <Route element={<RequireAuth />}>
           <Route element={<AppFrame />}>
-            <Route path="/settings" element={<SettingsRedirect />} />
+            <Route path="/settings" element={<AccountSettingsPage />} />
+            <Route path="/settings/mcp/new" element={<McpTokenCreatePage />} />
+            <Route path="/settings/mcp/:tokenId" element={<McpTokenDetailPage />} />
             <Route path="/settings/mcp-oauth" element={<McpOAuthConsentPage />} />
             <Route path="/w/:workspaceId" element={<WorkspaceShellPage />}>
+              <Route
+                index
+                element={
+                  <Suspense fallback={<p className="muted">Loading workspace…</p>}>
+                    <WorkspaceHomePage />
+                  </Suspense>
+                }
+              />
               <Route
                 path="p/:pageId"
                 element={
                   <Suspense fallback={<p className="muted">Loading editor…</p>}>
                     <WorkspaceNodePage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="n/:noteId"
+                element={
+                  <Suspense fallback={<p className="muted">Loading note…</p>}>
+                    <NotePage />
                   </Suspense>
                 }
               />

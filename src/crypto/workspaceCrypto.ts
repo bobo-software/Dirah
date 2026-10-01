@@ -127,7 +127,7 @@ async function createBundle(password: string): Promise<{ bundle: UserCryptoBundl
   };
 }
 
-async function openBundle(password: string, bundle: UserCryptoBundle): Promise<SessionKeys> {
+async function decryptPkcs8(password: string, bundle: UserCryptoBundle): Promise<Uint8Array> {
   if (bundle.kdfIterations !== KDF_ITERATIONS) {
     throw new Error('Unsupported key derivation');
   }
@@ -135,14 +135,39 @@ async function openBundle(password: string, bundle: UserCryptoBundle): Promise<S
   const nonce = packed.slice(0, 12);
   const wrapped = packed.slice(12);
   const kek = await pbkdf2Key(password, base64ToBytes(bundle.kdfSalt));
-  let pkcs8: ArrayBuffer;
   try {
-    pkcs8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bufferOf(nonce) }, kek, bufferOf(wrapped));
+    const pkcs8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bufferOf(nonce) }, kek, bufferOf(wrapped));
+    return new Uint8Array(pkcs8);
   } catch {
     throw new Error('Wrong password for encrypted pages');
   }
-  const privateKey = await importPrivateKey(new Uint8Array(pkcs8));
+}
+
+async function openBundle(password: string, bundle: UserCryptoBundle): Promise<SessionKeys> {
+  const pkcs8 = await decryptPkcs8(password, bundle);
+  const privateKey = await importPrivateKey(pkcs8);
   return { privateKey, publicKeySpki: bundle.publicKey };
+}
+
+/** Re-wrap the existing account key with a new password. The key pair stays the same. */
+export async function rewrapAccountKey(
+  currentPassword: string,
+  newPassword: string,
+  bundle: UserCryptoBundle
+): Promise<UserCryptoBundle> {
+  const pkcs8 = await decryptPkcs8(currentPassword, bundle);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const kek = await pbkdf2Key(newPassword, salt);
+  const wrapped = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: bufferOf(nonce) }, kek, bufferOf(pkcs8))
+  );
+  return {
+    publicKey: bundle.publicKey,
+    wrappedPrivateKey: bytesToBase64(concat([nonce, wrapped])),
+    kdfSalt: bytesToBase64(salt),
+    kdfIterations: KDF_ITERATIONS,
+  };
 }
 
 function remember(keys: SessionKeys): void {

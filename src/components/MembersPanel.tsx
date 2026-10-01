@@ -131,7 +131,16 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
       <ul className="member-list">
         {members.map((member) => (
           <li key={member.userId}>
-            <span className="member-email">{member.email}</span>
+            <span className="member-email">
+              {member.name?.trim() ? (
+                <>
+                  {member.name}
+                  <span className="member-email-sub">{member.email}</span>
+                </>
+              ) : (
+                member.email
+              )}
+            </span>
             <select
               aria-label={`Role for ${member.email}`}
               value={member.role}

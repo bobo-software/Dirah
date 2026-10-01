@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore, useWorkspaceStore } from '../stores/StoresIndex';
 import { BrandLink } from '../components/Logo';
@@ -91,6 +91,12 @@ function TopbarWorkspaceSwitcher() {
 }
 
 export function AppFrame({ children }: { children?: ReactNode }) {
+  const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
+
+  useEffect(() => {
+    void fetchWorkspaces().catch(() => undefined);
+  }, [fetchWorkspaces]);
+
   return (
     <div className="app">
       <header className="topbar">

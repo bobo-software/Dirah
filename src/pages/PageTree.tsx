@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import type { PageKind, PublicPage } from '../api/client';
 import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
+import { categoryHue } from './categoryColor';
 
 function ChevronIcon() {
   return (
@@ -264,9 +265,17 @@ function PageTreeItem({
               </button>
             ) : null}
           </span>
-          <span className="kind-glyph" title={kind}>
-            {kindGlyph(kind)}
-          </span>
+          {nestable ? (
+            <span
+              className="category-dot"
+              aria-hidden="true"
+              style={{ background: `hsl(${categoryHue(page.id)} 55% 50%)` }}
+            />
+          ) : (
+            <span className="kind-glyph" title={kind}>
+              {kindGlyph(kind)}
+            </span>
+          )}
           {nestable ? (
             <span className="page-row-title">{page.title}</span>
           ) : (
@@ -274,6 +283,7 @@ function PageTreeItem({
               {page.title}
             </NavLink>
           )}
+          {nestable ? <span className="page-row-count">{node.children.length}</span> : null}
           <button
             type="button"
             className={page.favorited ? 'linkish star on' : 'linkish star'}

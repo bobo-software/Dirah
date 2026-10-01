@@ -12,6 +12,7 @@ type WorkspaceState = {
   setActiveWorkspace: (id: string) => Promise<PublicWorkspace>;
   createWorkspace: (name: string) => Promise<PublicWorkspace>;
   renameWorkspace: (id: string, name: string) => Promise<PublicWorkspace>;
+  updateWorkspaceDescription: (id: string, description: string | null) => Promise<PublicWorkspace>;
   deleteWorkspace: (id: string) => Promise<void>;
   reset: () => void;
 };
@@ -79,6 +80,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       method: 'PATCH',
       accessToken: token(),
       body: JSON.stringify({ name }),
+    });
+    set((state) => ({ workspaces: upsert(state.workspaces, data.workspace) }));
+    return data.workspace;
+  },
+
+  updateWorkspaceDescription: async (id, description) => {
+    const data = await apiRequest<{ workspace: PublicWorkspace }>(`/api/workspaces/${id}`, {
+      method: 'PATCH',
+      accessToken: token(),
+      body: JSON.stringify({ description }),
     });
     set((state) => ({ workspaces: upsert(state.workspaces, data.workspace) }));
     return data.workspace;

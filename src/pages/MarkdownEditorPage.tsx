@@ -20,6 +20,79 @@ import {
   usePageStore,
 } from '../stores/StoresIndex';
 
+function CodeIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8.5 7L3.5 12l5 5" />
+      <path d="M15.5 7l5 5-5 5" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3.5v11.5" />
+      <path d="M7.5 11l4.5 4.5L16.5 11" />
+      <path d="M4.5 18.5h15" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 4.5h11l3.5 3.5V19a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5Z" />
+      <path d="M8 4.5V9h7V4.5" />
+      <path d="M7.5 13.5h9V19h-9z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4.5 12.5l5 5 10-10.5" />
+    </svg>
+  );
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3.5l1.7 4.8 4.8 1.7-4.8 1.7L12 16.5l-1.7-4.8-4.8-1.7 4.8-1.7L12 3.5Z" />
+      <path d="M19 14.5l.75 2 2 .75-2 .75-.75 2-.75-2-2-.75 2-.75.75-2Z" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="10.5" width="14" height="9" rx="2" />
+      <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6.5 2.75h7.4L18.5 7.4v13.85a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1Z" />
+      <path d="M14 2.5V7h5" />
+      <path d="M9 12.5h6M9 16h6" />
+    </svg>
+  );
+}
+
+function HashIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9.5 3.5l-3 17M17.5 3.5l-3 17M3.5 9h17M2.5 15h17" />
+    </svg>
+  );
+}
+
 export function MarkdownEditorPage() {
   const { workspaceId, pageId } = useParams();
   const { role, pageTitle } = useOutletContext<WorkspaceOutlet>();
@@ -172,41 +245,65 @@ export function MarkdownEditorPage() {
     <>
       <div className="editor-toolbar">
         <span className="editor-title">{pageTitle || page?.title || 'Untitled'}</span>
-        <button
-          type="button"
-          className={`linkish${showSource ? ' on' : ''}`}
-          onClick={toggleShowSource}
-          aria-pressed={showSource}
-        >
-          {showSource ? 'Hide source' : 'Show source'}
-        </button>
-        <span className="kind-chip">Markdown</span>
-        <button type="button" className="linkish" onClick={onDownload}>
-          Download .md
-        </button>
-        {editable ? (
-          <button type="button" className="linkish" onClick={() => void save()} disabled={saving || !dirty}>
-            {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
-          </button>
-        ) : (
-          <span className="muted">View only</span>
-        )}
-        {accessToken && aiEnabled && !encrypted ? (
+        <div className="editor-toolbar-actions">
+          <span className="kind-chip">
+            <FileIcon />
+            Markdown
+          </span>
           <button
             type="button"
-            className={`linkish${askOpen ? ' on' : ''}`}
-            onClick={() => setAskOpen((open) => !open)}
+            className={`editor-tool-btn${showSource ? ' on' : ''}`}
+            onClick={toggleShowSource}
+            aria-pressed={showSource}
+            title={showSource ? 'Hide source' : 'Show source'}
           >
-            Ask
+            <CodeIcon />
+            {showSource ? 'Hide source' : 'Show source'}
           </button>
-        ) : null}
-        {hash ? <span className="muted">etag {hash.slice(0, 8)}</span> : null}
-        {message ? (
-          <p className="error" role="alert">
-            {message}
-          </p>
-        ) : null}
+          <button type="button" className="editor-tool-btn" onClick={onDownload} title="Download as .md">
+            <DownloadIcon />
+            Download .md
+          </button>
+          {accessToken && aiEnabled && !encrypted ? (
+            <button
+              type="button"
+              className={`editor-tool-btn${askOpen ? ' on' : ''}`}
+              onClick={() => setAskOpen((open) => !open)}
+              title="Ask about this page"
+            >
+              <SparkleIcon />
+              Ask
+            </button>
+          ) : null}
+          {editable ? (
+            <button
+              type="button"
+              className="editor-tool-btn save-btn"
+              onClick={() => void save()}
+              disabled={saving || !dirty}
+            >
+              {dirty || saving ? <SaveIcon /> : <CheckIcon />}
+              {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+            </button>
+          ) : (
+            <span className="editor-meta">
+              <LockIcon />
+              View only
+            </span>
+          )}
+          {hash ? (
+            <span className="editor-meta" title={hash}>
+              <HashIcon />
+              {hash.slice(0, 8)}
+            </span>
+          ) : null}
+        </div>
       </div>
+      {message ? (
+        <p className="error editor-toolbar-error" role="alert">
+          {message}
+        </p>
+      ) : null}
       {askOpen && accessToken && pageId ? (
         <AskPanel
           pageId={pageId}
@@ -220,18 +317,17 @@ export function MarkdownEditorPage() {
         className={`markdown-split${editable ? '' : ' readonly'}${showSource ? '' : ' preview-only'}`}
       >
         {showSource ? (
-          editable ? (
+          <div className="markdown-source">
             <CodeMirror
               value={content}
               height="100%"
               theme={resolved}
               extensions={[markdown(), EditorView.lineWrapping]}
               onChange={onChange}
+              readOnly={!editable}
               basicSetup={{ lineNumbers: true, foldGutter: true }}
             />
-          ) : (
-            <pre className="markdown-source">{content}</pre>
-          )
+          </div>
         ) : null}
         <div className="markdown-preview">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '_Empty document._'}</ReactMarkdown>
