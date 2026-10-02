@@ -1,5 +1,5 @@
 import { and, asc, eq, exists, ilike, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
-import { notes, noteTagLinks, noteTags } from '../db/schemas';
+import { kanbanCards, kanbanColumns, notes, noteTagLinks, noteTags } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import {
   excerptFromSearchText,
@@ -13,6 +13,11 @@ import { diffPreview, EMPTY_MARKDOWN_HASH, MAX_MARKDOWN_BYTES } from './PageServ
 export const NOTE_VISIBILITIES = ['private', 'workspace'] as const;
 export type NoteVisibility = (typeof NOTE_VISIBILITIES)[number];
 
+export const NOTE_KINDS = ['note', 'kanban'] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+
+const DEFAULT_KANBAN_COLUMNS = ['To do', 'Doing', 'Done'] as const;
+
 export type NoteScope = 'mine' | 'shared';
 
 export interface PublicNote {
@@ -24,6 +29,7 @@ export interface PublicNote {
   icon: string | null;
   cover: string | null;
   visibility: NoteVisibility;
+  kind: NoteKind;
   position: number;
   pinnedAt: Date | null;
   tagIds: string[];
@@ -48,6 +54,24 @@ export interface PublicNoteTag {
   color: string;
 }
 
+export interface KanbanCardView {
+  noteId: string;
+  position: number;
+  note: PublicNote;
+}
+
+export interface KanbanColumnView {
+  id: string;
+  title: string;
+  position: number;
+  cards: KanbanCardView[];
+}
+
+export interface KanbanBoardView {
+  board: PublicNote;
+  columns: KanbanColumnView[];
+}
+
 export interface ListNotesQuery {
   trashed?: boolean;
   q?: string;
@@ -64,6 +88,7 @@ const noteColumns = {
   icon: notes.icon,
   cover: notes.cover,
   visibility: notes.visibility,
+  kind: notes.kind,
   position: notes.position,
   pinnedAt: notes.pinnedAt,
   deletedAt: notes.deletedAt,
@@ -81,6 +106,7 @@ type NoteRow = {
   icon: string | null;
   cover: string | null;
   visibility: string;
+  kind: string;
   position: number;
   pinnedAt: Date | null;
   deletedAt: Date | null;
@@ -100,6 +126,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function asVisibility(value: string): NoteVisibility {
   return value === 'workspace' ? 'workspace' : 'private';
+}
+
+function asKind(value: string): NoteKind {
+  return value === 'kanban' ? 'kanban' : 'note';
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -182,6 +212,7 @@ export class NoteService {
       icon?: string | null;
       cover?: string | null;
       visibility?: NoteVisibility;
+      kind?: NoteKind;
     }
   ): Promise<PublicNote> {
     const workspace = await this.auth.requireMember(userId, workspaceId);
@@ -196,22 +227,36 @@ export class NoteService {
       visibility = asVisibility(parent.visibility);
     }
     const title = (input.title ?? 'Untitled').trim() || 'Untitled';
+    const kind: NoteKind = input.kind ?? 'note';
     const position = await this.nextPosition(workspaceId, userId, parentId);
-    const [created] = await this.database
-      .insert(notes)
-      .values({
-        workspaceId,
-        authorId: userId,
-        parentId,
-        title,
-        icon: input.icon ?? null,
-        cover: input.cover ?? null,
-        visibility,
-        position,
-        content: '',
-        contentHash: EMPTY_MARKDOWN_HASH,
-      })
-      .returning(noteColumns);
+    const created = await this.database.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(notes)
+        .values({
+          workspaceId,
+          authorId: userId,
+          parentId,
+          title,
+          icon: input.icon ?? null,
+          cover: input.cover ?? null,
+          visibility,
+          kind,
+          position,
+          content: '',
+          contentHash: EMPTY_MARKDOWN_HASH,
+        })
+        .returning(noteColumns);
+      if (kind === 'kanban') {
+        await tx.insert(kanbanColumns).values(
+          DEFAULT_KANBAN_COLUMNS.map((columnTitle, columnPosition) => ({
+            boardId: row.id,
+            title: columnTitle,
+            position: columnPosition,
+          }))
+        );
+      }
+      return row;
+    });
     return this.toPublic(created, userId, []);
   }
 
@@ -274,6 +319,13 @@ export class NoteService {
             .set({ visibility, updatedAt: now })
             .where(inArray(notes.id, descendants));
         }
+        const boardIds = [noteId, ...descendants];
+        await tx.delete(kanbanCards).where(
+          and(
+            inArray(kanbanCards.boardId, boardIds),
+            sql`${kanbanCards.noteId} in (select id from notes where visibility <> ${visibility})`
+          )
+        );
       }
       return row;
     });
@@ -326,10 +378,16 @@ export class NoteService {
     const note = await this.requireAuthorNote(userId, noteId);
     const ids = await this.descendantIds(note.workspaceId, noteId, true);
     const now = new Date();
-    await this.database
-      .update(notes)
-      .set({ deletedAt: now, updatedAt: now })
-      .where(and(inArray(notes.id, ids), isNull(notes.deletedAt)));
+    await this.database.transaction(async (tx) => {
+      await tx
+        .update(notes)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(and(inArray(notes.id, ids), isNull(notes.deletedAt)));
+      await tx
+        .delete(kanbanCards)
+        .where(or(inArray(kanbanCards.noteId, ids), inArray(kanbanCards.boardId, ids))!);
+      await tx.delete(kanbanColumns).where(inArray(kanbanColumns.boardId, ids));
+    });
   }
 
   async restore(userId: string, noteId: string): Promise<PublicNote> {
@@ -443,6 +501,136 @@ export class NoteService {
     const tag = await this.requireTag(tagId);
     await this.auth.requireEditor(userId, tag.workspaceId);
     await this.database.delete(noteTags).where(eq(noteTags.id, tagId));
+  }
+
+  async getBoard(userId: string, boardId: string): Promise<KanbanBoardView> {
+    const board = await this.requireBoard(userId, boardId, false);
+    return this.boardView(userId, board);
+  }
+
+  async createColumn(userId: string, boardId: string, input: { title?: string }): Promise<KanbanBoardView> {
+    const board = await this.requireBoard(userId, boardId, true);
+    const title = (input.title ?? 'Untitled').trim() || 'Untitled';
+    const position = await this.nextColumnPosition(boardId);
+    await this.database.insert(kanbanColumns).values({ boardId, title, position });
+    return this.boardView(userId, board);
+  }
+
+  async patchColumn(
+    userId: string,
+    columnId: string,
+    input: { title?: string; position?: number }
+  ): Promise<KanbanBoardView> {
+    const { column, board } = await this.requireColumn(userId, columnId);
+    const title = input.title !== undefined ? input.title.trim() || 'Untitled' : column.title;
+    const position = input.position ?? column.position;
+    await this.database.update(kanbanColumns).set({ title, position }).where(eq(kanbanColumns.id, columnId));
+    return this.boardView(userId, board);
+  }
+
+  async deleteColumn(userId: string, columnId: string): Promise<KanbanBoardView> {
+    const { board } = await this.requireColumn(userId, columnId);
+    await this.database.delete(kanbanColumns).where(eq(kanbanColumns.id, columnId));
+    return this.boardView(userId, board);
+  }
+
+  async orderColumns(userId: string, boardId: string, columnIds: string[]): Promise<KanbanBoardView> {
+    const board = await this.requireBoard(userId, boardId, true);
+    const columns = await this.database
+      .select({ id: kanbanColumns.id })
+      .from(kanbanColumns)
+      .where(eq(kanbanColumns.boardId, boardId));
+    const existing = new Set(columns.map((column) => column.id));
+    const unique = new Set(columnIds);
+    if (columnIds.length !== existing.size || unique.size !== columnIds.length || columnIds.some((id) => !existing.has(id))) {
+      throw new HttpError('Column order must list every column once', 400, 'INVALID_ORDER');
+    }
+    await this.database.transaction(async (tx) => {
+      for (const [position, id] of columnIds.entries()) {
+        await tx.update(kanbanColumns).set({ position }).where(eq(kanbanColumns.id, id));
+      }
+    });
+    return this.boardView(userId, board);
+  }
+
+  async addCard(
+    userId: string,
+    boardId: string,
+    input: { columnId: string; title?: string; noteId?: string }
+  ): Promise<KanbanBoardView> {
+    const board = await this.requireBoard(userId, boardId, true);
+    await this.requireColumnOnBoard(boardId, input.columnId);
+    const note = input.noteId
+      ? await this.requirePlaceable(userId, board, input.noteId)
+      : await this.create(userId, board.workspaceId, {
+          parentId: board.id,
+          title: input.title,
+          visibility: board.visibility,
+        });
+    const position = await this.nextCardPosition(input.columnId);
+    try {
+      await this.database.insert(kanbanCards).values({
+        boardId,
+        columnId: input.columnId,
+        noteId: note.id,
+        position,
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new HttpError('That note is already on this board', 409, 'ALREADY_PLACED');
+      }
+      throw error;
+    }
+    return this.boardView(userId, board);
+  }
+
+  async moveCard(
+    userId: string,
+    input: { boardId: string; noteId: string; columnId: string; position: number }
+  ): Promise<KanbanBoardView> {
+    const board = await this.requireBoard(userId, input.boardId, true);
+    await this.requireColumnOnBoard(input.boardId, input.columnId);
+    const cards = await this.database
+      .select()
+      .from(kanbanCards)
+      .where(eq(kanbanCards.boardId, input.boardId));
+    const card = cards.find((item) => item.noteId === input.noteId);
+    if (!card) {
+      throw new HttpError('Card not found', 404, 'CARD_NOT_FOUND');
+    }
+    const sameColumn = card.columnId === input.columnId;
+    const source = cards
+      .filter((item) => item.columnId === card.columnId && item.noteId !== card.noteId)
+      .sort((a, b) => a.position - b.position);
+    const destination = sameColumn
+      ? source
+      : cards.filter((item) => item.columnId === input.columnId).sort((a, b) => a.position - b.position);
+    const index = Math.max(0, Math.min(input.position, destination.length));
+    destination.splice(index, 0, { ...card, columnId: input.columnId });
+    await this.database.transaction(async (tx) => {
+      const lists = sameColumn ? [destination] : [source, destination];
+      for (const list of lists) {
+        for (const [position, item] of list.entries()) {
+          await tx
+            .update(kanbanCards)
+            .set({ columnId: item.columnId, position })
+            .where(and(eq(kanbanCards.boardId, input.boardId), eq(kanbanCards.noteId, item.noteId)));
+        }
+      }
+    });
+    return this.boardView(userId, board);
+  }
+
+  async removeCard(userId: string, boardId: string, noteId: string): Promise<KanbanBoardView> {
+    const board = await this.requireBoard(userId, boardId, true);
+    const removed = await this.database
+      .delete(kanbanCards)
+      .where(and(eq(kanbanCards.boardId, boardId), eq(kanbanCards.noteId, noteId)))
+      .returning({ noteId: kanbanCards.noteId });
+    if (removed.length === 0) {
+      throw new HttpError('Card not found', 404, 'CARD_NOT_FOUND');
+    }
+    return this.boardView(userId, board);
   }
 
   /** Hidden notes 404 rather than 403 so their existence does not leak. */
@@ -570,6 +758,7 @@ export class NoteService {
       icon: row.icon,
       cover: row.cover,
       visibility: asVisibility(row.visibility),
+      kind: asKind(row.kind),
       position: row.position,
       pinnedAt: row.pinnedAt,
       tagIds,
@@ -579,6 +768,121 @@ export class NoteService {
       updatedAt: row.updatedAt,
       excerpt: excerptFromSearchText(row.searchTextPreview),
     };
+  }
+
+  private async requireBoard(userId: string, boardId: string, author: boolean): Promise<PublicNote> {
+    const note = author
+      ? await this.requireAuthorNote(userId, boardId)
+      : await this.requireVisibleNote(userId, boardId);
+    if (note.kind !== 'kanban') {
+      throw new HttpError('This note is not a kanban board', 400, 'NOT_A_BOARD');
+    }
+    return note;
+  }
+
+  private async requireColumn(userId: string, columnId: string) {
+    const column = await this.requireColumnRow(columnId);
+    const board = await this.requireBoard(userId, column.boardId, true);
+    return { column, board };
+  }
+
+  private async requireColumnOnBoard(boardId: string, columnId: string) {
+    const column = await this.requireColumnRow(columnId);
+    if (column.boardId !== boardId) {
+      throw new HttpError('Column not found', 404, 'COLUMN_NOT_FOUND');
+    }
+    return column;
+  }
+
+  private async requireColumnRow(columnId: string) {
+    if (!UUID_RE.test(columnId)) {
+      throw new HttpError('Column not found', 404, 'COLUMN_NOT_FOUND');
+    }
+    const [column] = await this.database
+      .select()
+      .from(kanbanColumns)
+      .where(eq(kanbanColumns.id, columnId))
+      .limit(1);
+    if (!column) {
+      throw new HttpError('Column not found', 404, 'COLUMN_NOT_FOUND');
+    }
+    return column;
+  }
+
+  private async requirePlaceable(userId: string, board: PublicNote, noteId: string): Promise<PublicNote> {
+    if (noteId === board.id) {
+      throw new HttpError('A board cannot contain itself', 400, 'INVALID_CARD');
+    }
+    const note = await this.requireVisibleNote(userId, noteId);
+    if (note.workspaceId !== board.workspaceId) {
+      throw new HttpError('Note not found', 404, 'NOTE_NOT_FOUND');
+    }
+    if (note.visibility !== board.visibility) {
+      throw this.visibilityConflict();
+    }
+    return note;
+  }
+
+  private async boardView(userId: string, board: PublicNote): Promise<KanbanBoardView> {
+    const columns = await this.database
+      .select()
+      .from(kanbanColumns)
+      .where(eq(kanbanColumns.boardId, board.id))
+      .orderBy(asc(kanbanColumns.position), asc(kanbanColumns.id));
+    const cards = await this.database
+      .select()
+      .from(kanbanCards)
+      .where(eq(kanbanCards.boardId, board.id))
+      .orderBy(asc(kanbanCards.position), asc(kanbanCards.noteId));
+    const visible = await this.visibleNotesById(
+      userId,
+      cards.map((card) => card.noteId)
+    );
+    return {
+      board,
+      columns: columns.map((column) => ({
+        id: column.id,
+        title: column.title,
+        position: column.position,
+        cards: cards
+          .filter((card) => card.columnId === column.id && visible.has(card.noteId))
+          .map((card) => ({
+            noteId: card.noteId,
+            position: card.position,
+            note: visible.get(card.noteId)!,
+          })),
+      })),
+    };
+  }
+
+  private async visibleNotesById(userId: string, noteIds: string[]): Promise<Map<string, PublicNote>> {
+    const map = new Map<string, PublicNote>();
+    if (noteIds.length === 0) return map;
+    const rows = await this.database
+      .select(noteColumns)
+      .from(notes)
+      .where(and(inArray(notes.id, noteIds), isNull(notes.deletedAt), this.visibleFilter(userId)));
+    const tagIds = await this.tagIdsFor(rows.map((row) => row.id));
+    for (const row of rows) {
+      map.set(row.id, this.toPublic(row, userId, tagIds.get(row.id) ?? []));
+    }
+    return map;
+  }
+
+  private async nextColumnPosition(boardId: string): Promise<number> {
+    const [{ nextPos }] = await this.database
+      .select({ nextPos: max(kanbanColumns.position) })
+      .from(kanbanColumns)
+      .where(eq(kanbanColumns.boardId, boardId));
+    return (nextPos ?? -1) + 1;
+  }
+
+  private async nextCardPosition(columnId: string): Promise<number> {
+    const [{ nextPos }] = await this.database
+      .select({ nextPos: max(kanbanCards.position) })
+      .from(kanbanCards)
+      .where(eq(kanbanCards.columnId, columnId));
+    return (nextPos ?? -1) + 1;
   }
 
   private async nextPosition(
