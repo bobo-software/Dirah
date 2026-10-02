@@ -1,8 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './stores/StoresIndex';
-import { AppFrame, RequireAuth } from './layout/AppFrame';
-import { AdminShell, RequireSystemAdmin } from './layout/AdminShell';
+import { AdminShell, AppFrame, RequireAuth, RequireSystemAdmin } from './components/ComponentsIndex';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { InvitePage } from './pages/InvitePage';
@@ -46,6 +45,11 @@ const CollectionPage = lazy(async () => {
 const NotePage = lazy(async () => {
   const mod = await import('./pages/notes/NotePage');
   return { default: mod.NotePage };
+});
+
+const NotesLandingPage = lazy(async () => {
+  const mod = await import('./pages/notes/NotesLandingPage');
+  return { default: mod.NotesLandingPage };
 });
 
 const WorkspaceHomePage = lazy(async () => {
@@ -96,7 +100,15 @@ export default function App() {
               <Route
                 index
                 element={
-                  <Suspense fallback={<p className="muted">Loading workspace…</p>}>
+                  <Suspense fallback={<p className="muted">Loading notes…</p>}>
+                    <NotesLandingPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="docs"
+                element={
+                  <Suspense fallback={<p className="muted">Loading docs…</p>}>
                     <WorkspaceHomePage />
                   </Suspense>
                 }

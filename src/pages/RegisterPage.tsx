@@ -1,9 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
-import { OAuthButtons } from './OAuthButtons';
-import { BrandLink } from '../components/Logo';
-import { ThemeToggle } from '../components/ThemeToggle';
+import { BrandLink, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
 
 export function RegisterPage() {
   const user = useAuthStore((state) => state.user);

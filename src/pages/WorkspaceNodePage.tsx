@@ -2,7 +2,7 @@ import { useOutletContext, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore } from '../stores/StoresIndex';
 import { MarkdownEditorPage } from './MarkdownEditorPage';
 import { FolderLandingPage } from './FolderLandingPage';
-import { pageKind } from './pageKind';
+import { pageKind } from '../components/ComponentsIndex';
 import type { WorkspaceOutlet } from './workspaceContext';
 
 export function WorkspaceNodePage() {

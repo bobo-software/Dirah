@@ -191,18 +191,34 @@ h1.auth-brand {
 }
 
 .topbar-nav {
-  display: flex;
-  gap: 1rem;
-  flex: 1;
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
-.topbar-nav a {
+.topbar-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 7px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   color: var(--muted);
   text-decoration: none;
 }
 
-.topbar-nav a.active {
+.topbar-tab:hover {
   color: var(--text-h);
+}
+
+.topbar-tab.active {
+  background: var(--surface);
+  color: var(--text-h);
+  box-shadow: 0 1px 2px var(--shadow);
 }
 
 .topbar-user {
@@ -242,7 +258,7 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled):not(.linkish):not(.icon-btn):not(.sidebar-add):not(.sidebar-close):not(.sidebar-empty-cta):not(.sidebar-toggle):not(.workspace-switcher):not(.workspace-pick):not(.danger-btn):not(.profile-trigger):not(.theme-option):not(.profile-menu-item):not(.settings-nav-item):not(.access-segment):not(.demo-replay):not(.home-copy-btn):not(.home-client-tab):not(.home-tab):not(.editor-tool-btn) {
+button:hover:not(:disabled):not(.linkish):not(.icon-btn):not(.sidebar-add):not(.sidebar-close):not(.sidebar-empty-cta):not(.sidebar-toggle):not(.workspace-switcher):not(.workspace-pick):not(.danger-btn):not(.profile-trigger):not(.theme-option):not(.profile-menu-item):not(.settings-nav-item):not(.access-segment):not(.demo-replay):not(.home-copy-btn):not(.home-client-tab):not(.editor-tool-btn) {
   background: var(--accent-hover);
 }
 
@@ -3132,7 +3148,45 @@ button.linkish.danger {
   }
 
   .topbar-nav {
-    flex: 0;
+    flex: 0 0 auto;
+  }
+
+  /* The fixed app topbar has a fixed height, so keep it to one row. */
+  .app > .topbar {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+
+  /* The switcher gives up width first; its name ellipsises down to the avatar. */
+  .topbar-workspace {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .topbar-workspace .workspace-switcher {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .topbar-workspace .workspace-switcher-name {
+    max-width: 8rem;
+  }
+
+  .topbar-workspace .kind-chip {
+    display: none;
+  }
+
+  .topbar-user {
+    flex-shrink: 0;
+  }
+
+  .topbar-tab {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.85rem;
+  }
+
+  .topbar-tab svg {
+    display: none;
   }
 
   .public-share-ro {
@@ -3445,49 +3499,11 @@ button.linkish.danger {
   resize: vertical;
 }
 
-.home-tabs {
-  display: inline-flex;
-  gap: 0.2rem;
-  padding: 0.25rem;
-  margin: 0 0 1.5rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.home-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  background: none;
-  border: 0;
-  border-radius: 7px;
-  padding: 0.4rem 0.85rem;
-  font: inherit;
-  font-weight: 500;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.home-tab:hover {
-  color: var(--text-h);
-}
-
-.home-tab.on {
-  background: var(--surface);
-  color: var(--text-h);
-  box-shadow: 0 1px 2px var(--shadow);
-}
-
 .home-empty-state {
   padding: 1rem 0;
 }
 
 /* Notes */
-
-.notes-home {
-  max-width: 44rem;
-}
 
 .notes-home-head {
   display: flex;
@@ -3499,6 +3515,17 @@ button.linkish.danger {
 
 .notes-home-head p {
   margin: 0;
+}
+
+.note-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.note-card-pin {
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .note-tree .page-row {
@@ -3532,13 +3559,11 @@ button.linkish.danger {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 1.25rem 1.75rem 4rem;
+  padding: 1.25rem 20rem 4rem 1.75rem;
 }
 
 .note-page > * {
-  max-width: 46rem;
-  margin-left: auto;
-  margin-right: auto;
+  max-width: none;
 }
 
 .note-page-empty {
@@ -3769,7 +3794,7 @@ button.linkish.danger {
   width: 100%;
   border-collapse: collapse;
   margin: 0.6em 0;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
 .note-prose th,
@@ -3789,6 +3814,406 @@ button.linkish.danger {
 .note-prose td p,
 .note-prose th p {
   margin: 0;
+}
+
+.note-col-widget {
+  display: contents;
+}
+
+.note-col-type {
+  float: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin: 0.05rem 0.35rem 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.note-col-type:hover,
+.note-col-type[aria-expanded='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.note-col-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 11.5rem;
+  max-width: 16rem;
+  max-height: min(24rem, calc(100vh - 1rem));
+  overflow: auto;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.note-col-option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: 0.9rem/1.3 var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.note-col-option:hover:not(:disabled),
+.note-col-option.on {
+  background: var(--accent-soft);
+  color: var(--text-h);
+}
+
+.note-col-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.note-col-choices {
+  margin-top: 0.25rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--border);
+}
+
+.note-col-choices > p,
+.note-col-choices-empty {
+  margin: 0.2rem 0.45rem;
+  color: var(--muted);
+  font: 0.75rem/1.4 var(--ui);
+}
+
+.note-col-choices ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.note-col-choices li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.15rem 0.45rem;
+  font: 0.85rem/1.3 var(--ui);
+}
+
+.note-col-choices li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-col-choice-remove,
+.note-col-choice-add button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 0.75rem/1 var(--ui);
+  cursor: pointer;
+}
+
+.note-col-choice-remove:hover,
+.note-col-choice-add button:hover {
+  color: var(--text-h);
+}
+
+.note-col-choice-add {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.3rem 0.35rem 0.15rem;
+}
+
+.note-col-choice-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: 0.85rem/1.3 var(--ui);
+}
+
+.note-prose td.note-cell-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-prose td.note-cell-checkbox,
+.note-prose td.note-cell-date,
+.note-prose td.note-cell-select {
+  position: relative;
+}
+
+.note-prose td.note-cell-checkbox > p,
+.note-prose td.note-cell-date > p,
+.note-prose td.note-cell-select > p {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.note-check,
+.note-select,
+.note-date {
+  font: inherit;
+  color: var(--text);
+}
+
+.note-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.note-check.on {
+  color: var(--accent);
+}
+
+.note-date {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.note-select {
+  max-width: 100%;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.note-select.empty {
+  color: var(--muted);
+}
+
+.note-select-gray,
+.note-type-gray { --type: #6b7280; }
+.note-select-red,
+.note-type-red { --type: #e11d48; }
+.note-select-orange,
+.note-type-orange { --type: #ea580c; }
+.note-select-yellow,
+.note-type-yellow { --type: #ca8a04; }
+.note-select-green,
+.note-type-green { --type: #16a34a; }
+.note-select-teal,
+.note-type-teal { --type: #0f766e; }
+.note-select-blue,
+.note-type-blue { --type: #2563eb; }
+.note-select-purple,
+.note-type-purple { --type: #7c3aed; }
+.note-select-pink,
+.note-type-pink { --type: #db2777; }
+
+:root[data-theme='dark'] .note-select-gray,
+:root[data-theme='dark'] .note-type-gray { --type: #a1a1aa; }
+:root[data-theme='dark'] .note-select-red,
+:root[data-theme='dark'] .note-type-red { --type: #fb7185; }
+:root[data-theme='dark'] .note-select-orange,
+:root[data-theme='dark'] .note-type-orange { --type: #fb923c; }
+:root[data-theme='dark'] .note-select-yellow,
+:root[data-theme='dark'] .note-type-yellow { --type: #facc15; }
+:root[data-theme='dark'] .note-select-green,
+:root[data-theme='dark'] .note-type-green { --type: #4ade80; }
+:root[data-theme='dark'] .note-select-teal,
+:root[data-theme='dark'] .note-type-teal { --type: #2dd4bf; }
+:root[data-theme='dark'] .note-select-blue,
+:root[data-theme='dark'] .note-type-blue { --type: #60a5fa; }
+:root[data-theme='dark'] .note-select-purple,
+:root[data-theme='dark'] .note-type-purple { --type: #c4b5fd; }
+:root[data-theme='dark'] .note-select-pink,
+:root[data-theme='dark'] .note-type-pink { --type: #f472b6; }
+
+.note-select[class*='note-select-'] {
+  background: color-mix(in srgb, var(--type) 18%, transparent);
+  color: var(--type);
+  border-color: transparent;
+}
+
+.note-type-dot {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: var(--type, var(--muted));
+  cursor: pointer;
+}
+
+.note-type-dot:disabled {
+  cursor: default;
+}
+
+.note-color-palette {
+  position: fixed;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(3, 1.15rem);
+  gap: 0.35rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.note-color-palette .note-type-dot {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.note-color-palette .note-type-dot[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--text-h);
+}
+
+.note-select-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.7rem;
+  padding: 0.1rem 0.2rem 0.25rem 0.45rem;
+  color: var(--text-h);
+  font: 0.85rem/1.3 var(--ui);
+}
+
+.note-select-menu-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-select-empty-label,
+.note-select-menu-head .note-select-empty-label {
+  color: var(--muted);
+}
+
+.note-select-clear {
+  margin-left: auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 1rem/1 var(--ui);
+  cursor: pointer;
+}
+
+.note-select-clear:hover {
+  background: var(--accent-soft);
+  color: var(--text-h);
+}
+
+.note-type-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+}
+
+.note-type-row.on,
+.note-type-row:hover {
+  background: var(--accent-soft);
+}
+
+.note-type-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.1rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: 0.9rem/1.3 var(--ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.note-type-name:disabled {
+  cursor: default;
+}
+
+.note-type-create {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.15rem 0.1rem;
+  border-top: 1px solid var(--border);
+}
+
+.note-type-create input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: 0.85rem/1.3 var(--ui);
+}
+
+.note-type-create button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 0.75rem/1 var(--ui);
+  cursor: pointer;
+}
+
+.note-type-create button:hover {
+  color: var(--text-h);
+}
+
+.note-col-choices li span {
+  flex: 1;
+}
+
+.note-col-choice-remove {
+  width: 1.3rem;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.note-url-open {
+  float: right;
+  margin-left: 0.4rem;
+  font-size: 0.8rem;
 }
 
 .note-prose .selectedCell {

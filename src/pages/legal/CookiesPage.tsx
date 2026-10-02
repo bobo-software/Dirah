@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { LEGAL } from '../../legal/legalInfo';
-import { ContactLink, LegalLayout, type LegalSection } from './LegalLayout';
+import { ContactLink, LegalLayout, type LegalSection } from '../../components/ComponentsIndex';
 
 const SECTIONS: LegalSection[] = [
   {

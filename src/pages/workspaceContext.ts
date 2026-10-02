@@ -14,3 +14,10 @@ export function canEdit(role: string): boolean {
 export function canAdmin(role: string): boolean {
   return role === 'owner';
 }
+
+export type WorkspaceSection = 'notes' | 'docs';
+
+// Notes own the workspace root and /n/*; everything else (pages, collection, trash, settings) is Docs.
+export function workspaceSection(pathname: string): WorkspaceSection {
+  return /^\/w\/[^/]+\/?$/.test(pathname) || /^\/w\/[^/]+\/n\//.test(pathname) ? 'notes' : 'docs';
+}

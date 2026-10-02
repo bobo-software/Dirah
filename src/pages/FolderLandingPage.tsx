@@ -2,7 +2,7 @@ import { useOutletContext, useParams, useNavigate } from 'react-router-dom';
 import type { ChangeEvent } from 'react';
 import { EMPTY_PAGES, usePageStore, useMarkdownContentStore } from '../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
-import { pageKind } from './pageKind';
+import { pageKind } from '../components/ComponentsIndex';
 
 export function FolderLandingPage({
   onCreate,

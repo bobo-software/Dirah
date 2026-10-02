@@ -1,8 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuthStore } from '../../stores/StoresIndex';
-import { Logo } from '../../components/Logo';
-import { ThemeToggle } from '../../components/ThemeToggle';
+import { Logo, ThemeToggle } from '../../components/ComponentsIndex';
 
 export function AdminLoginPage() {
   const admin = useAdminAuthStore((state) => state.admin);

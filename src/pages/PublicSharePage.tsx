@@ -3,8 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getPublicMarkdown } from '../api/share';
-import { BrandLink } from '../components/Logo';
-import { ThemeToggle } from '../components/ThemeToggle';
+import { BrandLink, ThemeToggle } from '../components/ComponentsIndex';
 
 export function PublicSharePage() {
   const { token } = useParams();

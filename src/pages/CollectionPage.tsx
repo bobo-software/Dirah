@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { DocsBrowser } from './DocsBrowser';
+import { DocsBrowser } from '../components/ComponentsIndex';
 
 export function CollectionPage() {
   const { workspaceId } = useParams();

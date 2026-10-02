@@ -1,27 +1,26 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useMatch, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore, useWorkspaceStore } from '../stores/StoresIndex';
 import type { PageKind, PublicPage } from '../api/client';
-import { Sidebar } from '../components/ComponentsIndex';
-import { setLastWorkspaceId } from '../components/lastWorkspace';
-import { useSidebarDrawer } from '../components/Sidebar';
-import { EmptyEditorPane } from './EmptyEditorPane';
-import { buildPageTree, draggedPageId, PageTree } from './PageTree';
-import { canEdit } from './workspaceContext';
-
-function HomeIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 10.5 12 4l8 6.5" />
-      <path d="M6.5 9.8V20h11V9.8" />
-    </svg>
-  );
-}
+import {
+  EmptyEditorPane,
+  HomeIcon,
+  NotesSidebarSection,
+  PageTree,
+  Sidebar,
+  buildPageTree,
+  draggedPageId,
+  setLastWorkspaceId,
+  useSidebarDrawer,
+} from '../components/ComponentsIndex';
+import { canEdit, workspaceSection } from './workspaceContext';
 
 export function WorkspaceShellPage() {
-  const { workspaceId, pageId } = useParams();
+  const { workspaceId, pageId, noteId } = useParams();
   const navigate = useNavigate();
-  const isHome = Boolean(useMatch('/w/:workspaceId'));
+  const { pathname } = useLocation();
+  const isNotesHome = Boolean(useMatch('/w/:workspaceId'));
+  const isDocsHome = Boolean(useMatch('/w/:workspaceId/docs'));
   const isTrash = Boolean(useMatch('/w/:workspaceId/trash'));
   const isNote = Boolean(useMatch('/w/:workspaceId/n/:noteId'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
@@ -65,7 +64,7 @@ export function WorkspaceShellPage() {
 
   useEffect(() => {
     setSidebarOpen(false);
-  }, [pageId, isHome, isTrash, isCollection, isNote, workspaceId, setSidebarOpen]);
+  }, [pageId, noteId, isNotesHome, isDocsHome, isTrash, isCollection, workspaceId, setSidebarOpen]);
 
   async function onCreateNode(kind: PageKind = 'markdown', parentId?: string | null) {
     if (!workspaceId) return;
@@ -99,7 +98,7 @@ export function WorkspaceShellPage() {
     try {
       await pageStoreTrashPage(page.id);
       if (pageId === page.id) {
-        navigate(`/w/${workspaceId}`);
+        navigate(`/w/${workspaceId}/docs`);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not trash page');
@@ -154,6 +153,7 @@ export function WorkspaceShellPage() {
   }
 
   const editable = canEdit(workspace.role);
+  const section = workspace.encrypted ? 'docs' : workspaceSection(pathname);
   const searching = Boolean(query);
   const favorites = pages.filter((page) => page.favorited);
   const tree = searching
@@ -189,79 +189,85 @@ export function WorkspaceShellPage() {
         narrow={narrow}
         onClose={() => setSidebarOpen(false)}
       >
-        <NavLink className="sidebar-home" to={`/w/${workspaceId}`} end>
-          <HomeIcon />
-          <span>Home</span>
-        </NavLink>
-        <label className="sidebar-label" htmlFor="page-search">
-          Search
-        </label>
-        <input
-          id="page-search"
-          type="search"
-          placeholder="Search titles and text"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        {favorites.length > 0 && !searching ? (
-          <>
-            <p className="sidebar-label">Favorites</p>
-            <PageTree nodes={favorites.map((page) => ({ page, children: [] }))} {...treeProps} />
-          </>
-        ) : null}
-        <div
-          className={rootOver ? 'sidebar-pages-header drop-target' : 'sidebar-pages-header'}
-          onDragOver={(event) => {
-            if (!editable) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-            setRootOver(true);
-          }}
-          onDragLeave={(event) => {
-            const related = event.relatedTarget as Node | null;
-            if (related && event.currentTarget.contains(related)) return;
-            setRootOver(false);
-          }}
-          onDrop={(event) => {
-            if (!editable) return;
-            event.preventDefault();
-            setRootOver(false);
-            const dragged = draggedPageId(event.dataTransfer);
-            if (dragged) void onMove(dragged, null);
-          }}
-        >
-          <p className="sidebar-label">Pages</p>
-          {editable ? (
-            <span className="header-creates">
-              <button
-                type="button"
-                className="linkish"
-                onClick={() => void onCreateNode('markdown')}
-                disabled={busy}
-              >
-                MD
-              </button>
-              <button
-                type="button"
-                className="linkish"
-                onClick={() => void onCreateNode('folder')}
-                disabled={busy}
-              >
-                Folder
-              </button>
-            </span>
-          ) : null}
-        </div>
-        {pages.length === 0 ? (
-          <p className="muted">{searching ? 'No matching pages.' : 'No pages yet.'}</p>
+        {section === 'notes' ? (
+          <NotesSidebarSection workspaceId={workspaceId} noteId={noteId} />
         ) : (
-          <PageTree nodes={tree} {...treeProps} />
+          <>
+            <NavLink className="sidebar-home" to={`/w/${workspaceId}/docs`} end>
+              <HomeIcon />
+              <span>Home</span>
+            </NavLink>
+            <label className="sidebar-label" htmlFor="page-search">
+              Search
+            </label>
+            <input
+              id="page-search"
+              type="search"
+              placeholder="Search titles and text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {favorites.length > 0 && !searching ? (
+              <>
+                <p className="sidebar-label">Favorites</p>
+                <PageTree nodes={favorites.map((page) => ({ page, children: [] }))} {...treeProps} />
+              </>
+            ) : null}
+            <div
+              className={rootOver ? 'sidebar-pages-header drop-target' : 'sidebar-pages-header'}
+              onDragOver={(event) => {
+                if (!editable) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setRootOver(true);
+              }}
+              onDragLeave={(event) => {
+                const related = event.relatedTarget as Node | null;
+                if (related && event.currentTarget.contains(related)) return;
+                setRootOver(false);
+              }}
+              onDrop={(event) => {
+                if (!editable) return;
+                event.preventDefault();
+                setRootOver(false);
+                const dragged = draggedPageId(event.dataTransfer);
+                if (dragged) void onMove(dragged, null);
+              }}
+            >
+              <p className="sidebar-label">Pages</p>
+              {editable ? (
+                <span className="header-creates">
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => void onCreateNode('markdown')}
+                    disabled={busy}
+                  >
+                    MD
+                  </button>
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => void onCreateNode('folder')}
+                    disabled={busy}
+                  >
+                    Folder
+                  </button>
+                </span>
+              ) : null}
+            </div>
+            {pages.length === 0 ? (
+              <p className="muted">{searching ? 'No matching pages.' : 'No pages yet.'}</p>
+            ) : (
+              <PageTree nodes={tree} {...treeProps} />
+            )}
+            {message ? (
+              <p className="error" role="alert">
+                {message}
+              </p>
+            ) : null}
+          </>
         )}
-        {message ? (
-          <p className="error" role="alert">
-            {message}
-          </p>
-        ) : null}
       </Sidebar>
       <section className="editor-pane">
         <div className="mobile-chrome">
@@ -277,11 +283,11 @@ export function WorkspaceShellPage() {
               <line x1="3.5" y1="12" x2="20.5" y2="12" />
               <line x1="3.5" y1="17.5" x2="20.5" y2="17.5" />
             </svg>
-            Pages
+            {section === 'notes' ? 'Notes' : 'Pages'}
           </button>
           {currentTitle ? (
             <span className="mobile-title">{currentTitle}</span>
-          ) : isHome ? (
+          ) : isNotesHome || isDocsHome ? (
             <span className="mobile-title">{workspace.name}</span>
           ) : isCollection ? (
             <span className="mobile-title">Collection</span>
@@ -293,7 +299,7 @@ export function WorkspaceShellPage() {
             <span className="mobile-title">Settings</span>
           ) : null}
         </div>
-        {pageId || isHome || isTrash || isCollection || isSettings || isNote ? (
+        {pageId || isNotesHome || isDocsHome || isTrash || isCollection || isSettings || isNote ? (
           <Outlet
             context={{
               role: workspace.role,

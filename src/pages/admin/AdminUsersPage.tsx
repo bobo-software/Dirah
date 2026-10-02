@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchAdminUsers, type AdminUserRow } from '../../api/admin';
 import { useAdminAuthStore } from '../../stores/StoresIndex';
-import { DataTable, type DataTableColumn } from '../../components/ComponentsIndex';
-import { AdminPagination } from './AdminPagination';
+import { AdminPagination, DataTable, type DataTableColumn } from '../../components/ComponentsIndex';
 
 const PAGE_SIZE = 25;
 

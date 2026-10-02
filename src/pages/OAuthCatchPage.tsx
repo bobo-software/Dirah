@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { REFRESH_KEY, useAuthStore } from '../stores/StoresIndex';
-import { Logo } from '../components/Logo';
+import { Logo } from '../components/ComponentsIndex';
 
 export function OAuthCatchPage() {
   const navigate = useNavigate();

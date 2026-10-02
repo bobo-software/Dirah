@@ -1,9 +1,6 @@
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { useEditorViewStore } from '../stores/StoresIndex';
-import { MembersPanel } from '../components/ComponentsIndex';
-import { McpTokensSection } from '../components/McpTokensSection';
+import { AppearanceSection, McpTokensSection, MembersPanel, PreferencesSection } from '../components/ComponentsIndex';
 import { canAdmin, type WorkspaceOutlet } from './workspaceContext';
-import { THEME_OPTIONS, useTheme } from '../theme/ThemeContext';
 
 type SettingsTab = 'appearance' | 'members' | 'preferences' | 'mcp';
 
@@ -16,9 +13,6 @@ const ALL_TABS: { id: SettingsTab; label: string }[] = [
 
 export function SettingsPage() {
   const { workspaceId, role } = useOutletContext<WorkspaceOutlet>();
-  const { preference, setPreference } = useTheme();
-  const showSource = useEditorViewStore((state) => state.showSource);
-  const setShowSource = useEditorViewStore((state) => state.setShowSource);
   const [searchParams, setSearchParams] = useSearchParams();
   const owner = canAdmin(role);
   const tabs = ALL_TABS.filter((tab) => tab.id !== 'members' || owner);
@@ -51,44 +45,11 @@ export function SettingsPage() {
           ))}
         </nav>
         <div className="settings-content">
-          {activeTab === 'appearance' ? (
-            <div className="settings-section">
-              <h2>Appearance</h2>
-              <p className="muted">Choose how Dirah looks on this device.</p>
-              <div className="theme-segmented settings-theme-segmented" role="group" aria-label="Theme">
-                {THEME_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={preference === option.value ? 'theme-option on' : 'theme-option'}
-                    onClick={() => setPreference(option.value)}
-                    aria-pressed={preference === option.value}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {activeTab === 'appearance' ? <AppearanceSection /> : null}
 
           {activeTab === 'members' && owner ? <MembersPanel workspaceId={workspaceId} /> : null}
 
-          {activeTab === 'preferences' ? (
-            <div className="settings-section">
-              <h2>Preferences</h2>
-              <label className="settings-toggle-row">
-                <input
-                  type="checkbox"
-                  checked={showSource}
-                  onChange={(e) => setShowSource(e.target.checked)}
-                />
-                <span>
-                  <strong>Show markdown source by default</strong>
-                  <span className="muted"> — reveal the editor pane alongside the preview when you open a document.</span>
-                </span>
-              </label>
-            </div>
-          ) : null}
+          {activeTab === 'preferences' ? <PreferencesSection /> : null}
 
           {activeTab === 'mcp' ? (
             <McpTokensSection

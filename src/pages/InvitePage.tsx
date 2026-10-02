@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuthStore, useInviteStore } from '../stores/StoresIndex';
-import { Logo } from '../components/Logo';
+import { Logo } from '../components/ComponentsIndex';
 import type { InvitePreview } from '../api/members';
 
 export function InvitePage() {
