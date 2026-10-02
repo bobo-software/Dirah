@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { PublicNote } from '../../api/client';
+import type { NoteKind, PublicNote } from '../../api/client';
 import { EMPTY_NOTES, useNoteStore } from '../../stores/StoresIndex';
 import type { DropZone } from './noteTreeModel';
 
@@ -14,11 +14,15 @@ export function useNoteActions(workspaceId: string) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  async function create(parent?: PublicNote) {
+  async function create(parent?: PublicNote, input?: { title?: string; kind?: NoteKind }) {
     setBusy(true);
     setMessage(null);
     try {
-      const note = await createNote(workspaceId, { parentId: parent?.id ?? null });
+      const note = await createNote(workspaceId, {
+        parentId: parent?.id ?? null,
+        title: input?.title,
+        kind: input?.kind,
+      });
       navigate(`/w/${workspaceId}/n/${note.id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not create note');

@@ -12,6 +12,7 @@ import {
   encodeColumnComment,
 } from './columnTypes'
 import { columnTypePlugin } from './columnControls'
+import { tableOptionsPlugin } from './tableOptions'
 
 type TableToken = MarkdownToken & {
   diraCols?: ColumnSpec[]
@@ -107,7 +108,7 @@ export const ColumnTypeMarkdown = Extension.create({
   name: 'columnTypeMarkdown',
 
   addProseMirrorPlugins() {
-    return [columnTypePlugin()]
+    return [columnTypePlugin(), tableOptionsPlugin(this.editor)]
   },
 
   markdownTokenizer: {

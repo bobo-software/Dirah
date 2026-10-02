@@ -9,7 +9,7 @@ import {
   type NoteBody,
   type NotePatch,
 } from '../../api/notes';
-import type { NoteVisibility, PublicNote } from '../../api/client';
+import type { NoteKind, NoteVisibility, PublicNote } from '../../api/client';
 import { useAuthStore } from './authStore';
 
 // Stable reference for "no notes yet" selectors; see EMPTY_PAGES in pageStore.
@@ -23,7 +23,7 @@ type NoteState = {
   fetchNotes: (workspaceId: string) => Promise<PublicNote[]>;
   createNote: (
     workspaceId: string,
-    input?: { title?: string; parentId?: string | null; visibility?: NoteVisibility }
+    input?: { title?: string; parentId?: string | null; visibility?: NoteVisibility; kind?: NoteKind }
   ) => Promise<PublicNote>;
   patchNote: (noteId: string, input: NotePatch) => Promise<PublicNote>;
   trashNote: (noteId: string) => Promise<void>;

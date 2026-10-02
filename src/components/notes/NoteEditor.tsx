@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -21,7 +21,7 @@ function breadcrumbs(notes: PublicNote[], note: PublicNote | undefined): PublicN
   const byId = new Map(notes.map((item) => [item.id, item]));
   const trail: PublicNote[] = [];
   const seen = new Set<string>();
-  let cursor = note?.parentId ? byId.get(note.parentId) : undefined;
+  let cursor = note;
   while (cursor && !seen.has(cursor.id)) {
     seen.add(cursor.id);
     trail.unshift(cursor);
@@ -37,7 +37,18 @@ function saveLabel(state: SaveState): string {
   return 'Saved';
 }
 
-export function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteId: string }) {
+export function NoteEditor({
+  workspaceId,
+  noteId,
+  variant = 'page',
+  actions,
+}: {
+  workspaceId: string;
+  noteId: string;
+  // 'peek' drops the breadcrumbs for use inside a modal; `actions` sits beside the save state.
+  variant?: 'page' | 'peek';
+  actions?: ReactNode;
+}) {
   const notes = useNoteStore((state) => state.byWorkspace[workspaceId] ?? EMPTY_NOTES);
   const loaded = useNoteStore((state) => state.loadedWorkspaces.has(workspaceId));
   const fetchNotes = useNoteStore((state) => state.fetchNotes);
@@ -221,19 +232,37 @@ export function NoteEditor({ workspaceId, noteId }: { workspaceId: string; noteI
   }
 
   const trail = breadcrumbs(notes, note);
+  const saveIndicator =
+    ready && editable && !unsupported ? (
+      <span className={`note-save-state ${saveState}`}>{saveLabel(saveState)}</span>
+    ) : null;
 
   return (
-    <article className="note-page">
-      <nav className="note-crumbs" aria-label="Breadcrumbs">
-        <Link to={`/w/${workspaceId}`}>Notes</Link>
-        {trail.map((item) => (
-          <span key={item.id}>
-            <span aria-hidden="true">/</span>
-            <Link to={`/w/${workspaceId}/n/${item.id}`}>{item.title}</Link>
-          </span>
-        ))}
-        {ready && editable && !unsupported ? <span className={`note-save-state ${saveState}`}>{saveLabel(saveState)}</span> : null}
-      </nav>
+    <article className={variant === 'peek' ? 'note-peek-editor' : 'note-page'}>
+      {variant === 'peek' ? (
+        <div className="note-peek-bar">
+          {saveIndicator ?? <span />}
+          {actions}
+        </div>
+      ) : (
+        <nav className="note-crumbs" aria-label="Breadcrumbs">
+          <Link to={`/w/${workspaceId}`}>Notes</Link>
+          {trail.map((item, index) => {
+            const current = item.id === note?.id && index === trail.length - 1;
+            return (
+              <span key={item.id}>
+                <span aria-hidden="true">/</span>
+                {current ? (
+                  <span aria-current="page">{item.title}</span>
+                ) : (
+                  <Link to={`/w/${workspaceId}/n/${item.id}`}>{item.title}</Link>
+                )}
+              </span>
+            );
+          })}
+          {saveIndicator}
+        </nav>
+      )}
       {conflict ? (
         <div className="note-banner warning" role="alert">
           <span>This note changed somewhere else since you opened it.</span>

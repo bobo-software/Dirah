@@ -29,6 +29,17 @@ export function NoteGlyph({ note }: { note: PublicNote }) {
       </span>
     );
   }
+  if (note.kind === 'kanban') {
+    return (
+      <span className="note-glyph" aria-hidden="true">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3.5" y="4" width="5" height="16" rx="1.2" />
+          <rect x="9.5" y="4" width="5" height="10" rx="1.2" />
+          <rect x="15.5" y="4" width="5" height="13" rx="1.2" />
+        </svg>
+      </span>
+    );
+  }
   return (
     <span className="note-glyph" aria-hidden="true">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -48,6 +59,7 @@ type NoteTreeProps = {
   expandedIds: Set<string>;
   onToggleExpand: (noteId: string) => void;
   onCreateChild: (parent: PublicNote) => void;
+  onCreateKanban: (parent: PublicNote) => void;
   onTrash: (note: PublicNote) => void;
   onMove: (draggedId: string, target: PublicNote, zone: DropZone) => void;
   ancestorIds?: string[];
@@ -71,6 +83,7 @@ function NoteTreeItem({
   expandedIds,
   onToggleExpand,
   onCreateChild,
+  onCreateKanban,
   onTrash,
   onMove,
   ancestorIds = [],
@@ -218,6 +231,17 @@ function NoteTreeItem({
                 <button
                   type="button"
                   role="menuitem"
+                  className="page-row-dropdown-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onCreateKanban(note);
+                  }}
+                >
+                  Add kanban
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
                   className="page-row-dropdown-item danger"
                   onClick={() => {
                     setMenuOpen(false);
@@ -239,6 +263,7 @@ function NoteTreeItem({
           expandedIds={expandedIds}
           onToggleExpand={onToggleExpand}
           onCreateChild={onCreateChild}
+          onCreateKanban={onCreateKanban}
           onTrash={onTrash}
           onMove={onMove}
           ancestorIds={[...ancestorIds, note.id]}

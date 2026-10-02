@@ -241,25 +241,6 @@ export function NoteFormatter({ editor }: { editor: Editor }) {
           {icons.redo}
         </ToolButton>
       </div>
-      {state.table ? (
-        <div className="note-toolbar-group note-toolbar-table" aria-label="Table">
-          <ToolButton label="Add row below" onClick={() => chain().addRowAfter().run()}>
-            <span className="note-tool-text">+ Row</span>
-          </ToolButton>
-          <ToolButton label="Add column right" onClick={() => chain().addColumnAfter().run()}>
-            <span className="note-tool-text">+ Column</span>
-          </ToolButton>
-          <ToolButton label="Delete row" onClick={() => chain().deleteRow().run()}>
-            <span className="note-tool-text">− Row</span>
-          </ToolButton>
-          <ToolButton label="Delete column" onClick={() => chain().deleteColumn().run()}>
-            <span className="note-tool-text">− Column</span>
-          </ToolButton>
-          <ToolButton label="Delete table" onClick={() => chain().deleteTable().run()}>
-            <span className="note-tool-text danger">Delete table</span>
-          </ToolButton>
-        </div>
-      ) : null}
     </div>
   );
 }

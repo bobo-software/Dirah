@@ -38,6 +38,8 @@ export type PublicPage = {
 
 export type NoteVisibility = 'private' | 'workspace';
 
+export type NoteKind = 'note' | 'kanban';
+
 export type PublicNote = {
   id: string;
   workspaceId: string;
@@ -47,6 +49,7 @@ export type PublicNote = {
   icon: string | null;
   cover: string | null;
   visibility: NoteVisibility;
+  kind: NoteKind;
   position: number;
   pinnedAt: string | null;
   tagIds: string[];

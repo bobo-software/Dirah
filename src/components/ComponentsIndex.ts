@@ -59,10 +59,12 @@ export { TokenDetailBody } from './mcp/TokenDetailBody';
 export type { TokenAccessFieldsWorkspace, TokenAccessValue } from './mcp/TokenAccessFields';
 
 export { NoteEditor } from './notes/NoteEditor';
+export { KanbanBoard } from './notes/kanban/KanbanBoard';
 export { NoteGlyph, NoteTree } from './notes/NoteTree';
 export { NoteFormatter } from './notes/formatter/NoteFormatter';
 export { ColumnTypeButton, ColumnTypeSelector } from './notes/table/ColumnTypeSelector';
 export { SelectValueMenu } from './notes/table/SelectValueMenu';
+export { TableOptionsMenu } from './notes/table/TableOptionsMenu';
 export { NotesBrowser } from './notes/NotesBrowser';
 export { NotesSidebarSection } from './notes/NotesSidebarSection';
 export { buildNoteTree } from './notes/noteTreeModel';

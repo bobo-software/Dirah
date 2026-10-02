@@ -102,6 +102,10 @@ export function NotesSidebarSection({ workspaceId, noteId }: { workspaceId: stri
             expand(parent.id);
             void create(parent);
           }}
+          onCreateKanban={(parent) => {
+            expand(parent.id);
+            void create(parent, { kind: 'kanban', title: 'Kanban' });
+          }}
           onTrash={(note) => void trash(note)}
           onMove={(draggedId, target, zone) => {
             if (zone === 'inside') expand(target.id);

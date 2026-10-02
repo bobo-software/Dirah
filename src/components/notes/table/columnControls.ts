@@ -3,6 +3,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { EditorView } from '@tiptap/pm/view'
 import type { Node as ProseNode } from '@tiptap/pm/model'
 import { mountColumnTypeButton, mountColumnTypeMenu, mountSelectValueMenu } from './columnMenuMount'
+import { dismiss, exclusive, release } from './menuDismiss'
 import {
   columnSpecFromAttrs,
   hrefFromCell,
@@ -17,13 +18,6 @@ import {
 } from './columnTypes'
 
 const columnTypeKey = new PluginKey('noteColumnTypes')
-
-let dismissOpen: (() => void) | null = null
-
-function exclusive(close: () => void) {
-  dismissOpen?.()
-  dismissOpen = close
-}
 
 function iconSvg(type: ColumnType): SVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -96,7 +90,7 @@ function openColumnMenu(view: EditorView, anchor: HTMLElement, headerPos: number
     menu = null
     host.remove()
     currentAnchor.setAttribute('aria-expanded', 'false')
-    if (dismissOpen === close) dismissOpen = null
+    release(close)
   }
   exclusive(close)
   anchor.setAttribute('aria-expanded', 'true')
@@ -150,7 +144,7 @@ function openSelectMenu(view: EditorView, anchor: HTMLElement, cellPos: number, 
     menu?.unmount()
     menu = null
     host.remove()
-    if (dismissOpen === close) dismissOpen = null
+    release(close)
   }
   exclusive(close)
 
@@ -214,7 +208,7 @@ function headerButton(view: EditorView, cellPos: number, spec: ColumnSpec): HTML
     colPos: cellPos,
     onClick: (button) => {
       if (button.getAttribute('aria-expanded') === 'true') {
-        dismissOpen?.()
+        dismiss()
         return
       }
       openColumnMenu(view, button, cellPos)
