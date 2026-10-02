@@ -38,6 +38,10 @@ const itemsCreateSchema = z
     message: 'Pass text or texts',
   });
 
+const fromNoteSchema = z.object({
+  noteId: uuid,
+});
+
 const itemsOrderSchema = z.object({
   itemIds: z.array(uuid).min(1),
 });
@@ -65,6 +69,15 @@ export function createTaskController(taskListService: TaskListService) {
       }
       const list = await taskListService.create(req.user!.userId, req.params.id, parsed.data);
       return ResponseUtils.success(res, 'Task list created', { list }, 201);
+    }),
+
+    createFromNote: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = fromNoteSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid note reference', parsed.error.flatten(), 400);
+      }
+      const view = await taskListService.createFromNote(req.user!.userId, parsed.data.noteId);
+      return ResponseUtils.success(res, 'Task list created from note', view, 201);
     }),
 
     get: asyncHandler(async (req: Request, res: Response) => {

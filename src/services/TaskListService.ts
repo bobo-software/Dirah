@@ -1,7 +1,9 @@
 import { and, asc, count, eq, inArray, isNull, max, or, sql } from 'drizzle-orm';
 import { taskListItems, taskLists } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
+import { markdownListItems } from '../utils/markdownList';
 import { type AuthService, type Database } from './AuthService';
+import type { NoteService } from './NoteService';
 
 export const TASK_LIST_VISIBILITIES = ['private', 'workspace'] as const;
 export type TaskListVisibility = (typeof TASK_LIST_VISIBILITIES)[number];
@@ -116,7 +118,8 @@ function cleanItemText(raw: string): string {
 export class TaskListService {
   constructor(
     private readonly database: Database,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly notes: NoteService
   ) {}
 
   async list(userId: string, workspaceId: string): Promise<PublicTaskList[]> {
@@ -160,6 +163,39 @@ export class TaskListService {
       })
       .returning(listColumns);
     return this.toPublic(row, userId);
+  }
+
+  /**
+   * Copies a note's list lines (bullets, numbers, `- [ ]` / `- [x]`) into a new
+   * private checklist in the note's workspace. The note itself is unchanged.
+   */
+  async createFromNote(userId: string, noteId: string): Promise<TaskListView> {
+    const { note, content } = await this.notes.get(userId, noteId);
+    const parsed = markdownListItems(content);
+    if (parsed.length === 0) {
+      throw new HttpError('This note has no list items to turn into a checklist', 400, 'NO_LIST_ITEMS');
+    }
+    if (parsed.length > MAX_TASK_ITEMS_PER_ADD) {
+      throw new HttpError(`A checklist can take at most ${MAX_TASK_ITEMS_PER_ADD} items at once`, 400, 'TOO_MANY_ITEMS');
+    }
+    const list = await this.create(userId, note.workspaceId, { title: note.title, icon: note.icon });
+    const now = new Date();
+    try {
+      await this.database.insert(taskListItems).values(
+        parsed.map((item, position) => ({
+          listId: list.id,
+          text: item.text.slice(0, MAX_TASK_ITEM_TEXT),
+          checked: item.checked,
+          checkedAt: item.checked ? now : null,
+          checkedBy: item.checked ? userId : null,
+          position,
+        }))
+      );
+    } catch (error) {
+      await this.database.delete(taskLists).where(eq(taskLists.id, list.id));
+      throw error;
+    }
+    return this.get(userId, list.id);
   }
 
   async get(userId: string, listId: string): Promise<TaskListView> {

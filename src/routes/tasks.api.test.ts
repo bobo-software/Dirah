@@ -186,6 +186,50 @@ describe('task lists API', () => {
     expect(outsiderList.status).toBe(403);
   });
 
+  it('turns a note’s list lines into a new private checklist', async () => {
+    if (!dbReady) return;
+    const created = await as(owner).post(`/api/workspaces/${workspaceId}/notes`, {
+      title: 'Trip prep',
+      visibility: 'workspace',
+    });
+    const noteId = created.body.data.note.id as string;
+    const content = '# Trip\n\nIntro text.\n\n- **Passport**\n- [x] Charger\n1. Tickets\n\n```\n- not this\n```\n';
+    const fresh = await as(owner).get(`/api/notes/${noteId}`);
+    await as(owner).put(`/api/notes/${noteId}/content`, { content, hash: fresh.body.data.hash });
+
+    const sent = await as(owner).post('/api/task-lists/from-note', { noteId });
+    expect(sent.status).toBe(201);
+    expect(sent.body.data.list.title).toBe('Trip prep');
+    expect(sent.body.data.list.visibility).toBe('private');
+    expect(sent.body.data.items.map((item: Item) => [item.text, item.checked])).toEqual([
+      ['Passport', false],
+      ['Charger', true],
+      ['Tickets', false],
+    ]);
+    expect(sent.body.data.list.checkedCount).toBe(1);
+
+    const note = await as(owner).get(`/api/notes/${noteId}`);
+    expect(note.body.data.content).toBe(content);
+
+    // A viewer who can see a shared note gets their own private copy.
+    const viewerCopy = await as(viewer).post('/api/task-lists/from-note', { noteId });
+    expect(viewerCopy.status).toBe(201);
+    expect(viewerCopy.body.data.list.authorId).toBe(viewer.userId);
+
+    const prose = await as(owner).post(`/api/workspaces/${workspaceId}/notes`, { title: 'Prose' });
+    const proseId = prose.body.data.note.id as string;
+    const proseBody = await as(owner).get(`/api/notes/${proseId}`);
+    await as(owner).put(`/api/notes/${proseId}/content`, { content: 'Just words.', hash: proseBody.body.data.hash });
+    const empty = await as(owner).post('/api/task-lists/from-note', { noteId: proseId });
+    expect(empty.status).toBe(400);
+    expect(empty.body.error).toBe('NO_LIST_ITEMS');
+
+    const hidden = await as(viewer).post('/api/task-lists/from-note', { noteId: proseId });
+    expect(hidden.status).toBe(404);
+    const bad = await as(owner).post('/api/task-lists/from-note', { noteId: 'nope' });
+    expect(bad.status).toBe(400);
+  });
+
   it('soft-deletes lists', async () => {
     if (!dbReady) return;
     const list = await createList(owner, { title: 'Temp' });

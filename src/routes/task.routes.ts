@@ -8,6 +8,7 @@ export function createTaskListRouter(taskListService: TaskListService): Router {
   const controller = createTaskController(taskListService);
 
   router.use(requireAuth);
+  router.post('/from-note', controller.createFromNote);
   router.get('/:id', controller.get);
   router.patch('/:id', controller.patch);
   router.delete('/:id', controller.remove);
