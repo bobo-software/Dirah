@@ -299,6 +299,9 @@ function SwipeCard({
   const rotate = useTransform(x, [-240, 240], [-14, 14]);
   const yesOpacity = useTransform(x, [24, SWIPE_DISTANCE], [0, 1]);
   const noOpacity = useTransform(x, [-SWIPE_DISTANCE, -24], [1, 0]);
+  // Edge hints: faint at rest, full strength toward the side being dragged to, faded on the other.
+  const yesHint = useTransform(x, [-SWIPE_DISTANCE, 0, SWIPE_DISTANCE], [0.2, 0.8, 1]);
+  const noHint = useTransform(x, [-SWIPE_DISTANCE, 0, SWIPE_DISTANCE], [1, 0.8, 0.2]);
 
   function onDragEnd(_event: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
     if (info.offset.x > SWIPE_DISTANCE || info.velocity.x > SWIPE_VELOCITY) onAnswer(true);
@@ -325,6 +328,16 @@ function SwipeCard({
       </motion.span>
       <motion.span className="task-card-stamp no" style={{ opacity: noOpacity }} aria-hidden="true">
         {mode.no.stamp}
+      </motion.span>
+      <motion.span className="task-card-hint no" style={{ opacity: noHint }} aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+          <path d="M7 7l10 10M17 7 7 17" />
+        </svg>
+      </motion.span>
+      <motion.span className="task-card-hint yes" style={{ opacity: yesHint }} aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m5.5 12.5 4 4L18.5 7.5" />
+        </svg>
       </motion.span>
       <p className="task-card-prompt">{mode.prompt}</p>
       <h2 className="task-card-text">{item.text}</h2>
