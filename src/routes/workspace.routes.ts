@@ -5,6 +5,7 @@ import { createBlobController } from '../controllers/blob.controller';
 import { createMemberController } from '../controllers/member.controller';
 import { createCryptoController } from '../controllers/crypto.controller';
 import { createNoteController } from '../controllers/note.controller';
+import { createTaskController } from '../controllers/task.controller';
 import type { AuthService } from '../services/AuthService';
 import type { PageService } from '../services/PageService';
 import type { BlobService } from '../services/BlobService';
@@ -12,6 +13,7 @@ import type { MemberService } from '../services/MemberService';
 import type { CryptoService } from '../services/CryptoService';
 import type { McpTokenService } from '../services/McpTokenService';
 import type { NoteService } from '../services/NoteService';
+import type { TaskListService } from '../services/TaskListService';
 import { requireAuth } from '../middlewares/auth';
 
 export function createWorkspaceRouter(
@@ -21,6 +23,7 @@ export function createWorkspaceRouter(
   memberService: MemberService,
   cryptoService: CryptoService,
   noteService: NoteService,
+  taskListService: TaskListService,
   mcpTokenService?: McpTokenService
 ): Router {
   const router = Router();
@@ -30,6 +33,7 @@ export function createWorkspaceRouter(
   const members = createMemberController(memberService);
   const crypto = createCryptoController(cryptoService);
   const notes = createNoteController(noteService);
+  const tasks = createTaskController(taskListService);
 
   router.use(requireAuth);
   router.get('/', controller.list);
@@ -40,6 +44,8 @@ export function createWorkspaceRouter(
   router.post('/:id/notes', notes.create);
   router.get('/:id/note-tags', notes.listTags);
   router.post('/:id/note-tags', notes.createTag);
+  router.get('/:id/task-lists', tasks.list);
+  router.post('/:id/task-lists', tasks.create);
   router.get('/:id/blobs', blobs.list);
   router.get('/:id/blobs/:blobId', blobs.downloadInWorkspace);
   router.post('/:id/blobs', raw({ type: '*/*', limit: '12mb' }), blobs.upload);

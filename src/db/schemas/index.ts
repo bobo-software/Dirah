@@ -6,6 +6,7 @@ export { pages } from './pages';
 export { markdownBodies } from './markdown';
 export { pageFavorites } from './pageFavorites';
 export { notes, noteTags, noteTagLinks, kanbanColumns, kanbanCards } from './notes';
+export { taskLists, taskListItems } from './tasks';
 export { blobs } from './docs';
 export { shareLinks } from './shareLinks';
 export { workspaceInvites } from './invites';
