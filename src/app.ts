@@ -85,7 +85,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   const authService = options.authService ?? new AuthService(db);
   const pageService = options.pageService ?? new PageService(db, authService);
   const noteService = new NoteService(db, authService);
-  const taskListService = new TaskListService(db, authService);
+  const taskListService = new TaskListService(db, authService, noteService);
   const blobService =
     options.blobService ?? new BlobService(db, authService, createBlobStore(env));
   const memberService = new MemberService(db, authService);
