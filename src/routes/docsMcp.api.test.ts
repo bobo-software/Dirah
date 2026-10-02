@@ -1127,4 +1127,272 @@ describe('docs MCP protocol', () => {
       true
     );
   });
+
+  it('exposes notes with the same visibility as the app, and keeps them out of page search', async () => {
+    if (!dbReady) return;
+
+    const ownerEmail = `notes-mcp-owner-${stamp}@example.com`;
+    const memberEmail = `notes-mcp-member-${stamp}@example.com`;
+    const secretWord = `zebracornnotemcp${stamp}`;
+
+    const owner = await request(app).post('/api/auth/register').send({ email: ownerEmail, password });
+    expect(owner.status).toBe(201);
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    const member = await request(app).post('/api/auth/register').send({ email: memberEmail, password });
+    expect(member.status).toBe(201);
+    const memberJwt = member.body.data.tokens.accessToken as string;
+
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'notes-agent', workspaceAccess: [{ workspaceId, canWrite: true }] });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    const guide = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 200,
+      method: 'tools/call',
+      params: { name: 'dirah_guide', arguments: {} },
+    });
+    expect(String((toolResult(guide).data as { instructions: string }).instructions)).toContain('search_notes');
+
+    const parent = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 201,
+      method: 'tools/call',
+      params: { name: 'write_note', arguments: { title: 'Nest parent' } },
+    });
+    const parentData = toolResult(parent).data as { id: string; visibility: string; url: string };
+    expect(toolResult(parent).success).toBe(true);
+    expect(parentData.visibility).toBe('private');
+    expect(parentData.url).toContain(`/w/${workspaceId}/n/${parentData.id}`);
+
+    const child = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 202,
+      method: 'tools/call',
+      params: {
+        name: 'write_note',
+        arguments: {
+          title: 'Nest child',
+          parentId: parentData.id,
+          content: `# Child\n\n${secretWord} lives here\n`,
+        },
+      },
+    });
+    const childData = toolResult(child).data as {
+      id: string;
+      hash: string;
+      breadcrumb: string[];
+      editable: boolean;
+    };
+    expect(toolResult(child).success).toBe(true);
+    expect(childData.editable).toBe(true);
+    expect(childData.breadcrumb).toEqual(['Nest parent', 'Nest child']);
+
+    const listed = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 203,
+      method: 'tools/call',
+      params: { name: 'list_notes', arguments: { parentId: parentData.id } },
+    });
+    const listedRows = toolResult(listed).data as Array<{ id: string }>;
+    expect(listedRows.map((row) => row.id)).toEqual([childData.id]);
+
+    const read = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 204,
+      method: 'tools/call',
+      params: { name: 'read_note', arguments: { noteId: childData.id } },
+    });
+    const readData = toolResult(read).data as { content: string; hash: string };
+    expect(readData.content).toContain(secretWord);
+
+    const edited = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 205,
+      method: 'tools/call',
+      params: {
+        name: 'edit_note',
+        arguments: {
+          noteId: childData.id,
+          oldString: '# Child',
+          newString: '# Child revised',
+          hash: readData.hash,
+        },
+      },
+    });
+    expect(toolResult(edited).success).toBe(true);
+    expect((toolResult(edited).data as { content: string }).content).toContain('# Child revised');
+    expect((toolResult(edited).data as { content: string }).content).toContain(secretWord);
+
+    const stale = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 206,
+      method: 'tools/call',
+      params: {
+        name: 'write_note',
+        arguments: { noteId: childData.id, content: 'overwrite', hash: readData.hash },
+      },
+    });
+    expect(toolResult(stale).success).toBe(false);
+    expect(toolResult(stale).error).toBe('HASH_MISMATCH');
+
+    const pageSearch = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 207,
+      method: 'tools/call',
+      params: { name: 'search_docs', arguments: { q: secretWord } },
+    });
+    expect(toolResult(pageSearch).success).toBe(true);
+    const pageHits = toolResult(pageSearch).data as Array<{ id: string }>;
+    expect(pageHits.some((hit) => hit.id === childData.id)).toBe(false);
+
+    const noteSearch = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 208,
+      method: 'tools/call',
+      params: { name: 'search_notes', arguments: { query: secretWord } },
+    });
+    const noteHits = toolResult(noteSearch).data as Array<{ id: string; snippet: string }>;
+    expect(noteHits.some((hit) => hit.id === childData.id && hit.snippet.includes(secretWord))).toBe(true);
+
+    const invite = await request(app)
+      .post(`/api/workspaces/${workspaceId}/members`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ email: memberEmail, role: 'editor' });
+    expect(invite.status).toBe(201);
+    const inviteToken = String(invite.body.data.invite.inviteUrl).split('/invite/')[1];
+    const accepted = await request(app)
+      .post(`/api/invites/${inviteToken}/accept`)
+      .set('Authorization', `Bearer ${memberJwt}`);
+    expect(accepted.status).toBe(201);
+
+    const memberToken = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${memberJwt}`)
+      .send({ name: 'member-notes', workspaceAccess: [{ workspaceId, canWrite: true }] });
+    const memberSecret = memberToken.body.data.token.secret as string;
+
+    const hiddenList = await mcpPost(app, memberSecret, {
+      jsonrpc: '2.0',
+      id: 209,
+      method: 'tools/call',
+      params: { name: 'list_notes', arguments: { workspaceId } },
+    });
+    expect(
+      (toolResult(hiddenList).data as Array<{ id: string }>).some((row) => row.id === childData.id)
+    ).toBe(false);
+
+    const hiddenSearch = await mcpPost(app, memberSecret, {
+      jsonrpc: '2.0',
+      id: 210,
+      method: 'tools/call',
+      params: { name: 'search_notes', arguments: { workspaceId, q: secretWord } },
+    });
+    expect(
+      (toolResult(hiddenSearch).data as Array<{ id: string }>).some((row) => row.id === childData.id)
+    ).toBe(false);
+
+    const hiddenRead = await mcpPost(app, memberSecret, {
+      jsonrpc: '2.0',
+      id: 211,
+      method: 'tools/call',
+      params: { name: 'read_note', arguments: { noteId: childData.id } },
+    });
+    expect(toolResult(hiddenRead).success).toBe(false);
+    expect(toolResult(hiddenRead).error).toBe('NOTE_NOT_FOUND');
+
+    const shared = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 212,
+      method: 'tools/call',
+      params: {
+        name: 'update_note',
+        arguments: { noteId: parentData.id, visibility: 'workspace' },
+      },
+    });
+    expect(toolResult(shared).success).toBe(true);
+    expect((toolResult(shared).data as { visibility: string }).visibility).toBe('workspace');
+
+    const memberRead = await mcpPost(app, memberSecret, {
+      jsonrpc: '2.0',
+      id: 213,
+      method: 'tools/call',
+      params: { name: 'read_note', arguments: { noteId: childData.id } },
+    });
+    const memberReadData = toolResult(memberRead).data as { editable: boolean; content: string; hash: string };
+    expect(toolResult(memberRead).success).toBe(true);
+    expect(memberReadData.editable).toBe(false);
+    expect(memberReadData.content).toContain(secretWord);
+
+    const memberEdit = await mcpPost(app, memberSecret, {
+      jsonrpc: '2.0',
+      id: 214,
+      method: 'tools/call',
+      params: {
+        name: 'edit_note',
+        arguments: {
+          noteId: childData.id,
+          oldString: secretWord,
+          newString: 'nope',
+          hash: memberReadData.hash,
+        },
+      },
+    });
+    expect(toolResult(memberEdit).success).toBe(false);
+    expect(toolResult(memberEdit).error).toBe('FORBIDDEN');
+
+    const trashed = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 215,
+      method: 'tools/call',
+      params: { name: 'trash_note', arguments: { noteId: parentData.id } },
+    });
+    expect(toolResult(trashed).data).toEqual({ id: parentData.id, trashed: true });
+
+    const afterTrash = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 216,
+      method: 'tools/call',
+      params: { name: 'list_notes', arguments: {} },
+    });
+    const remaining = (toolResult(afterTrash).data as Array<{ id: string }>).map((row) => row.id);
+    expect(remaining).not.toContain(parentData.id);
+    expect(remaining).not.toContain(childData.id);
+
+    const gone = await mcpPost(app, memberSecret, {
+      jsonrpc: '2.0',
+      id: 217,
+      method: 'tools/call',
+      params: { name: 'read_note', arguments: { noteId: childData.id } },
+    });
+    expect(toolResult(gone).error).toBe('NOTE_NOT_FOUND');
+  });
+
+  it('rejects note writes when the token grant is read-only', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `notes-mcp-readonly-${stamp}@example.com`, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'notes-readonly', workspaceAccess: [{ workspaceId, canWrite: false }] });
+    const secret = tokenRes.body.data.token.secret as string;
+
+    const write = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 220,
+      method: 'tools/call',
+      params: { name: 'write_note', arguments: { title: 'Should fail' } },
+    });
+    expect(toolResult(write).success).toBe(false);
+    expect(toolResult(write).error).toBe('MCP_READ_ONLY');
+  });
 });

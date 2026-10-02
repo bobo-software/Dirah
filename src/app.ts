@@ -23,6 +23,7 @@ import { CryptoService } from './services/CryptoService';
 import { OAuthService } from './services/OAuthService';
 import { McpTokenService } from './services/McpTokenService';
 import { DocsMcpService } from './services/DocsMcpService';
+import { NotesMcpService } from './services/NotesMcpService';
 import { createDocsMcpExpressHandler } from './mcp/docs/createDocsMcpExpressHandler';
 import { createDocsMcpAuthMiddleware } from './middlewares/docsMcpAuth';
 import { docsMcpRateLimit } from './middlewares/docsMcpRateLimit';
@@ -96,6 +97,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   const docsMcpService = new DocsMcpService(pageService, mcpTokenService, {
     appPublicUrl: env.appPublicUrl,
   });
+  const notesMcpService = new NotesMcpService(noteService, docsMcpService, {
+    appPublicUrl: env.appPublicUrl,
+  });
   const apiPublicUrl = env.apiPublicUrl;
   const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl, mcpTokenService);
   const shareService = new ShareService(db, authService, pageService);
@@ -158,7 +162,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   });
   app.all('/mcp/protocol', mcpApiKeyMiddleware, mcpHandler);
 
-  const docsMcpHandler = await createDocsMcpExpressHandler(docsMcpService);
+  const docsMcpHandler = await createDocsMcpExpressHandler(docsMcpService, notesMcpService);
   app.all(
     '/mcp',
     createDocsMcpAuthMiddleware({ tokens: mcpTokenService, apiPublicUrl }),

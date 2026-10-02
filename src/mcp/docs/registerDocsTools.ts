@@ -103,7 +103,8 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'dirah_guide',
     {
       title: 'How to use Dirah docs MCP',
-      description: 'Short instructions for coding agents: search first, omit workspace when the token has one workspace, pass hash on writes.',
+      description:
+        'Short instructions for coding agents: search_docs for pages and search_notes for notes, omit workspace when the token has one workspace, pass hash on writes.',
       inputSchema: z.object({}),
     },
     (async () =>
