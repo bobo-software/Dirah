@@ -169,6 +169,13 @@
       "when": 1756538300000,
       "tag": "0023_kanban",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1756538400000,
+      "tag": "0024_task_lists",
+      "breakpoints": true
     }
   ]
 }

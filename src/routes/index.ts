@@ -22,6 +22,8 @@ import type { McpOAuthService } from '../services/McpOAuthService';
 import type { SystemAdminAuthService } from '../services/SystemAdminAuthService';
 import type { AdminService } from '../services/AdminService';
 import type { NoteService } from '../services/NoteService';
+import { createTaskItemRouter, createTaskListRouter } from './task.routes';
+import type { TaskListService } from '../services/TaskListService';
 import { createMcpSettingsRouter } from './mcpSettings.routes';
 import { createMcpOAuthApproveRouter } from './mcpOAuth.routes';
 
@@ -38,17 +40,20 @@ export function createApiRouter(
   mcpOAuthService: McpOAuthService,
   systemAdminAuthService: SystemAdminAuthService,
   adminService: AdminService,
-  noteService: NoteService
+  noteService: NoteService,
+  taskListService: TaskListService
 ): Router {
   const router = Router();
   router.use('/health', healthRouter);
   router.use('/auth', createAuthRouter(authService, cryptoService, oauthService));
-  router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, noteService, mcpTokenService));
+  router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, noteService, taskListService, mcpTokenService));
   router.use('/pages', createPageRouter(pageService, shareService));
   router.use('/notes', createNoteRouter(noteService));
   router.use('/kanban-columns', createKanbanColumnRouter(noteService));
   router.use('/kanban-cards', createKanbanCardRouter(noteService));
   router.use('/note-tags', createNoteTagRouter(noteService));
+  router.use('/task-lists', createTaskListRouter(taskListService));
+  router.use('/task-list-items', createTaskItemRouter(taskListService));
   router.use('/blobs', createBlobRouter(blobService));
   router.use('/public', createPublicRouter(shareService, blobService));
   router.use('/invites', createInviteRouter(memberService));
