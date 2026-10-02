@@ -162,6 +162,13 @@
       "when": 1756538200000,
       "tag": "0022_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1756538300000,
+      "tag": "0023_kanban",
+      "breakpoints": true
     }
   ]
 }

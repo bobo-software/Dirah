@@ -8,7 +8,7 @@ import { createPublicRouter } from './public.routes';
 import { createInviteRouter } from './invite.routes';
 import { createAiRouter } from './ai.routes';
 import { createAdminRouter } from './admin.routes';
-import { createNoteRouter, createNoteTagRouter } from './note.routes';
+import { createKanbanCardRouter, createKanbanColumnRouter, createNoteRouter, createNoteTagRouter } from './note.routes';
 import type { AuthService } from '../services/AuthService';
 import type { PageService } from '../services/PageService';
 import type { BlobService } from '../services/BlobService';
@@ -46,6 +46,8 @@ export function createApiRouter(
   router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, noteService, mcpTokenService));
   router.use('/pages', createPageRouter(pageService, shareService));
   router.use('/notes', createNoteRouter(noteService));
+  router.use('/kanban-columns', createKanbanColumnRouter(noteService));
+  router.use('/kanban-cards', createKanbanCardRouter(noteService));
   router.use('/note-tags', createNoteTagRouter(noteService));
   router.use('/blobs', createBlobRouter(blobService));
   router.use('/public', createPublicRouter(shareService, blobService));

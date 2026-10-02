@@ -46,7 +46,13 @@ describe('notes API', () => {
   async function createNote(session: Session, body: object = {}) {
     const res = await as(session).post(`/api/workspaces/${workspaceId}/notes`, body);
     expect(res.status).toBe(201);
-    return res.body.data.note as { id: string; visibility: string; parentId: string | null };
+    return res.body.data.note as {
+      id: string;
+      title: string;
+      kind: string;
+      visibility: string;
+      parentId: string | null;
+    };
   }
 
   beforeAll(async () => {
@@ -240,6 +246,92 @@ describe('notes API', () => {
     expect(removed.status).toBe(200);
     expect(removed.body.data.ids).toEqual([root.id]);
     expect((await api.get(`/api/notes/${child.id}`)).status).toBe(200);
+  });
+
+  it('keeps kanban cards as notes and leaves placed notes in the tree', async () => {
+    if (!dbReady) return;
+    const api = as(owner);
+    const board = await createNote(owner, { title: 'Kanban', kind: 'kanban' });
+    expect(board).toMatchObject({ title: 'Kanban', kind: 'kanban', parentId: null });
+
+    const plain = await createNote(owner, { title: 'Plain' });
+    expect(plain).toMatchObject({ kind: 'note' });
+
+    const loaded = await api.get(`/api/notes/${board.id}/board`);
+    expect(loaded.status).toBe(200);
+    const columns = loaded.body.data.columns as { id: string; title: string; cards: unknown[] }[];
+    expect(columns.map((column) => column.title)).toEqual(['To do', 'Doing', 'Done']);
+    expect(columns.every((column) => column.cards.length === 0)).toBe(true);
+
+    const added = await api.post(`/api/notes/${board.id}/cards`, {
+      columnId: columns[0].id,
+      title: 'Sprint',
+    });
+    expect(added.status).toBe(201);
+    const sprint = added.body.data.columns[0].cards[0].note as { id: string; parentId: string };
+    expect(sprint.parentId).toBe(board.id);
+
+    const home = await createNote(owner, { title: 'Home' });
+    const elsewhere = await createNote(owner, { title: 'Elsewhere', parentId: home.id });
+    const placed = await api.post(`/api/notes/${board.id}/cards`, {
+      columnId: columns[0].id,
+      noteId: elsewhere.id,
+    });
+    expect(placed.status).toBe(201);
+    const elsewhereAfter = await api.get(`/api/notes/${elsewhere.id}`);
+    expect(elsewhereAfter.body.data.note.parentId).toBe(home.id);
+
+    const moved = await api.patch('/api/kanban-cards', {
+      boardId: board.id,
+      noteId: elsewhere.id,
+      columnId: columns[1].id,
+      position: 0,
+    });
+    expect(moved.status).toBe(200);
+    const doing = (moved.body.data.columns as { title: string; cards: { noteId: string }[] }[]).find(
+      (column) => column.title === 'Doing'
+    );
+    expect(doing?.cards.map((card) => card.noteId)).toEqual([elsewhere.id]);
+    expect((await api.get(`/api/notes/${elsewhere.id}`)).body.data.note.parentId).toBe(home.id);
+
+    const duplicate = await api.post(`/api/notes/${board.id}/cards`, {
+      columnId: columns[1].id,
+      noteId: elsewhere.id,
+    });
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.error).toBe('ALREADY_PLACED');
+
+    expect((await api.del(`/api/notes/${elsewhere.id}`)).status).toBe(200);
+    const afterTrash = await api.get(`/api/notes/${board.id}/board`);
+    const remaining = (afterTrash.body.data.columns as { cards: { noteId: string }[] }[]).flatMap((column) =>
+      column.cards.map((card) => card.noteId)
+    );
+    expect(remaining).toEqual([sprint.id]);
+    expect((await api.get(`/api/notes/${home.id}`)).status).toBe(200);
+
+    const shared = await api.patch(`/api/notes/${board.id}`, { visibility: 'workspace' });
+    expect(shared.status).toBe(200);
+    const secret = await createNote(owner, { title: 'Still private' });
+    const rejected = await api.post(`/api/notes/${board.id}/cards`, {
+      columnId: columns[0].id,
+      noteId: secret.id,
+    });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.error).toBe('VISIBILITY_CONFLICT');
+
+    const memberView = await as(member).get(`/api/notes/${board.id}/board`);
+    expect(memberView.status).toBe(200);
+    expect((await as(member).post(`/api/notes/${board.id}/cards`, { columnId: columns[0].id, title: 'Nope' })).status).toBe(403);
+
+    const reversed = await api.put(`/api/notes/${board.id}/columns/order`, {
+      columnIds: [...columns].reverse().map((column) => column.id),
+    });
+    expect(reversed.status).toBe(200);
+    expect((reversed.body.data.columns as { title: string }[]).map((column) => column.title)).toEqual([
+      'Done',
+      'Doing',
+      'To do',
+    ]);
   });
 
   it('refuses note writes in encrypted workspaces until Phase 5', async () => {

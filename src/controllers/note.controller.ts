@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Request, Response } from 'express';
-import { NoteService, NOTE_VISIBILITIES } from '../services/NoteService';
+import { NoteService, NOTE_KINDS, NOTE_VISIBILITIES } from '../services/NoteService';
 import ResponseUtils from '../utils/ResponseUtils';
 import { asyncHandler } from '../utils/asyncHandler';
 
@@ -15,6 +15,42 @@ const createSchema = z.object({
   icon: icon.optional(),
   cover: cover.optional(),
   visibility: visibility.optional(),
+  kind: z.enum(NOTE_KINDS).optional(),
+});
+
+const columnCreateSchema = z.object({
+  title: z.string().max(200).optional(),
+});
+
+const columnPatchSchema = z.object({
+  title: z.string().max(200).optional(),
+  position: z.number().int().optional(),
+});
+
+const columnOrderSchema = z.object({
+  columnIds: z.array(uuid).min(1),
+});
+
+const cardCreateSchema = z
+  .object({
+    columnId: uuid,
+    title: z.string().max(500).optional(),
+    noteId: uuid.optional(),
+  })
+  .refine((data) => !(data.noteId && data.title !== undefined), {
+    message: 'Pass a title or a note, not both',
+  });
+
+const cardMoveSchema = z.object({
+  boardId: uuid,
+  noteId: uuid,
+  columnId: uuid,
+  position: z.number().int().min(0),
+});
+
+const cardRemoveSchema = z.object({
+  boardId: uuid,
+  noteId: uuid,
 });
 
 const patchSchema = z.object({
@@ -85,6 +121,70 @@ export function createNoteController(noteService: NoteService) {
     get: asyncHandler(async (req: Request, res: Response) => {
       const body = await noteService.get(req.user!.userId, req.params.id);
       return ResponseUtils.success(res, 'ok', noteBody(body));
+    }),
+
+    getBoard: asyncHandler(async (req: Request, res: Response) => {
+      const board = await noteService.getBoard(req.user!.userId, req.params.id);
+      return ResponseUtils.success(res, 'ok', board);
+    }),
+
+    createColumn: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = columnCreateSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid column payload', parsed.error.flatten(), 400);
+      }
+      const board = await noteService.createColumn(req.user!.userId, req.params.id, parsed.data);
+      return ResponseUtils.success(res, 'Column created', board, 201);
+    }),
+
+    patchColumn: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = columnPatchSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid column payload', parsed.error.flatten(), 400);
+      }
+      const board = await noteService.patchColumn(req.user!.userId, req.params.id, parsed.data);
+      return ResponseUtils.success(res, 'ok', board);
+    }),
+
+    deleteColumn: asyncHandler(async (req: Request, res: Response) => {
+      const board = await noteService.deleteColumn(req.user!.userId, req.params.id);
+      return ResponseUtils.success(res, 'Column deleted', board);
+    }),
+
+    orderColumns: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = columnOrderSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid column order', parsed.error.flatten(), 400);
+      }
+      const board = await noteService.orderColumns(req.user!.userId, req.params.id, parsed.data.columnIds);
+      return ResponseUtils.success(res, 'ok', board);
+    }),
+
+    createCard: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = cardCreateSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid card payload', parsed.error.flatten(), 400);
+      }
+      const board = await noteService.addCard(req.user!.userId, req.params.id, parsed.data);
+      return ResponseUtils.success(res, 'Card added', board, 201);
+    }),
+
+    moveCard: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = cardMoveSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid card move', parsed.error.flatten(), 400);
+      }
+      const board = await noteService.moveCard(req.user!.userId, parsed.data);
+      return ResponseUtils.success(res, 'ok', board);
+    }),
+
+    removeCard: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = cardRemoveSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid card payload', parsed.error.flatten(), 400);
+      }
+      const board = await noteService.removeCard(req.user!.userId, parsed.data.boardId, parsed.data.noteId);
+      return ResponseUtils.success(res, 'Card removed', board);
     }),
 
     patch: asyncHandler(async (req: Request, res: Response) => {
