@@ -32,6 +32,21 @@ const PublicSharePage = lazy(async () => {
   return { default: mod.PublicSharePage };
 });
 
+const TasksPage = lazy(async () => {
+  const mod = await import('./pages/tasks/TasksPage');
+  return { default: mod.TasksPage };
+});
+
+const TaskListPage = lazy(async () => {
+  const mod = await import('./pages/tasks/TaskListPage');
+  return { default: mod.TaskListPage };
+});
+
+const ChecklistRunPage = lazy(async () => {
+  const mod = await import('./pages/tasks/ChecklistRunPage');
+  return { default: mod.ChecklistRunPage };
+});
+
 const TrashPage = lazy(async () => {
   const mod = await import('./pages/TrashPage');
   return { default: mod.TrashPage };
@@ -126,6 +141,30 @@ export default function App() {
                 element={
                   <Suspense fallback={<p className="muted">Loading note…</p>}>
                     <NotePage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="tasks"
+                element={
+                  <Suspense fallback={<p className="muted">Loading tasks…</p>}>
+                    <TasksPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="tasks/:listId"
+                element={
+                  <Suspense fallback={<p className="muted">Loading list…</p>}>
+                    <TaskListPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="tasks/:listId/run"
+                element={
+                  <Suspense fallback={<p className="muted">Loading…</p>}>
+                    <ChecklistRunPage />
                   </Suspense>
                 }
               />

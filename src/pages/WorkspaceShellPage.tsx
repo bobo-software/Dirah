@@ -6,6 +6,7 @@ import {
   EmptyEditorPane,
   HomeIcon,
   NotesSidebarSection,
+  TasksSidebarSection,
   PageTree,
   Sidebar,
   buildPageTree,
@@ -24,6 +25,7 @@ export function WorkspaceShellPage() {
   const isTrash = Boolean(useMatch('/w/:workspaceId/trash'));
   const isNote = Boolean(useMatch('/w/:workspaceId/n/:noteId'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
+  const isTasks = Boolean(useMatch('/w/:workspaceId/tasks/*'));
   const isSettings = Boolean(useMatch('/w/:workspaceId/settings/*'));
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
@@ -191,6 +193,8 @@ export function WorkspaceShellPage() {
       >
         {section === 'notes' ? (
           <NotesSidebarSection workspaceId={workspaceId} noteId={noteId} />
+        ) : section === 'tasks' ? (
+          <TasksSidebarSection workspaceId={workspaceId} />
         ) : (
           <>
             <NavLink className="sidebar-home" to={`/w/${workspaceId}/docs`} end>
@@ -283,7 +287,7 @@ export function WorkspaceShellPage() {
               <line x1="3.5" y1="12" x2="20.5" y2="12" />
               <line x1="3.5" y1="17.5" x2="20.5" y2="17.5" />
             </svg>
-            {section === 'notes' ? 'Notes' : 'Pages'}
+            {section === 'notes' ? 'Notes' : section === 'tasks' ? 'Tasks' : 'Pages'}
           </button>
           {currentTitle ? (
             <span className="mobile-title">{currentTitle}</span>
@@ -295,11 +299,13 @@ export function WorkspaceShellPage() {
             <span className="mobile-title">Trash</span>
           ) : isNote ? (
             <span className="mobile-title">Notes</span>
+          ) : isTasks ? (
+            <span className="mobile-title">Tasks</span>
           ) : isSettings ? (
             <span className="mobile-title">Settings</span>
           ) : null}
         </div>
-        {pageId || isNotesHome || isDocsHome || isTrash || isCollection || isSettings || isNote ? (
+        {pageId || isNotesHome || isDocsHome || isTrash || isCollection || isSettings || isNote || isTasks ? (
           <Outlet
             context={{
               role: workspace.role,

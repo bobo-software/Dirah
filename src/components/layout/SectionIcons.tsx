@@ -17,6 +17,15 @@ export function NotesIcon() {
   );
 }
 
+export function TasksIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.75" y="3.75" width="16.5" height="16.5" rx="3" />
+      <path d="m8 12.3 2.7 2.7L16 9.6" />
+    </svg>
+  );
+}
+
 export function HomeIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
