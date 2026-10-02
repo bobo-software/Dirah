@@ -8,6 +8,7 @@ import { parseFrontmatter } from '../utils/frontmatter';
 import { extractMarkdownLinks } from '../utils/markdownLinks';
 import type { PageKind, PageService, PublicPage } from './PageService';
 import type { McpTokenService } from './McpTokenService';
+import { applyMarkdownEdit, type EditPatch } from './mcp/markdownPatch';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -114,50 +115,7 @@ function boostAgentIndexHits<T extends { path: string }>(hits: T[]): T[] {
   return [...boosted, ...rest];
 }
 
-export type EditPatch = { oldString: string; newString: string; replaceAll?: boolean };
-
-function nearbySnippet(content: string, oldString: string): string {
-  const lines = content.split('\n');
-  const needle = oldString.split('\n').find((line) => line.trim().length > 0) ?? oldString;
-  let idx = needle ? lines.findIndex((line) => line.includes(needle)) : -1;
-  if (idx < 0 && needle.length > 8) {
-    const prefix = needle.slice(0, Math.min(24, needle.length));
-    idx = lines.findIndex((line) => line.includes(prefix));
-  }
-  const start = idx < 0 ? 0 : Math.max(0, idx - 2);
-  const end = idx < 0 ? Math.min(lines.length, 8) : Math.min(lines.length, idx + 4);
-  return lines.slice(start, end).join('\n').slice(0, 400);
-}
-
-function applyOnePatch(content: string, patch: EditPatch, path: string, hash: string): string {
-  const occurrences = content.split(patch.oldString).length - 1;
-  const details = {
-    currentHash: hash,
-    path,
-    nearbySnippet: nearbySnippet(content, patch.oldString),
-    hint: 'Retry with this currentHash; re-read only if nearbySnippet is not enough to craft oldString.',
-  };
-  if (occurrences === 0) {
-    throw new HttpError('oldString was not found', 400, 'PATCH_NOT_FOUND', details);
-  }
-  if (occurrences > 1 && !patch.replaceAll) {
-    throw new HttpError(
-      `oldString occurs ${occurrences} times — pass replaceAll: true or narrow oldString to a unique match`,
-      400,
-      'PATCH_AMBIGUOUS',
-      { ...details, occurrences }
-    );
-  }
-  return patch.replaceAll
-    ? content.split(patch.oldString).join(patch.newString)
-    : content.replace(patch.oldString, patch.newString);
-}
-
-function appendToMarkdown(content: string, addition: string): string {
-  if (!addition) return content;
-  if (!content) return addition;
-  return content.endsWith('\n') ? content + addition : `${content}\n${addition}`;
-}
+export type { EditPatch } from './mcp/markdownPatch';
 
 export class DocsMcpService {
   constructor(
@@ -494,31 +452,7 @@ export class DocsMcpService {
   ) {
     await this.tokens.requireAllowlist(userId, tokenId, workspaceId, true);
     const current = await this.readFile(userId, tokenId, workspaceId, input);
-    const hasSingle = Boolean(input.oldString);
-    const hasPatches = Boolean(input.patches?.length);
-    const hasAppend = typeof input.append === 'string' && input.append.length > 0;
-    const modes = [hasSingle, hasPatches, hasAppend].filter(Boolean).length;
-    if (modes !== 1) {
-      throw new HttpError(
-        'Provide exactly one of oldString/newString, patches, or append',
-        400,
-        'INVALID_PATCH'
-      );
-    }
-    let next = current.content;
-    if (hasAppend) {
-      next = appendToMarkdown(current.content, input.append!);
-    } else {
-      const patches: EditPatch[] = hasPatches
-        ? input.patches!
-        : [{ oldString: input.oldString!, newString: input.newString ?? '', replaceAll: input.replaceAll }];
-      for (const patch of patches) {
-        if (!patch.oldString) {
-          throw new HttpError('oldString is required', 400, 'INVALID_PATCH');
-        }
-        next = applyOnePatch(next, patch, current.path, current.hash);
-      }
-    }
+    const next = applyMarkdownEdit(current.content, input, current.path, current.hash);
     const body = await this.pages.putMarkdown(userId, current.id, next, input.hash ?? current.hash);
     const tree = await this.loadTree(userId, tokenId, workspaceId);
     const warnings = this.checkLinks(tree, current.path, next);
@@ -651,6 +585,15 @@ export class DocsMcpService {
 
   recordAudit(entry: Parameters<McpTokenService['recordAudit']>[0]): Promise<void> {
     return this.tokens.recordAudit(entry);
+  }
+
+  requireWorkspaceAccess(
+    userId: string,
+    tokenId: string | null,
+    workspaceId: string,
+    write: boolean
+  ): ReturnType<McpTokenService['requireAllowlist']> {
+    return this.tokens.requireAllowlist(userId, tokenId, workspaceId, write);
   }
 
   private async allowlisted(

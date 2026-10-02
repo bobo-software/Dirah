@@ -3,7 +3,9 @@ import type { DocsGuide } from '../../services/DocsMcpService';
 export const DIRA_DOCS_INSTRUCTIONS = `Dirah is the team's markdown knowledge base (Postgres-backed virtual paths, not a git working tree).
 
 - Prefer search_docs before inventing APIs, runbooks, or architecture. Hyphens and spaces in ticket ids fold together (PP-B4 matches "PP - B4"). Snippets are plain text (safe to copy into oldString).
-- Prefer path (e.g. docs/api/auth.md) over UUIDs.
+- Notes are not pages. Use search_notes, list_notes, and read_note for notes. search_docs, list_tree, and read_file never return notes.
+- A note is visible when you wrote it, or when its visibility is workspace. Only the author can edit. Pass hash from read_note on edit_note and write_note. Notes have no file path; use noteId.
+- Prefer path (e.g. docs/api/auth.md) over UUIDs for pages.
 - Omit workspace / workspaceId when this token has exactly one allowlisted workspace. Otherwise pass workspace as a slug or name from list_workspaces.
 - Pass hash from read_file on edit_file / write_file to avoid clobbering (409 HASH_MISMATCH). Use edit_file patches or append for several changes on one hash; the response hash is enough for the next call — do not re-read unless a patch failed.
 - Prefer one ## Status block per plan/progress note. After shipping, update that block; do not maintain a second "Shipped behaviour" list unless it is the same section.

@@ -1,12 +1,17 @@
 import type { RequestHandler } from 'express';
 import type { DocsMcpService } from '../../services/DocsMcpService';
+import type { NotesMcpService } from '../../services/NotesMcpService';
 import { registerDocsTools } from './registerDocsTools';
+import { registerNotesTools } from './registerNotesTools';
 import { registerDocsResources } from './registerDocsResources';
 import { currentDocsAuth, docsMcpAuth } from './authContext';
 import type { PgMcpServerHost } from '../registerPgTools';
 import { buildDynamicInstructions } from './instructions';
 
-export async function createDocsMcpExpressHandler(service: DocsMcpService): Promise<RequestHandler> {
+export async function createDocsMcpExpressHandler(
+  service: DocsMcpService,
+  notes: NotesMcpService
+): Promise<RequestHandler> {
   const [{ createMcpHandler, McpServer, ResourceTemplate }, { toNodeHandler }] = await Promise.all([
     import('@modelcontextprotocol/server'),
     import('@modelcontextprotocol/node'),
@@ -21,6 +26,7 @@ export async function createDocsMcpExpressHandler(service: DocsMcpService): Prom
         { instructions: buildDynamicInstructions(guide) } as { instructions?: string }
       );
       registerDocsTools(server as unknown as PgMcpServerHost, service);
+      registerNotesTools(server as unknown as PgMcpServerHost, notes);
       registerDocsResources(server as unknown as PgMcpServerHost, service, ResourceTemplate as never);
       return server;
     },
