@@ -12,6 +12,8 @@ import type { NoteBody } from '../../api/notes';
 import { EMPTY_NOTES, useNoteStore } from '../../stores/StoresIndex';
 import { NoteGlyph } from './NoteTree';
 import { NoteFormatter } from './formatter/NoteFormatter';
+import { TasksIcon } from '../layout/SectionIcons';
+import { useSendNoteToTasks } from '../tasks/useSendNoteToTasks';
 
 const SAVE_DELAY_MS = 800;
 
@@ -57,6 +59,7 @@ export function NoteEditor({
   const patchNote = useNoteStore((state) => state.patchNote);
   const note = notes.find((item) => item.id === noteId);
   const editable = note?.editable ?? false;
+  const sendToTasks = useSendNoteToTasks(workspaceId);
 
   const [ready, setReady] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -231,6 +234,15 @@ export function NoteEditor({
     }
   }
 
+  /** Saves pending typing (and waits out an in-flight save) so the server reads the latest body. */
+  async function settleSaves() {
+    await flush();
+    for (let waited = 0; savingRef.current && waited < 5000; waited += 100) {
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+    }
+    if (pendingRef.current !== null) await flush();
+  }
+
   const trail = breadcrumbs(notes, note);
   const saveIndicator =
     ready && editable && !unsupported ? (
@@ -260,7 +272,21 @@ export function NoteEditor({
               </span>
             );
           })}
-          {saveIndicator}
+          <span className="note-crumbs-actions">
+            {saveIndicator}
+            {ready && note && !unsupported ? (
+              <button
+                type="button"
+                className="linkish note-send-tasks"
+                onClick={() => void sendToTasks.send(noteId, settleSaves)}
+                disabled={sendToTasks.sending}
+                title="Copy this note’s list items into a new checklist"
+              >
+                <TasksIcon />
+                {sendToTasks.sending ? 'Sending…' : 'Send to Tasks'}
+              </button>
+            ) : null}
+          </span>
         </nav>
       )}
       {conflict ? (
@@ -280,9 +306,9 @@ export function NoteEditor({
           This note contains content the editor can’t display yet, so editing is turned off to protect it.
         </p>
       ) : null}
-      {message ? (
+      {message ?? sendToTasks.error ? (
         <p className="error" role="alert">
-          {message}
+          {message ?? sendToTasks.error}
         </p>
       ) : null}
       <header className="note-header">

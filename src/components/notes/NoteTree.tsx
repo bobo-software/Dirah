@@ -60,6 +60,7 @@ type NoteTreeProps = {
   onToggleExpand: (noteId: string) => void;
   onCreateChild: (parent: PublicNote) => void;
   onCreateKanban: (parent: PublicNote) => void;
+  onSendToTasks: (note: PublicNote) => void;
   onTrash: (note: PublicNote) => void;
   onMove: (draggedId: string, target: PublicNote, zone: DropZone) => void;
   ancestorIds?: string[];
@@ -84,6 +85,7 @@ function NoteTreeItem({
   onToggleExpand,
   onCreateChild,
   onCreateKanban,
+  onSendToTasks,
   onTrash,
   onMove,
   ancestorIds = [],
@@ -239,6 +241,19 @@ function NoteTreeItem({
                 >
                   Add kanban
                 </button>
+                {note.kind === 'note' ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="page-row-dropdown-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onSendToTasks(note);
+                    }}
+                  >
+                    Send to Tasks
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   role="menuitem"
@@ -264,6 +279,7 @@ function NoteTreeItem({
           onToggleExpand={onToggleExpand}
           onCreateChild={onCreateChild}
           onCreateKanban={onCreateKanban}
+          onSendToTasks={onSendToTasks}
           onTrash={onTrash}
           onMove={onMove}
           ancestorIds={[...ancestorIds, note.id]}

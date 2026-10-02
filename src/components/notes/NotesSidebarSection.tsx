@@ -5,11 +5,13 @@ import { HomeIcon } from '../layout/SectionIcons';
 import { NoteTree } from './NoteTree';
 import { buildNoteTree } from './noteTreeModel';
 import { useNoteActions } from './useNoteActions';
+import { useSendNoteToTasks } from '../tasks/useSendNoteToTasks';
 
 export function NotesSidebarSection({ workspaceId, noteId }: { workspaceId: string; noteId?: string }) {
   const loaded = useNoteStore((state) => state.loadedWorkspaces.has(workspaceId));
   const fetchNotes = useNoteStore((state) => state.fetchNotes);
   const { notes, busy, message, create, trash, move } = useNoteActions(workspaceId);
+  const sendToTasks = useSendNoteToTasks(workspaceId);
   const [search, setSearch] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -61,7 +63,7 @@ export function NotesSidebarSection({ workspaceId, noteId }: { workspaceId: stri
     });
   }
 
-  const error = message ?? loadError;
+  const error = message ?? sendToTasks.error ?? loadError;
 
   return (
     <>
@@ -106,6 +108,7 @@ export function NotesSidebarSection({ workspaceId, noteId }: { workspaceId: stri
             expand(parent.id);
             void create(parent, { kind: 'kanban', title: 'Kanban' });
           }}
+          onSendToTasks={(note) => void sendToTasks.send(note.id)}
           onTrash={(note) => void trash(note)}
           onMove={(draggedId, target, zone) => {
             if (zone === 'inside') expand(target.id);

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
   addTaskItems,
   createTaskList,
+  createTaskListFromNote,
   deleteTaskItem,
   deleteTaskList,
   getTaskList,
@@ -27,6 +28,7 @@ type TaskState = {
   views: Record<string, TaskListView>;
   fetchLists: (workspaceId: string) => Promise<TaskList[]>;
   createList: (workspaceId: string, input?: { title?: string; visibility?: TaskListVisibility }) => Promise<TaskList>;
+  createFromNote: (noteId: string) => Promise<TaskListView>;
   patchList: (listId: string, input: TaskListPatch) => Promise<TaskList>;
   deleteList: (listId: string) => Promise<void>;
   fetchList: (listId: string) => Promise<TaskListView>;
@@ -103,6 +105,12 @@ export const useTaskStore = create<TaskState>((set, get) => {
         views: { ...state.views, [list.id]: { list, items: [] } },
       }));
       return list;
+    },
+
+    createFromNote: async (noteId) => {
+      const view = await createTaskListFromNote(token(), noteId);
+      putView(view);
+      return view;
     },
 
     patchList: async (listId, input) => {

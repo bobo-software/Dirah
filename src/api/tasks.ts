@@ -63,6 +63,14 @@ export async function createTaskList(
   return data.list;
 }
 
+export async function createTaskListFromNote(accessToken: string, noteId: string): Promise<TaskListView> {
+  return apiRequest<TaskListView>('/api/task-lists/from-note', {
+    method: 'POST',
+    accessToken,
+    body: JSON.stringify({ noteId }),
+  });
+}
+
 export async function getTaskList(accessToken: string, listId: string): Promise<TaskListView> {
   return apiRequest<TaskListView>(`/api/task-lists/${listId}`, { accessToken });
 }

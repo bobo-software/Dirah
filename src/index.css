@@ -6898,3 +6898,24 @@ button.task-run-secondary:hover:not(:disabled) {
     padding: 0.85rem 1.3rem;
   }
 }
+
+/* Note → Tasks */
+
+.note-crumbs-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-left: auto;
+}
+
+.note-crumbs-actions .note-save-state {
+  margin-left: 0;
+}
+
+button.note-send-tasks {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
