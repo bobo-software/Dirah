@@ -36,16 +36,17 @@ function optionsIcon(): SVGElement {
 }
 
 class TableOptionsView {
+  private view: EditorView
+  private readonly editor: Editor
   private readonly button = document.createElement('button')
   private menu: ReturnType<typeof mountTableOptionsMenu> | null = null
   private closeMenu: (() => void) | null = null
   private frame = 0
   private readonly observer: ResizeObserver
 
-  constructor(
-    private view: EditorView,
-    private readonly editor: Editor,
-  ) {
+  constructor(view: EditorView, editor: Editor) {
+    this.view = view
+    this.editor = editor
     this.button.type = 'button'
     this.button.className = 'note-table-options'
     this.button.hidden = true
@@ -90,11 +91,6 @@ class TableOptionsView {
     const height = this.button.offsetHeight || 26
     this.button.style.top = `${tableRect.top - parentRect.top - height}px`
     this.button.style.left = `${tableRect.right - parentRect.left - width}px`
-  }
-
-  destroy() {
-    this.closeMenu?.()
-    this.button.remove()
   }
 
   private toggle() {
