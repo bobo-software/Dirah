@@ -32,6 +32,7 @@ export function TokenDetailBody({
   const revokeToken = useMcpStore((state) => state.revokeToken);
   const setTokenAccess = useMcpStore((state) => state.setTokenAccess);
   const rows = tokenAccess[token.id];
+  const isOAuth = Boolean(token.oauthClientId);
 
   const [name, setName] = useState(token.name);
   const [message, setMessage] = useState<string | null>(null);
@@ -116,7 +117,10 @@ export function TokenDetailBody({
   }
 
   async function onRevoke() {
-    if (!window.confirm('Revoke this MCP token?')) return;
+    const prompt = isOAuth
+      ? `Disconnect ${token.name}? It will lose access to Dirah until you connect it again.`
+      : 'Revoke this MCP token?';
+    if (!window.confirm(prompt)) return;
     try {
       await revokeToken(token.id);
       navigate(backLink);
@@ -141,7 +145,8 @@ export function TokenDetailBody({
       </Link>
       <h1>{token.name}</h1>
       <p className="muted">
-        {token.tokenPrefix}… · created {new Date(token.createdAt).toLocaleDateString()}
+        {isOAuth ? 'Connected app' : `${token.tokenPrefix}…`} · created{' '}
+        {new Date(token.createdAt).toLocaleDateString()}
         {token.lastUsedAt ? ` · last used ${new Date(token.lastUsedAt).toLocaleDateString()}` : ' · never used'}
       </p>
       {message ? (
@@ -192,10 +197,12 @@ export function TokenDetailBody({
         )}
       </div>
 
-      <div className="settings-section">
-        <h2>Cursor / Claude Code</h2>
-        <textarea className="mcp-snippet" readOnly value={mcpConfigSnippet} />
-      </div>
+      {isOAuth ? null : (
+        <div className="settings-section">
+          <h2>Cursor / Claude Code</h2>
+          <textarea className="mcp-snippet" readOnly value={mcpConfigSnippet} />
+        </div>
+      )}
 
       {snippet ? (
         <div className="settings-section">
@@ -206,11 +213,13 @@ export function TokenDetailBody({
 
       <div className="settings-section">
         <h2>Danger zone</h2>
-        <button type="button" onClick={() => void onRotate()}>
-          Rotate token
-        </button>
+        {isOAuth ? null : (
+          <button type="button" onClick={() => void onRotate()}>
+            Rotate token
+          </button>
+        )}
         <button type="button" className="danger-btn" onClick={() => void onRevoke()}>
-          Revoke token
+          {isOAuth ? 'Disconnect app' : 'Revoke token'}
         </button>
       </div>
     </section>

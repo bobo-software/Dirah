@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
+import { readReturnTo } from '../utils/returnTo';
 import { BrandLink, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
 
 export function LoginPage() {
@@ -17,7 +18,7 @@ export function LoginPage() {
 
   if (!ready) return <p className="muted">Loading…</p>;
   if (user) {
-    const from = (location.state as { from?: string } | null)?.from;
+    const from = (location.state as { from?: string } | null)?.from ?? readReturnTo();
     return <Navigate to={from ?? '/'} replace />;
   }
 
@@ -27,7 +28,7 @@ export function LoginPage() {
     setMessage(null);
     try {
       await login(email, password);
-      const from = (location.state as { from?: string } | null)?.from;
+      const from = (location.state as { from?: string } | null)?.from ?? readReturnTo();
       navigate(from ?? '/');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Login failed');

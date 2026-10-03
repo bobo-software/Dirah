@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
+import { readReturnTo } from '../utils/returnTo';
 import { BrandLink, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
 
 export function RegisterPage() {
@@ -15,7 +16,7 @@ export function RegisterPage() {
 
   if (!ready) return <p className="muted">Loading…</p>;
   if (nextPath) return <Navigate to={nextPath} replace />;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={readReturnTo() ?? '/'} replace />;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -23,7 +24,7 @@ export function RegisterPage() {
     setMessage(null);
     try {
       const workspace = await register(email, password);
-      setNextPath(`/w/${workspace.id}`);
+      setNextPath(readReturnTo() ?? `/w/${workspace.id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not register');
     } finally {

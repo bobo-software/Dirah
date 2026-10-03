@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AnimatePresence,
@@ -7,6 +7,7 @@ import {
   useMotionValue,
   useTransform,
   type PanInfo,
+  type TapInfo,
   type Variants,
 } from 'motion/react';
 import type { TaskItem } from '../../../api/tasks';
@@ -18,6 +19,7 @@ type Answer = { itemId: string; checked: boolean; previous: boolean };
 
 const SWIPE_DISTANCE = 110;
 const SWIPE_VELOCITY = 600;
+const TAP_SLOP = 8;
 
 function buzz(pattern: number | number[]) {
   try {
@@ -247,7 +249,7 @@ export function TaskRunner({ listId, onExit }: { listId: string; onExit: () => v
                   <span>{mode.yes.label}</span>
                 </motion.button>
               </div>
-              <p className="task-run-hint">Swipe right for “{mode.yes.label}”, left for “{mode.no.label}”</p>
+              <p className="task-run-hint">Swipe or tap right for “{mode.yes.label}”, left for “{mode.no.label}”</p>
             </motion.main>
           ) : (
             <DoneScreen
@@ -303,6 +305,40 @@ function SwipeCard({
   const yesHint = useTransform(x, [-SWIPE_DISTANCE, 0, SWIPE_DISTANCE], [0.2, 0.8, 1]);
   const noHint = useTransform(x, [-SWIPE_DISTANCE, 0, SWIPE_DISTANCE], [1, 0.8, 0.2]);
 
+  // A tap on either side zone answers. A press that travelled further than
+  // TAP_SLOP at any point is a drag, even if it came back, so motion's onTap
+  // (which can fire after a drag) is ignored for it.
+  const pressRef = useRef<{ moved: boolean; stop: () => void } | null>(null);
+
+  function onTapStart(_event: PointerEvent | MouseEvent | TouchEvent, info: TapInfo) {
+    pressRef.current?.stop();
+    const start = info.point;
+    const press = {
+      moved: false,
+      stop: () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointercancel', press.stop);
+      },
+    };
+    function onMove(event: PointerEvent) {
+      if (Math.hypot(event.pageX - start.x, event.pageY - start.y) > TAP_SLOP) press.moved = true;
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointercancel', press.stop);
+    pressRef.current = press;
+  }
+
+  function onTap(event: PointerEvent | MouseEvent | TouchEvent) {
+    const press = pressRef.current;
+    press?.stop();
+    pressRef.current = null;
+    if (!press || press.moved) return;
+    const zone = (event.target as Element | null)?.closest<HTMLElement>('.task-card-zone');
+    if (zone) onAnswer(zone.dataset.answer === 'yes');
+  }
+
+  useEffect(() => () => pressRef.current?.stop(), []);
+
   function onDragEnd(_event: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
     if (info.offset.x > SWIPE_DISTANCE || info.velocity.x > SWIPE_VELOCITY) onAnswer(true);
     else if (info.offset.x < -SWIPE_DISTANCE || info.velocity.x < -SWIPE_VELOCITY) onAnswer(false);
@@ -320,6 +356,12 @@ function SwipeCard({
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.85}
+      onTapStart={onTapStart}
+      onTap={onTap}
+      onTapCancel={() => {
+        pressRef.current?.stop();
+        pressRef.current = null;
+      }}
       onDragEnd={onDragEnd}
       whileDrag={{ cursor: 'grabbing', scale: 1.02 }}
     >
@@ -329,16 +371,21 @@ function SwipeCard({
       <motion.span className="task-card-stamp no" style={{ opacity: noOpacity }} aria-hidden="true">
         {mode.no.stamp}
       </motion.span>
-      <motion.span className="task-card-hint no" style={{ opacity: noHint }} aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-          <path d="M7 7l10 10M17 7 7 17" />
-        </svg>
-      </motion.span>
-      <motion.span className="task-card-hint yes" style={{ opacity: yesHint }} aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="m5.5 12.5 4 4L18.5 7.5" />
-        </svg>
-      </motion.span>
+      {/* Tap zones; the answer buttons below the card are the accessible equivalent. */}
+      <span className="task-card-zone no" data-answer="no" title={mode.no.label} aria-hidden="true">
+        <motion.span className="task-card-hint" style={{ opacity: noHint }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <path d="M7 7l10 10M17 7 7 17" />
+          </svg>
+        </motion.span>
+      </span>
+      <span className="task-card-zone yes" data-answer="yes" title={mode.yes.label} aria-hidden="true">
+        <motion.span className="task-card-hint" style={{ opacity: yesHint }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m5.5 12.5 4 4L18.5 7.5" />
+          </svg>
+        </motion.span>
+      </span>
       <p className="task-card-prompt">{mode.prompt}</p>
       <h2 className="task-card-text">{item.text}</h2>
       {item.checked ? <p className="task-card-was">Checked last time</p> : null}

@@ -4964,6 +4964,13 @@ button.kanban-picker-option:hover:not(:disabled),
   align-self: flex-start;
 }
 
+.mcp-consent-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
 .settings-body {
   display: flex;
   align-items: flex-start;
@@ -6660,6 +6667,43 @@ button.task-run-icon:disabled {
   transform: rotate(12deg);
 }
 
+.task-card-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.task-card-zone.no {
+  left: 0;
+  border-radius: 24px 0 0 24px;
+}
+
+.task-card-zone.yes {
+  right: 0;
+  border-radius: 0 24px 24px 0;
+}
+
+.task-card-zone.no:hover,
+.task-card-zone.no:active {
+  background: linear-gradient(to right, color-mix(in srgb, var(--danger) 24%, transparent), transparent);
+}
+
+.task-card-zone.yes:hover,
+.task-card-zone.yes:active {
+  background: linear-gradient(to left, color-mix(in srgb, var(--accent) 26%, transparent), transparent);
+}
+
+@media (hover: none) {
+  .task-card-zone.no:hover:not(:active),
+  .task-card-zone.yes:hover:not(:active) {
+    background: none;
+  }
+}
+
 .task-card-hint {
   position: absolute;
   top: 50%;
@@ -6672,13 +6716,13 @@ button.task-run-icon:disabled {
   pointer-events: none;
 }
 
-.task-card-hint.yes {
+.task-card-zone.yes .task-card-hint {
   right: 0.75rem;
   background: var(--accent);
   color: var(--on-accent);
 }
 
-.task-card-hint.no {
+.task-card-zone.no .task-card-hint {
   left: 0.75rem;
   background: var(--danger);
   color: var(--surface);

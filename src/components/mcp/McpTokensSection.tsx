@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
 import { useMcpStore } from '../../stores/StoresIndex';
 
@@ -128,7 +129,11 @@ function TokenRow({
     >
       <td className="mcp-table-name">{token.name}</td>
       <td>
-        <code className="mcp-table-token">{token.tokenPrefix}…</code>
+        {token.oauthClientId ? (
+          <span className="muted">Connected app</span>
+        ) : (
+          <code className="mcp-table-token">{token.tokenPrefix}…</code>
+        )}
       </td>
       <td>
         <TokenWorkspaces rows={accessRows} loading={accessLoading} currentWorkspaceId={currentWorkspaceId} />
@@ -231,6 +236,10 @@ export function McpTokensSection({
         <div>
           <h2>MCP tokens</h2>
           <p className="muted">{description}</p>
+          <p className="muted">
+            Using Claude, ChatGPT, or another AI chat app? Add <code>{`${API_URL}/mcp`}</code> as a custom connector and
+            sign in. You don't need a token.
+          </p>
         </div>
         <button type="button" onClick={() => navigate(newTokenPath)}>
           New token

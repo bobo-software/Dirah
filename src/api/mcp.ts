@@ -5,6 +5,8 @@ export type McpToken = {
   name: string;
   tokenPrefix: string;
   defaultWorkspaceId: string | null;
+  /** Set when an AI app (Claude, ChatGPT, …) connected via OAuth instead of a pasted token. */
+  oauthClientId?: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -102,4 +104,39 @@ export async function setWorkspaceMcpEnabled(
     }
   );
   return data.workspace;
+}
+
+export type OAuthClientInfo = {
+  clientId: string;
+  clientName: string;
+  redirectHost: string;
+};
+
+export async function getOAuthClient(
+  accessToken: string,
+  clientId: string,
+  redirectUri: string
+): Promise<OAuthClientInfo> {
+  const query = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri });
+  return apiRequest<OAuthClientInfo>(`/api/mcp/oauth/client?${query.toString()}`, { accessToken });
+}
+
+export async function answerOAuthRequest(
+  accessToken: string,
+  input: {
+    clientId: string;
+    redirectUri: string;
+    codeChallenge?: string;
+    state?: string;
+    resource?: string;
+    scope?: string;
+    deny?: boolean;
+    workspaces?: Array<{ workspaceId: string; canWrite: boolean }>;
+  }
+): Promise<{ redirectTo: string }> {
+  return apiRequest<{ redirectTo: string }>('/api/mcp/oauth/approve', {
+    method: 'POST',
+    accessToken,
+    body: JSON.stringify(input),
+  });
 }
