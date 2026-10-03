@@ -176,7 +176,13 @@
       "when": 1756538400000,
       "tag": "0024_task_lists",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1756538500000,
+      "tag": "0025_mcp_oauth_refresh",
+      "breakpoints": true
     }
   ]
 }
-

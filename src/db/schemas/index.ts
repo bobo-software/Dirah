@@ -17,6 +17,7 @@ export {
   mcpAudit,
   mcpOauthClients,
   mcpOauthCodes,
+  mcpOauthRefreshTokens,
 } from './mcp';
 export { systemAdmins, systemAdminRefreshTokens } from './systemAdmins';
 export { requestLogs } from './requestLogs';

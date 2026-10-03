@@ -9,6 +9,7 @@ export interface JwtPayload {
   profileId?: string;
   role?: string;
   tokenId?: string;
+  aud?: string | string[];
 }
 
 export interface SystemAdminJwtPayload {
@@ -20,9 +21,12 @@ export function signAccessToken(payload: JwtPayload): string {
   return jwt.sign(payload, env.jwtSecret, { expiresIn: '15m' });
 }
 
-export function signMcpAccessToken(userId: string, tokenId: string): string {
+export const MCP_ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
+
+export function signMcpAccessToken(userId: string, tokenId: string, audience?: string): string {
   return jwt.sign({ userId, role: 'mcp', tokenId } satisfies JwtPayload, env.jwtSecret, {
-    expiresIn: '8h',
+    expiresIn: MCP_ACCESS_TOKEN_TTL_SECONDS,
+    ...(audience ? { audience } : {}),
   });
 }
 

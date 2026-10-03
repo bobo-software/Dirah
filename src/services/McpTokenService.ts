@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { mcpAudit, mcpTokens, mcpTokenWorkspaceAccess, workspaces } from '../db/schemas';
+import { mcpAudit, mcpOauthRefreshTokens, mcpTokens, mcpTokenWorkspaceAccess, workspaces } from '../db/schemas';
 import { canEdit } from '../authz/roles';
 import { HttpError } from '../utils/HttpError';
 import { slugify } from '../utils/slugify';
@@ -13,6 +13,8 @@ export interface PublicMcpToken {
   name: string;
   tokenPrefix: string;
   defaultWorkspaceId: string | null;
+  /** Set when the token backs an OAuth connection (Claude, ChatGPT, …) rather than a pasted PAT. */
+  oauthClientId: string | null;
   createdAt: Date;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
@@ -51,6 +53,7 @@ export class McpTokenService {
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
         defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
+        oauthClientId: mcpTokens.oauthClientId,
         createdAt: mcpTokens.createdAt,
         lastUsedAt: mcpTokens.lastUsedAt,
         revokedAt: mcpTokens.revokedAt,
@@ -161,6 +164,7 @@ export class McpTokenService {
           name: mcpTokens.name,
           tokenPrefix: mcpTokens.tokenPrefix,
           defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
+          oauthClientId: mcpTokens.oauthClientId,
           createdAt: mcpTokens.createdAt,
           lastUsedAt: mcpTokens.lastUsedAt,
           revokedAt: mcpTokens.revokedAt,
@@ -216,6 +220,7 @@ export class McpTokenService {
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
         defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
+        oauthClientId: mcpTokens.oauthClientId,
         createdAt: mcpTokens.createdAt,
         lastUsedAt: mcpTokens.lastUsedAt,
         revokedAt: mcpTokens.revokedAt,
@@ -254,6 +259,7 @@ export class McpTokenService {
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
         defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
+        oauthClientId: mcpTokens.oauthClientId,
         createdAt: mcpTokens.createdAt,
         lastUsedAt: mcpTokens.lastUsedAt,
         revokedAt: mcpTokens.revokedAt,
@@ -270,10 +276,12 @@ export class McpTokenService {
     if (!row) {
       throw new HttpError('Token not found', 404, 'TOKEN_NOT_FOUND');
     }
+    const now = new Date();
+    await this.database.update(mcpTokens).set({ revokedAt: now }).where(eq(mcpTokens.id, tokenId));
     await this.database
-      .update(mcpTokens)
-      .set({ revokedAt: new Date() })
-      .where(eq(mcpTokens.id, tokenId));
+      .update(mcpOauthRefreshTokens)
+      .set({ revokedAt: now })
+      .where(and(eq(mcpOauthRefreshTokens.tokenId, tokenId), isNull(mcpOauthRefreshTokens.revokedAt)));
   }
 
   async resolveSecret(secret: string): Promise<ResolvedMcpAuth | null> {
@@ -297,17 +305,14 @@ export class McpTokenService {
     return { userId: row.userId, tokenId: row.id, defaultWorkspaceId: row.defaultWorkspaceId };
   }
 
+  /** Null when revoked or missing; otherwise stamps last use (OAuth access/refresh) in the same query. */
   async isTokenUsable(tokenId: string): Promise<{ defaultWorkspaceId: string | null } | null> {
     const [row] = await this.database
-      .select({
-        defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
-        revokedAt: mcpTokens.revokedAt,
-      })
-      .from(mcpTokens)
-      .where(eq(mcpTokens.id, tokenId))
-      .limit(1);
-    if (!row || row.revokedAt) return null;
-    return { defaultWorkspaceId: row.defaultWorkspaceId };
+      .update(mcpTokens)
+      .set({ lastUsedAt: new Date() })
+      .where(and(eq(mcpTokens.id, tokenId), isNull(mcpTokens.revokedAt)))
+      .returning({ defaultWorkspaceId: mcpTokens.defaultWorkspaceId });
+    return row ?? null;
   }
 
   async findOrCreateOauthToken(

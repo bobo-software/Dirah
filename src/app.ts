@@ -31,7 +31,7 @@ import { docsMcpRateLimit } from './middlewares/docsMcpRateLimit';
 import { McpOAuthService } from './services/McpOAuthService';
 import { SystemAdminAuthService } from './services/SystemAdminAuthService';
 import { AdminService } from './services/AdminService';
-import { createMcpOAuthPublicRouter } from './routes/mcpOAuth.routes';
+import { createMcpOAuthPublicRouter, MCP_OAUTH_PUBLIC_PATHS } from './routes/mcpOAuth.routes';
 import { defaultOAuthExchanger, type OAuthExchanger } from './oauth/providers';
 import { convertBlockPagesIfNeeded } from './convert/convertBlockPages';
 
@@ -64,14 +64,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
     next();
   });
 
-  app.use(
-    cors({
-      origin: env.corsOrigin,
-      credentials: env.corsOrigin !== '*',
-      methods: 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-      allowedHeaders: 'Content-Type,Authorization,Accept,MCP-Protocol-Version,X-Dirah-Blob-Id,X-Dirah-Blob-Id',
-    })
-  );
+  const appCors = cors({
+    origin: env.corsOrigin,
+    credentials: env.corsOrigin !== '*',
+    methods: 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type,Authorization,Accept,MCP-Protocol-Version,X-Dirah-Blob-Id,X-Dirah-Blob-Id',
+    exposedHeaders: 'WWW-Authenticate',
+  });
+  // OAuth discovery/registration/token endpoints get their own open CORS policy (mcpOAuth.routes).
+  app.use((req, res, next) => (MCP_OAUTH_PUBLIC_PATHS.test(req.path) ? next() : appCors(req, res, next)));
   app.use(express.json({ limit: '1.5mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(requestTiming);
@@ -168,7 +169,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   const docsMcpHandler = await createDocsMcpExpressHandler(docsMcpService, notesMcpService);
   app.all(
     '/mcp',
-    createDocsMcpAuthMiddleware({ tokens: mcpTokenService, apiPublicUrl }),
+    createDocsMcpAuthMiddleware({
+      tokens: mcpTokenService,
+      apiPublicUrl,
+      resource: mcpOAuthService.resource,
+    }),
     docsMcpRateLimit,
     docsMcpHandler
   );

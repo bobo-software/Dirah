@@ -1,4 +1,5 @@
-import { boolean, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { boolean, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { users } from './users';
 import { workspaces } from './workspaces';
 
@@ -23,10 +24,10 @@ export const mcpTokens = pgTable(
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
   (table) => ({
-    userOauthClientUnique: unique('mcp_tokens_user_oauth_client').on(
-      table.userId,
-      table.oauthClientId
-    ),
+    // Partial so a user can reconnect the same OAuth client after revoking it.
+    userOauthClientUnique: uniqueIndex('mcp_tokens_user_oauth_client_active')
+      .on(table.userId, table.oauthClientId)
+      .where(sql`${table.revokedAt} is null`),
   })
 );
 
@@ -78,6 +79,33 @@ export const mcpOauthCodes = pgTable('mcp_oauth_codes', {
     .references(() => users.id, { onDelete: 'cascade' }),
   redirectUri: text('redirect_uri').notNull(),
   codeChallenge: text('code_challenge').notNull(),
+  resource: text('resource'),
+  scope: text('scope'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   usedAt: timestamp('used_at', { withTimezone: true }),
 });
+
+export const mcpOauthRefreshTokens = pgTable(
+  'mcp_oauth_refresh_tokens',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    tokenId: uuid('token_id')
+      .notNull()
+      .references(() => mcpTokens.id, { onDelete: 'cascade' }),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => mcpOauthClients.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    resource: text('resource'),
+    scope: text('scope'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tokenIdx: index('mcp_oauth_refresh_tokens_token_idx').on(table.tokenId),
+  })
+);
