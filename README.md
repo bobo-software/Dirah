@@ -161,7 +161,18 @@ Schema changes: edit the Drizzle tables, run `npm run db:generate`, commit the S
 
 `POST`/`GET` (Streamable HTTP) at `/mcp`.
 
-Agents authenticate with a Bearer token created in workspace settings (`/api/mcp/tokens`) or through the MCP OAuth flow (`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`, `/mcp/oauth/authorize`). Tokens are allowlisted to specific workspaces. Calls are rate-limited (`MCP_DOCS_RATE_LIMIT`) and written to the MCP audit log.
+Agents authenticate with a Bearer token, either a personal token created in settings (`/api/mcp/tokens`) or an OAuth access token. Tokens are allowlisted to specific workspaces. Calls are rate-limited (`MCP_DOCS_RATE_LIMIT`) and written to the MCP audit log.
+
+### OAuth (Claude, ChatGPT, and other AI apps)
+
+Customers add `<API_PUBLIC_URL>/mcp` as a custom connector and sign in. Nothing to paste. The flow follows the MCP authorization spec (OAuth 2.1):
+
+- Discovery: `/.well-known/oauth-protected-resource` (also `/.well-known/oauth-protected-resource/mcp`), `/.well-known/oauth-authorization-server` (also `/.well-known/openid-configuration`). Open CORS on these and `/mcp/oauth/*`.
+- Dynamic client registration at `POST /mcp/oauth/register`. Public clients only (`token_endpoint_auth_method: none`). Redirect URIs must be https, http loopback, or a private-use scheme.
+- `GET /mcp/oauth/authorize` checks the client and redirect URI, then sends the user to the web consent page (`/settings/mcp-oauth`). The user picks workspaces and read/write per workspace there.
+- `POST /mcp/oauth/token` supports `authorization_code` (PKCE S256 required) and `refresh_token`. Access tokens are 1h JWTs with `aud` = `<API_PUBLIC_URL>/mcp` (RFC 8707 `resource`). Refresh tokens last 30 days and rotate on every use. Reusing an old refresh token revokes the chain.
+- `POST /mcp/oauth/revoke` (RFC 7009).
+- Each connected app is an `mcp_tokens` row with `oauth_client_id` set. "Disconnect app" in settings revokes it, along with its refresh tokens.
 
 Tools: `dirah_guide`, `list_workspaces`, `list_tree`, `read_file`, `write_file`, `edit_file`, `create_folder`, `rename`, `move`, `delete`, `search_docs`.
 
