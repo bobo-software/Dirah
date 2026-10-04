@@ -78,3 +78,21 @@ export const noteTagLinks = pgTable(
     pk: primaryKey({ columns: [table.noteId, table.tagId] }),
   })
 );
+
+export const noteLinks = pgTable(
+  'note_links',
+  {
+    sourceId: uuid('source_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    targetId: uuid('target_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.sourceId, table.targetId] }),
+  })
+);

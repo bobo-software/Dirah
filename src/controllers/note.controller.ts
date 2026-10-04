@@ -123,6 +123,11 @@ export function createNoteController(noteService: NoteService) {
       return ResponseUtils.success(res, 'ok', noteBody(body));
     }),
 
+    backlinks: asyncHandler(async (req: Request, res: Response) => {
+      const backlinks = await noteService.backlinks(req.user!.userId, req.params.id);
+      return ResponseUtils.success(res, 'ok', { backlinks });
+    }),
+
     getBoard: asyncHandler(async (req: Request, res: Response) => {
       const board = await noteService.getBoard(req.user!.userId, req.params.id);
       return ResponseUtils.success(res, 'ok', board);

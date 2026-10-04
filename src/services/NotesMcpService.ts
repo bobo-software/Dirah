@@ -1,4 +1,5 @@
 import { HttpError } from '../utils/HttpError';
+import { formatNoteLink } from '../utils/noteLinks';
 import { applyMarkdownEdit, type MarkdownEditInput } from './mcp/markdownPatch';
 import type { DocsMcpService } from './DocsMcpService';
 import {
@@ -20,7 +21,17 @@ export interface NoteListRow {
   tagIds: string[];
   breadcrumb: string[];
   url: string;
+  /** Paste into another note's content to link here. */
+  link: string;
 }
+
+export interface LinkedNotesResult {
+  /** The note holding the links, after the list was added. */
+  note: NoteReadResult;
+  created: { id: string; title: string; link: string; url: string }[];
+}
+
+const MAX_LINKED_NOTES = 50;
 
 export interface NoteReadResult extends NoteListRow {
   cover: string | null;
@@ -30,6 +41,8 @@ export interface NoteReadResult extends NoteListRow {
   startLine: number;
   endLine: number;
   totalLines: number;
+  /** Notes visible to the caller that link here with `[[Label|noteId]]`. */
+  backlinks?: { noteId: string; title: string; context: string }[];
 }
 
 function breadcrumbTitles(all: PublicNote[], noteId: string): string[] {
@@ -138,6 +151,7 @@ export class NotesMcpService {
     const body = await this.visibleNote(userId, tokenId, noteId, false, options.workspaceRef);
     const all = await this.notes.list(userId, body.note.workspaceId);
     const sliced = sliceContent(body.content, options.startLine, options.maxLines);
+    const backlinks = await this.notes.backlinks(userId, noteId);
     return {
       ...this.toListRow(body.note, all),
       cover: body.note.cover,
@@ -147,6 +161,11 @@ export class NotesMcpService {
       startLine: sliced.startLine,
       endLine: sliced.endLine,
       totalLines: sliced.totalLines,
+      backlinks: backlinks.map((link) => ({
+        noteId: link.note.id,
+        title: link.note.title,
+        context: link.context,
+      })),
     };
   }
 
@@ -248,6 +267,108 @@ export class NotesMcpService {
     return this.toReadResult(body.note, body.content, body.hash, body.updatedAt, all);
   }
 
+  /**
+   * Creates one sub-note per entry under a note (an existing `noteId`, or a
+   * new one from `title`) and, unless `placement` is `none`, appends a list
+   * linking to each. For "make a list of X with a note for each".
+   */
+  async createLinkedNotes(
+    userId: string,
+    tokenId: string | null,
+    input: {
+      workspaceRef?: string;
+      defaultWorkspaceId?: string | null;
+      noteId?: string;
+      hash?: string;
+      title?: string;
+      parentId?: string | null;
+      visibility?: NoteVisibility;
+      content?: string;
+      notes: { title: string; content?: string }[];
+      heading?: string;
+      listStyle?: 'bullet' | 'checklist';
+      placement?: 'append' | 'none';
+    }
+  ): Promise<LinkedNotesResult> {
+    const entries = input.notes.map((entry) => ({ ...entry, title: entry.title.trim() }));
+    if (entries.length === 0 || entries.length > MAX_LINKED_NOTES) {
+      throw new HttpError(`notes must have 1–${MAX_LINKED_NOTES} entries`, 400, 'INVALID_ARGS');
+    }
+    if (entries.some((entry) => !entry.title)) {
+      throw new HttpError('Every note needs a title', 400, 'INVALID_ARGS');
+    }
+
+    let source: { id: string; workspaceId: string; content: string; hash: string };
+    if (input.noteId) {
+      if (
+        input.title !== undefined ||
+        input.parentId !== undefined ||
+        input.visibility !== undefined ||
+        input.content !== undefined
+      ) {
+        throw new HttpError(
+          'title, parentId, visibility, and content apply only when creating the note (omit noteId)',
+          400,
+          'INVALID_ARGS'
+        );
+      }
+      const current = await this.visibleNote(userId, tokenId, input.noteId, true, input.workspaceRef);
+      if (!current.note.editable) {
+        throw new HttpError('Only the author can change this note', 403, 'FORBIDDEN');
+      }
+      // Check before creating anything, so a stale hash leaves no orphan sub-notes.
+      if (input.hash && input.hash !== current.hash) {
+        throw new HttpError('Note was updated elsewhere', 409, 'HASH_MISMATCH', {
+          currentHash: current.hash,
+        });
+      }
+      source = { id: current.note.id, workspaceId: current.note.workspaceId, content: current.content, hash: current.hash };
+    } else {
+      const created = await this.writeNote(userId, tokenId, {
+        workspaceRef: input.workspaceRef,
+        defaultWorkspaceId: input.defaultWorkspaceId,
+        title: input.title,
+        parentId: input.parentId,
+        visibility: input.visibility,
+        content: input.content,
+      });
+      const fresh = await this.notes.get(userId, created.id);
+      source = { id: fresh.note.id, workspaceId: fresh.note.workspaceId, content: fresh.content, hash: fresh.hash };
+    }
+
+    const children: PublicNote[] = [];
+    for (const entry of entries) {
+      const child = await this.notes.create(userId, source.workspaceId, {
+        title: entry.title,
+        parentId: source.id,
+      });
+      if (entry.content) await this.notes.putContent(userId, child.id, entry.content);
+      children.push(child);
+    }
+
+    let body = await this.notes.get(userId, source.id);
+    if (input.placement !== 'none') {
+      const marker = input.listStyle === 'checklist' ? '- [ ] ' : '- ';
+      const list = children.map((child) => `${marker}${formatNoteLink(child.title, child.id)}`).join('\n');
+      const heading = input.heading?.trim();
+      const block = heading ? `## ${heading}\n\n${list}` : list;
+      const existing = source.content.trimEnd();
+      const next = existing ? `${existing}\n\n${block}\n` : `${block}\n`;
+      body = await this.notes.putContent(userId, source.id, next, source.hash);
+    }
+
+    const all = await this.notes.list(userId, source.workspaceId);
+    return {
+      note: this.toReadResult(body.note, body.content, body.hash, body.updatedAt, all),
+      created: children.map((child) => ({
+        id: child.id,
+        title: child.title,
+        link: formatNoteLink(child.title, child.id),
+        url: this.noteUrl(child.workspaceId, child.id),
+      })),
+    };
+  }
+
   async editNote(
     userId: string,
     tokenId: string | null,
@@ -331,6 +452,7 @@ export class NotesMcpService {
       tagIds: note.tagIds,
       breadcrumb: breadcrumbTitles(all, note.id),
       url: this.noteUrl(note.workspaceId, note.id),
+      link: formatNoteLink(note.title, note.id),
     };
   }
 

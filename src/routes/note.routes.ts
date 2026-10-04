@@ -9,6 +9,7 @@ export function createNoteRouter(noteService: NoteService): Router {
 
   router.use(requireAuth);
   router.get('/:id/board', controller.getBoard);
+  router.get('/:id/backlinks', controller.backlinks);
   router.post('/:id/columns', controller.createColumn);
   router.put('/:id/columns/order', controller.orderColumns);
   router.post('/:id/cards', controller.createCard);
