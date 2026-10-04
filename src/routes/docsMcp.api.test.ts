@@ -1395,4 +1395,75 @@ describe('docs MCP protocol', () => {
     expect(toolResult(write).success).toBe(false);
     expect(toolResult(write).error).toBe('MCP_READ_ONLY');
   });
+
+  it('creates a list note with a linked sub-note per item in one call', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `linked-notes-${stamp}@example.com`, password });
+    expect(owner.status).toBe(201);
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'books-agent', workspaceAccess: [{ workspaceId, canWrite: true }] });
+    const secret = tokenRes.body.data.token.secret as string;
+    const call = (id: number, name: string, args: object) =>
+      mcpPost(app, secret, { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
+
+    type Linked = {
+      note: { id: string; content: string; hash: string; link: string };
+      created: { id: string; title: string; link: string; url: string }[];
+    };
+    const made = await call(300, 'create_linked_notes', {
+      title: 'Books to read',
+      content: 'My reading list.',
+      heading: 'Books',
+      notes: [{ title: 'Dune' }, { title: 'The Hobbit', content: '## First thoughts\n' }],
+    });
+    expect(toolResult(made).success).toBe(true);
+    const books = toolResult(made).data as Linked;
+    expect(books.created.map((note) => note.title)).toEqual(['Dune', 'The Hobbit']);
+    const [dune, hobbit] = books.created;
+    expect(dune.link).toBe(`[[Dune|${dune.id}]]`);
+    expect(books.note.link).toBe(`[[Books to read|${books.note.id}]]`);
+    expect(books.note.content).toBe(`My reading list.\n\n## Books\n\n- ${dune.link}\n- ${hobbit.link}\n`);
+
+    const children = await call(301, 'list_notes', { parentId: books.note.id });
+    expect((toolResult(children).data as { id: string }[]).map((row) => row.id)).toEqual([dune.id, hobbit.id]);
+    const hobbitRead = await call(302, 'read_note', { noteId: hobbit.id });
+    const hobbitData = toolResult(hobbitRead).data as { content: string; backlinks: { noteId: string }[] };
+    expect(hobbitData.content).toBe('## First thoughts\n');
+    expect(hobbitData.backlinks.map((link) => link.noteId)).toEqual([books.note.id]);
+
+    const more = await call(303, 'create_linked_notes', {
+      noteId: books.note.id,
+      hash: books.note.hash,
+      listStyle: 'checklist',
+      notes: [{ title: 'Emma' }],
+    });
+    const moreData = toolResult(more).data as Linked;
+    expect(moreData.note.content.endsWith(`- [ ] ${moreData.created[0].link}\n`)).toBe(true);
+
+    const stale = await call(304, 'create_linked_notes', {
+      noteId: books.note.id,
+      hash: books.note.hash,
+      notes: [{ title: 'Orphan' }],
+    });
+    expect(toolResult(stale).error).toBe('HASH_MISMATCH');
+    const afterStale = await call(305, 'list_notes', { parentId: books.note.id });
+    expect((toolResult(afterStale).data as { title: string }[]).some((row) => row.title === 'Orphan')).toBe(false);
+
+    const quiet = await call(306, 'create_linked_notes', {
+      noteId: books.note.id,
+      placement: 'none',
+      notes: [{ title: 'Unlisted' }],
+    });
+    expect((toolResult(quiet).data as Linked).note.content).toBe(moreData.note.content);
+
+    const bad = await call(307, 'create_linked_notes', { noteId: books.note.id, title: 'x', notes: [{ title: 'y' }] });
+    expect(toolResult(bad).error).toBe('INVALID_ARGS');
+  });
 });

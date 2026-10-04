@@ -1,5 +1,5 @@
-import { and, asc, eq, exists, ilike, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
-import { kanbanCards, kanbanColumns, notes, noteTagLinks, noteTags } from '../db/schemas';
+import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
+import { kanbanCards, kanbanColumns, noteLinks, notes, noteTagLinks, noteTags } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import {
   excerptFromSearchText,
@@ -7,6 +7,7 @@ import {
   markdownSearchText,
   normalizeDocsSearchQuery,
 } from '../utils/slugify';
+import { extractNoteLinks, noteLinkContext, noteLinksToLabels } from '../utils/noteLinks';
 import { type AuthService, type Database } from './AuthService';
 import { diffPreview, EMPTY_MARKDOWN_HASH, MAX_MARKDOWN_BYTES } from './PageService';
 
@@ -45,6 +46,12 @@ export interface NoteBody {
   content: string;
   hash: string;
   updatedAt: Date;
+}
+
+export interface NoteBacklink {
+  note: PublicNote;
+  /** The linking line of the source note, as plain text. */
+  context: string;
 }
 
 export interface PublicNoteTag {
@@ -96,6 +103,8 @@ const noteColumns = {
   updatedAt: notes.updatedAt,
   searchTextPreview: sql<string>`left(${notes.searchText}, 400)`,
 };
+
+type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 type NoteRow = {
   id: string;
@@ -356,22 +365,44 @@ export class NoteService {
       });
     }
     const hash = hashMarkdown(content);
-    const [updated] = await this.database
-      .update(notes)
-      .set({
-        content,
-        contentHash: hash,
-        searchText: markdownSearchText(content).slice(0, 200_000),
-        updatedAt: new Date(),
-      })
-      .where(eq(notes.id, noteId))
-      .returning(noteColumns);
+    const updated = await this.database.transaction(async (tx) => {
+      const [row] = await tx
+        .update(notes)
+        .set({
+          content,
+          contentHash: hash,
+          searchText: markdownSearchText(noteLinksToLabels(content)).slice(0, 200_000),
+          updatedAt: new Date(),
+        })
+        .where(eq(notes.id, noteId))
+        .returning(noteColumns);
+      await this.syncLinks(tx, userId, note, content);
+      return row;
+    });
     return {
       note: this.toPublic(updated, userId, note.tagIds),
       content,
       hash,
       updatedAt: updated.updatedAt,
     };
+  }
+
+  /** Notes the viewer can see that link to `noteId`, most recently edited first. */
+  async backlinks(userId: string, noteId: string): Promise<NoteBacklink[]> {
+    const target = await this.requireVisibleNote(userId, noteId);
+    const rows = await this.database
+      .select({ ...noteColumns, content: notes.content })
+      .from(noteLinks)
+      .innerJoin(notes, eq(notes.id, noteLinks.sourceId))
+      .where(
+        and(eq(noteLinks.targetId, target.id), isNull(notes.deletedAt), this.visibleFilter(userId))
+      )
+      .orderBy(desc(notes.updatedAt));
+    const tagIds = await this.tagIdsFor(rows.map((row) => row.id));
+    return rows.map(({ content, ...row }) => ({
+      note: this.toPublic(row, userId, tagIds.get(row.id) ?? []),
+      context: noteLinkContext(content, target.id, target.title),
+    }));
   }
 
   async trash(userId: string, noteId: string): Promise<void> {
@@ -662,6 +693,57 @@ export class NoteService {
       throw new HttpError('Only the author can change this note', 403, 'FORBIDDEN');
     }
     return note;
+  }
+
+  /**
+   * Rewrites the outgoing links of `source` from its markdown. Only notes its
+   * author can see count, so a link never reveals a note to anyone; title-only
+   * `[[Title]]` links resolve to the oldest note with that title.
+   */
+  private async syncLinks(tx: Tx, userId: string, source: PublicNote, content: string): Promise<void> {
+    const refs = extractNoteLinks(content);
+    const ids = [...new Set(refs.flatMap((ref) => (ref.id ? [ref.id] : [])))];
+    const titles = [
+      ...new Set(refs.flatMap((ref) => (ref.id ? [] : [ref.label.toLowerCase()]))),
+    ];
+    const targetIds = new Set<string>();
+    if (ids.length > 0 || titles.length > 0) {
+      const byId = ids.length > 0 ? inArray(notes.id, ids) : undefined;
+      const byTitle = titles.length > 0 ? inArray(sql`lower(${notes.title})`, titles) : undefined;
+      const rows = await tx
+        .select({ id: notes.id, title: notes.title })
+        .from(notes)
+        .where(
+          and(
+            eq(notes.workspaceId, source.workspaceId),
+            isNull(notes.deletedAt),
+            this.visibleFilter(userId),
+            or(byId, byTitle)
+          )
+        )
+        .orderBy(asc(notes.createdAt));
+      const idSet = new Set(ids);
+      const titleSeen = new Set<string>();
+      for (const row of rows) {
+        if (idSet.has(row.id)) targetIds.add(row.id);
+        const title = row.title.toLowerCase();
+        if (titles.includes(title) && !titleSeen.has(title)) {
+          titleSeen.add(title);
+          targetIds.add(row.id);
+        }
+      }
+      targetIds.delete(source.id);
+    }
+    await tx.delete(noteLinks).where(eq(noteLinks.sourceId, source.id));
+    if (targetIds.size > 0) {
+      await tx.insert(noteLinks).values(
+        [...targetIds].map((targetId) => ({
+          sourceId: source.id,
+          targetId,
+          workspaceId: source.workspaceId,
+        }))
+      );
+    }
   }
 
   private visibleFilter(userId: string) {

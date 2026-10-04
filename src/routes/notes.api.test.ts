@@ -334,6 +334,59 @@ describe('notes API', () => {
     ]);
   });
 
+  it('records [[ ]] links and lists visible backlinks', async () => {
+    if (!dbReady) return;
+    const api = as(owner);
+    const backlinkIds = async (session: Session, noteId: string) => {
+      const res = await as(session).get(`/api/notes/${noteId}/backlinks`);
+      expect(res.status).toBe(200);
+      return (res.body.data.backlinks as { note: { id: string }; context: string }[]).map((link) => link.note.id);
+    };
+
+    const target = await createNote(owner, { title: `Link target ${stamp}`, visibility: 'workspace' });
+    const titled = await createNote(owner, { title: `Titled ${stamp}`, visibility: 'workspace' });
+    const source = await createNote(owner, { title: 'Shared source', visibility: 'workspace' });
+    const secret = await createNote(owner, { title: 'Private source' });
+
+    const content = [
+      `- [ ] Read [[Roadmap|${target.id}]] first`,
+      `Also [[titled ${stamp}]] and [[Self|${source.id}]]`,
+      '```',
+      `[[Ignored|${secret.id}]]`,
+      '```',
+    ].join('\n');
+    expect((await api.put(`/api/notes/${source.id}/content`, { content })).status).toBe(200);
+    expect((await api.put(`/api/notes/${secret.id}/content`, { content: `[[x|${target.id}]]` })).status).toBe(200);
+
+    const links = await api.get(`/api/notes/${target.id}/backlinks`);
+    const sourceLink = (links.body.data.backlinks as { note: { id: string }; context: string }[]).find(
+      (link) => link.note.id === source.id
+    );
+    expect(sourceLink?.context).toBe('Read Roadmap first');
+    expect((await backlinkIds(owner, target.id)).sort()).toEqual([source.id, secret.id].sort());
+    expect(await backlinkIds(member, target.id)).toEqual([source.id]);
+    expect(await backlinkIds(owner, titled.id)).toEqual([source.id]);
+    expect(await backlinkIds(owner, source.id)).toEqual([]);
+    expect(await backlinkIds(owner, secret.id)).toEqual([]);
+    expect((await as(outsider).get(`/api/notes/${target.id}/backlinks`)).status).toBe(403);
+
+    const read = await api.get(`/api/notes/${source.id}`);
+    expect(read.body.data.note.excerpt).not.toContain(target.id);
+
+    expect((await api.put(`/api/notes/${source.id}/content`, { content: 'no links now' })).status).toBe(200);
+    expect(await backlinkIds(owner, titled.id)).toEqual([]);
+
+    expect((await api.del(`/api/notes/${secret.id}`)).status).toBe(200);
+    expect(await backlinkIds(owner, target.id)).toEqual([]);
+    expect((await api.post(`/api/notes/${secret.id}/restore`)).status).toBe(200);
+    expect(await backlinkIds(owner, target.id)).toEqual([secret.id]);
+
+    expect((await api.del(`/api/notes/${secret.id}`)).status).toBe(200);
+    expect((await api.del(`/api/notes/${secret.id}/permanent`)).status).toBe(200);
+    expect((await api.put(`/api/notes/${source.id}/content`, { content: `[[t|${target.id}]]` })).status).toBe(200);
+    expect(await backlinkIds(owner, target.id)).toEqual([source.id]);
+  });
+
   it('refuses note writes in encrypted workspaces until Phase 5', async () => {
     if (!dbReady) return;
     const created = await as(outsider).post('/api/workspaces', { name: `Sealed ${stamp}` });

@@ -174,7 +174,7 @@ export function registerNotesTools(server: PgMcpServerHost, service: NotesMcpSer
     {
       title: 'Write note',
       description:
-        'Create a note (title, optional parentId, visibility, content) or replace one (noteId, content, hash). Author only. Pass hash from read_note to avoid clobbering. Stale hash returns HASH_MISMATCH.',
+        'Create a note (title, optional parentId, visibility, content) or replace one (noteId, content, hash). Author only. Pass hash from read_note to avoid clobbering. Stale hash returns HASH_MISMATCH. Link other notes with [[Label|noteId]].',
       inputSchema: z.object({
         ...workspaceFields,
         noteId: z.string().uuid().optional(),
@@ -279,6 +279,52 @@ export function registerNotesTools(server: PgMcpServerHost, service: NotesMcpSer
         service.updateNote(currentDocsAuth().userId, currentDocsAuth().tokenId, {
           ...args,
           workspaceRef: workspaceRef(args),
+        })
+      )) as never
+  );
+
+  server.registerTool(
+    'create_linked_notes',
+    {
+      title: 'Create linked notes',
+      description:
+        'Create one sub-note per entry under a note and append a list linking to each ([[Title|noteId]]). Use for "make a list of X with a note for each". Pass noteId (+ hash from read_note) to add to an existing note, or title (+ optional parentId, visibility, content) to create the list note too. Author only. Returns the updated note and each new note\'s id, link, and url.',
+      inputSchema: z.object({
+        ...workspaceFields,
+        noteId: z.string().uuid().optional(),
+        hash: z.string().optional(),
+        title: z.string().optional(),
+        parentId: z.string().uuid().nullable().optional(),
+        visibility: z.enum(['private', 'workspace']).optional(),
+        content: z.string().optional(),
+        notes: z
+          .array(z.object({ title: z.string().min(1), content: z.string().optional() }))
+          .min(1)
+          .max(50),
+        heading: z.string().optional(),
+        listStyle: z.enum(['bullet', 'checklist']).optional(),
+        placement: z.enum(['append', 'none']).optional(),
+      }),
+    },
+    (async (args: {
+      workspaceId?: string;
+      workspace?: string;
+      noteId?: string;
+      hash?: string;
+      title?: string;
+      parentId?: string | null;
+      visibility?: 'private' | 'workspace';
+      content?: string;
+      notes: { title: string; content?: string }[];
+      heading?: string;
+      listStyle?: 'bullet' | 'checklist';
+      placement?: 'append' | 'none';
+    }) =>
+      run('create_linked_notes', () =>
+        service.createLinkedNotes(currentDocsAuth().userId, currentDocsAuth().tokenId, {
+          ...args,
+          workspaceRef: workspaceRef(args),
+          defaultWorkspaceId: currentDocsAuth().defaultWorkspaceId,
         })
       )) as never
   );
