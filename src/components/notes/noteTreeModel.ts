@@ -7,6 +7,20 @@ export type NoteNode = {
 
 export type DropZone = 'before' | 'inside' | 'after';
 
+/** `note` and its ancestors, root first. */
+export function breadcrumbs(notes: PublicNote[], note: PublicNote | undefined): PublicNote[] {
+  const byId = new Map(notes.map((item) => [item.id, item]));
+  const trail: PublicNote[] = [];
+  const seen = new Set<string>();
+  let cursor = note;
+  while (cursor && !seen.has(cursor.id)) {
+    seen.add(cursor.id);
+    trail.unshift(cursor);
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+  return trail;
+}
+
 export function buildNoteTree(notes: PublicNote[]): NoteNode[] {
   const ids = new Set(notes.map((note) => note.id));
   const byParent = new Map<string | null, PublicNote[]>();

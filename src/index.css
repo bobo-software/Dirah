@@ -6987,3 +6987,171 @@ button.note-send-tasks {
   font-size: 0.8rem;
   white-space: nowrap;
 }
+
+/* Note links: [[Label|id]] pills, the [[ picker, selection menu, backlinks. */
+.note-prose .note-link {
+  display: inline;
+}
+
+.note-prose .note-link a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  padding: 0 0.3rem;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.note-prose .note-link a:hover {
+  text-decoration: underline;
+}
+
+.note-prose .note-link .note-glyph {
+  align-self: center;
+  width: 0.95rem;
+  color: inherit;
+  font-size: 0.8rem;
+}
+
+.note-prose .note-link.is-selected a {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.note-prose .note-link--missing a {
+  background: transparent;
+  color: var(--muted);
+  text-decoration: line-through;
+  cursor: default;
+}
+
+.note-prose .suggestion {
+  color: var(--accent);
+}
+
+.note-link-menu {
+  min-width: 16rem;
+  max-width: 22rem;
+}
+
+.note-link-picker {
+  display: flex;
+  flex-direction: column;
+}
+
+.note-link-picker-empty {
+  margin: 0;
+  padding: 0.35rem 0.45rem;
+  color: var(--muted);
+  font: 0.85rem/1.3 var(--ui);
+}
+
+.note-link-option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.note-link-option-title,
+.note-link-option-trail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-link-option-trail {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.note-bubble-menu {
+  z-index: 40;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.note-bubble-actions {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.note-bubble-actions button {
+  padding: 0.3rem 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: 0.85rem/1.3 var(--ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.note-bubble-actions button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--text-h);
+}
+
+.note-bubble-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: min(22rem, calc(100vh - 2rem));
+  overflow: auto;
+}
+
+.note-bubble-search {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: 0.9rem/1.3 var(--ui);
+}
+
+.note-backlinks {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.note-backlinks h2 {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font: 600 0.8rem/1.3 var(--ui);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.note-backlinks ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-backlinks a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-h);
+  font: 500 0.92rem/1.3 var(--ui);
+  text-decoration: none;
+}
+
+.note-backlinks a:hover .note-backlink-title {
+  text-decoration: underline;
+}
+
+.note-backlinks p {
+  margin: 0.15rem 0 0 1.45rem;
+  color: var(--muted);
+  font: 0.85rem/1.4 var(--ui);
+}

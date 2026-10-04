@@ -11,6 +11,10 @@ import { ApiError, type PublicNote } from '../../api/client';
 import type { NoteBody } from '../../api/notes';
 import { EMPTY_NOTES, useNoteStore } from '../../stores/StoresIndex';
 import { NoteGlyph } from './NoteTree';
+import { breadcrumbs } from './noteTreeModel';
+import { NoteLink } from './links/noteLink';
+import { NoteSelectionMenu } from './links/NoteSelectionMenu';
+import { NoteBacklinks } from './links/NoteBacklinks';
 import { NoteFormatter } from './formatter/NoteFormatter';
 import { TasksIcon } from '../layout/SectionIcons';
 import { useSendNoteToTasks } from '../tasks/useSendNoteToTasks';
@@ -18,19 +22,6 @@ import { useSendNoteToTasks } from '../tasks/useSendNoteToTasks';
 const SAVE_DELAY_MS = 800;
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
-
-function breadcrumbs(notes: PublicNote[], note: PublicNote | undefined): PublicNote[] {
-  const byId = new Map(notes.map((item) => [item.id, item]));
-  const trail: PublicNote[] = [];
-  const seen = new Set<string>();
-  let cursor = note;
-  while (cursor && !seen.has(cursor.id)) {
-    seen.add(cursor.id);
-    trail.unshift(cursor);
-    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
-  }
-  return trail;
-}
 
 function saveLabel(state: SaveState): string {
   if (state === 'saving') return 'Saving…';
@@ -57,6 +48,7 @@ export function NoteEditor({
   const loadContent = useNoteStore((state) => state.loadContent);
   const saveContent = useNoteStore((state) => state.saveContent);
   const patchNote = useNoteStore((state) => state.patchNote);
+  const createNote = useNoteStore((state) => state.createNote);
   const note = notes.find((item) => item.id === noteId);
   const editable = note?.editable ?? false;
   const sendToTasks = useSendNoteToTasks(workspaceId);
@@ -77,6 +69,13 @@ export function NoteEditor({
   const savingRef = useRef(false);
   const conflictRef = useRef(false);
   const timerRef = useRef<number | null>(null);
+
+  // A sub-note of this note; links and "Turn into sub-note" create them in place.
+  function createSubnote(subTitle: string): Promise<PublicNote> {
+    return createNote(workspaceId, { parentId: noteId, title: subTitle });
+  }
+  const createSubnoteRef = useRef(createSubnote);
+  createSubnoteRef.current = createSubnote;
 
   function schedule() {
     if (timerRef.current) window.clearTimeout(timerRef.current);
@@ -124,6 +123,11 @@ export function NoteEditor({
       TypedTableHeader,
       ColumnTypeMarkdown,
       Placeholder.configure({ placeholder: 'Start writing…' }),
+      NoteLink.configure({
+        workspaceId,
+        noteId,
+        createSubnote: (subTitle) => createSubnoteRef.current(subTitle),
+      }),
       Markdown,
     ],
     editable: false,
@@ -327,7 +331,17 @@ export function NoteEditor({
       </header>
       {!ready && !message ? <p className="muted">Loading note…</p> : null}
       {ready && editable && !unsupported ? <NoteFormatter editor={editor} /> : null}
+      {ready && editable && !unsupported ? (
+        <NoteSelectionMenu
+          editor={editor}
+          workspaceId={workspaceId}
+          noteId={noteId}
+          createSubnote={createSubnote}
+          onError={setMessage}
+        />
+      ) : null}
       <EditorContent editor={editor} className={ready ? 'note-editor' : 'note-editor hidden'} />
+      {ready && variant === 'page' ? <NoteBacklinks workspaceId={workspaceId} noteId={noteId} /> : null}
     </article>
   );
 }

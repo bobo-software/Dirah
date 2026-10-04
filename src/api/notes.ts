@@ -83,6 +83,17 @@ export async function getNote(accessToken: string, noteId: string): Promise<Note
   return apiRequest<NoteBody>(`/api/notes/${noteId}`, { accessToken });
 }
 
+export type NoteBacklink = {
+  note: PublicNote;
+  /** The linking line of the source note, as plain text. */
+  context: string;
+};
+
+export async function getNoteBacklinks(accessToken: string, noteId: string): Promise<NoteBacklink[]> {
+  const data = await apiRequest<{ backlinks: NoteBacklink[] }>(`/api/notes/${noteId}/backlinks`, { accessToken });
+  return data.backlinks;
+}
+
 export async function patchNote(accessToken: string, noteId: string, input: NotePatch): Promise<PublicNote> {
   const data = await apiRequest<{ note: PublicNote }>(`/api/notes/${noteId}`, {
     method: 'PATCH',
