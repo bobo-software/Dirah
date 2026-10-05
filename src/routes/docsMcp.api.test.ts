@@ -1466,4 +1466,91 @@ describe('docs MCP protocol', () => {
     const bad = await call(307, 'create_linked_notes', { noteId: books.note.id, title: 'x', notes: [{ title: 'y' }] });
     expect(toolResult(bad).error).toBe('INVALID_ARGS');
   });
+
+  it('creates a kanban board and adds cards by title or existing note', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(app)
+      .post('/api/auth/register')
+      .send({ email: `kanban-mcp-${stamp}@example.com`, password });
+    expect(owner.status).toBe(201);
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'kanban-agent', workspaceAccess: [{ workspaceId, canWrite: true }] });
+    const secret = tokenRes.body.data.token.secret as string;
+    const call = (id: number, name: string, args: object) =>
+      mcpPost(app, secret, { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
+
+    const guide = await call(400, 'dirah_guide', {});
+    expect(String((toolResult(guide).data as { instructions: string }).instructions)).toContain('create_kanban_card');
+
+    const made = await call(401, 'write_note', { title: 'Launch', kind: 'kanban' });
+    expect(toolResult(made).success).toBe(true);
+    const board = toolResult(made).data as { id: string; kind: string };
+    expect(board.kind).toBe('kanban');
+
+    const read = await call(402, 'read_kanban', { boardId: board.id });
+    const boardView = toolResult(read).data as {
+      title: string;
+      columns: { id: string; title: string; cards: { noteId: string; title: string }[] }[];
+    };
+    expect(toolResult(read).success).toBe(true);
+    expect(boardView.title).toBe('Launch');
+    expect(boardView.columns.map((column) => column.title)).toEqual(['To do', 'Doing', 'Done']);
+    expect(boardView.columns.every((column) => column.cards.length === 0)).toBe(true);
+
+    const added = await call(403, 'create_kanban_card', {
+      boardId: board.id,
+      column: 'doing',
+      title: 'Ship it',
+      content: 'Release notes',
+    });
+    expect(toolResult(added).success).toBe(true);
+    const card = toolResult(added).data as {
+      card: { noteId: string; title: string; link: string };
+      column: { title: string };
+    };
+    expect(card.column.title).toBe('Doing');
+    expect(card.card.title).toBe('Ship it');
+    expect(card.card.link).toBe(`[[Ship it|${card.card.noteId}]]`);
+    const cardRead = await call(404, 'read_note', { noteId: card.card.noteId });
+    expect((toolResult(cardRead).data as { content: string; kind: string }).content).toBe('Release notes');
+    expect((toolResult(cardRead).data as { kind: string }).kind).toBe('note');
+
+    const source = await call(405, 'write_note', { title: 'Existing task' });
+    const sourceId = (toolResult(source).data as { id: string; kind: string }).id;
+    expect((toolResult(source).data as { kind: string }).kind).toBe('note');
+    const placed = await call(406, 'create_kanban_card', {
+      boardId: board.id,
+      column: boardView.columns[0].id,
+      noteId: sourceId,
+    });
+    expect(toolResult(placed).success).toBe(true);
+    expect((toolResult(placed).data as { card: { noteId: string }; column: { title: string } }).card.noteId).toBe(
+      sourceId
+    );
+    expect((toolResult(placed).data as { column: { title: string } }).column.title).toBe('To do');
+
+    const again = await call(407, 'read_kanban', { boardId: board.id });
+    const filled = toolResult(again).data as typeof boardView;
+    expect(filled.columns.find((column) => column.title === 'To do')?.cards.map((item) => item.noteId)).toEqual([
+      sourceId,
+    ]);
+    expect(filled.columns.find((column) => column.title === 'Doing')?.cards.map((item) => item.title)).toEqual([
+      'Ship it',
+    ]);
+
+    const missing = await call(408, 'create_kanban_card', { boardId: board.id, column: 'Later', title: 'Nope' });
+    expect(toolResult(missing).success).toBe(false);
+    expect(toolResult(missing).error).toBe('COLUMN_NOT_FOUND');
+    expect(toolResult(missing).details).toEqual({ columns: ['To do', 'Doing', 'Done'] });
+
+    const listed = await call(409, 'list_notes', {});
+    expect(
+      (toolResult(listed).data as { id: string; kind: string }[]).find((row) => row.id === board.id)?.kind
+    ).toBe('kanban');
+  });
 });

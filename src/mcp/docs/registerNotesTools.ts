@@ -174,13 +174,14 @@ export function registerNotesTools(server: PgMcpServerHost, service: NotesMcpSer
     {
       title: 'Write note',
       description:
-        'Create a note (title, optional parentId, visibility, content) or replace one (noteId, content, hash). Author only. Pass hash from read_note to avoid clobbering. Stale hash returns HASH_MISMATCH. Link other notes with [[Label|noteId]].',
+        'Create a note (title, optional parentId, visibility, kind, content) or replace one (noteId, content, hash). kind "kanban" creates a board with columns To do, Doing, and Done. Author only. Pass hash from read_note to avoid clobbering. Stale hash returns HASH_MISMATCH. Link other notes with [[Label|noteId]].',
       inputSchema: z.object({
         ...workspaceFields,
         noteId: z.string().uuid().optional(),
         title: z.string().optional(),
         parentId: z.string().uuid().nullable().optional(),
         visibility: z.enum(['private', 'workspace']).optional(),
+        kind: z.enum(['note', 'kanban']).optional(),
         content: z.string().optional(),
         hash: z.string().optional(),
       }),
@@ -192,6 +193,7 @@ export function registerNotesTools(server: PgMcpServerHost, service: NotesMcpSer
       title?: string;
       parentId?: string | null;
       visibility?: 'private' | 'workspace';
+      kind?: 'note' | 'kanban';
       content?: string;
       hash?: string;
     }) =>
@@ -203,8 +205,63 @@ export function registerNotesTools(server: PgMcpServerHost, service: NotesMcpSer
           title: args.title,
           parentId: args.parentId,
           visibility: args.visibility,
+          kind: args.kind,
           content: args.content,
           hash: args.hash,
+        })
+      )) as never
+  );
+
+  server.registerTool(
+    'read_kanban',
+    {
+      title: 'Read kanban',
+      description:
+        'Read a kanban board by boardId (the note id of a note with kind "kanban"). Returns columns in order, each with id, title, and cards (noteId, title, url, link).',
+      inputSchema: z.object({
+        ...workspaceFields,
+        boardId: z.string().uuid(),
+      }),
+    },
+    (async (args: { workspaceId?: string; workspace?: string; boardId: string }) =>
+      run('read_kanban', () =>
+        service.readKanban(
+          currentDocsAuth().userId,
+          currentDocsAuth().tokenId,
+          args.boardId,
+          workspaceRef(args)
+        )
+      )) as never
+  );
+
+  server.registerTool(
+    'create_kanban_card',
+    {
+      title: 'Create kanban card',
+      description:
+        'Add a card to a kanban board. Pass title to create a new card note (optional content), or noteId to place an existing note. column is a column id or title (case-insensitive); omit it to use the first column. A column title that matches nothing returns the board\'s column titles. Author of the board only.',
+      inputSchema: z.object({
+        ...workspaceFields,
+        boardId: z.string().uuid(),
+        column: z.string().min(1).optional(),
+        title: z.string().min(1).optional(),
+        noteId: z.string().uuid().optional(),
+        content: z.string().optional(),
+      }),
+    },
+    (async (args: {
+      workspaceId?: string;
+      workspace?: string;
+      boardId: string;
+      column?: string;
+      title?: string;
+      noteId?: string;
+      content?: string;
+    }) =>
+      run('create_kanban_card', () =>
+        service.createKanbanCard(currentDocsAuth().userId, currentDocsAuth().tokenId, {
+          ...args,
+          workspaceRef: workspaceRef(args),
         })
       )) as never
   );
