@@ -3,17 +3,21 @@ import { formatNoteLink } from '../utils/noteLinks';
 import { applyMarkdownEdit, type MarkdownEditInput } from './mcp/markdownPatch';
 import type { DocsMcpService } from './DocsMcpService';
 import {
+  type NoteKind,
   type NoteScope,
   type NoteService,
   type NoteVisibility,
   type PublicNote,
 } from './NoteService';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface NoteListRow {
   id: string;
   title: string;
   parentId: string | null;
   visibility: NoteVisibility;
+  kind: NoteKind;
   editable: boolean;
   icon: string | null;
   pinned: boolean;
@@ -23,6 +27,19 @@ export interface NoteListRow {
   url: string;
   /** Paste into another note's content to link here. */
   link: string;
+}
+
+export interface KanbanCardRow {
+  noteId: string;
+  title: string;
+  url: string;
+  link: string;
+}
+
+export interface KanbanReadResult {
+  id: string;
+  title: string;
+  columns: { id: string; title: string; cards: KanbanCardRow[] }[];
 }
 
 export interface LinkedNotesResult {
@@ -74,6 +91,30 @@ function sliceContent(content: string, startLine?: number, maxLines?: number) {
     endLine: sliced.length ? endLine : start - 1,
     totalLines,
   };
+}
+
+function resolveKanbanColumn(
+  columns: { id: string; title: string }[],
+  column: string | undefined
+): { id: string; title: string } {
+  if (columns.length === 0) {
+    throw new HttpError('This board has no columns', 400, 'NO_COLUMNS');
+  }
+  const titles = columns.map((item) => item.title);
+  if (!column?.trim()) return columns[0];
+  const name = column.trim();
+  if (UUID_RE.test(name)) {
+    const match = columns.find((item) => item.id === name);
+    if (!match) {
+      throw new HttpError('Column not found', 404, 'COLUMN_NOT_FOUND', { columns: titles });
+    }
+    return match;
+  }
+  const titled = columns.filter((item) => item.title.toLowerCase() === name.toLowerCase());
+  if (titled.length === 0) {
+    throw new HttpError(`No column named “${name}”`, 400, 'COLUMN_NOT_FOUND', { columns: titles });
+  }
+  return titled[0];
 }
 
 function plainSnippet(content: string, query: string): string {
@@ -191,6 +232,7 @@ export class NotesMcpService {
       workspaceId: string;
       workspace: string;
       visibility: NoteVisibility;
+      kind: NoteKind;
       editable: boolean;
       snippet: string;
       url: string;
@@ -201,12 +243,13 @@ export class NotesMcpService {
       for (const note of found) {
         const body = await this.notes.get(userId, note.id);
         hits.push({
-          id: note.id,
-          title: note.title,
-          workspaceId: note.workspaceId,
-          workspace: workspace.slug,
-          visibility: note.visibility,
-          editable: note.editable,
+      id: note.id,
+      title: note.title,
+      workspaceId: note.workspaceId,
+      workspace: workspace.slug,
+      visibility: note.visibility,
+      kind: note.kind,
+      editable: note.editable,
           snippet: plainSnippet(body.content, q) || note.title,
           url: this.noteUrl(note.workspaceId, note.id),
         });
@@ -226,6 +269,7 @@ export class NotesMcpService {
       title?: string;
       parentId?: string | null;
       visibility?: NoteVisibility;
+      kind?: NoteKind;
       content?: string;
       hash?: string;
     }
@@ -234,9 +278,14 @@ export class NotesMcpService {
       if (input.content === undefined) {
         throw new HttpError('content is required', 400, 'INVALID_ARGS');
       }
-      if (input.title !== undefined || input.parentId !== undefined || input.visibility !== undefined) {
+      if (
+        input.title !== undefined ||
+        input.parentId !== undefined ||
+        input.visibility !== undefined ||
+        input.kind !== undefined
+      ) {
         throw new HttpError(
-          'title, parentId, and visibility apply only when creating a note',
+          'title, parentId, visibility, and kind apply only when creating a note',
           400,
           'INVALID_ARGS'
         );
@@ -258,6 +307,7 @@ export class NotesMcpService {
       title: input.title,
       parentId: input.parentId,
       visibility: input.visibility,
+      kind: input.kind,
     });
     const body =
       input.content !== undefined
@@ -410,6 +460,67 @@ export class NotesMcpService {
     return { ...this.toListRow(updated, all), cover: updated.cover };
   }
 
+  async readKanban(
+    userId: string,
+    tokenId: string | null,
+    boardId: string,
+    workspaceRef?: string
+  ): Promise<KanbanReadResult> {
+    await this.visibleNote(userId, tokenId, boardId, false, workspaceRef);
+    const board = await this.notes.getBoard(userId, boardId);
+    return {
+      id: board.board.id,
+      title: board.board.title,
+      columns: board.columns.map((column) => ({
+        id: column.id,
+        title: column.title,
+        cards: column.cards.map((card) => this.toCardRow(board.board.workspaceId, card.noteId, card.note.title)),
+      })),
+    };
+  }
+
+  async createKanbanCard(
+    userId: string,
+    tokenId: string | null,
+    input: {
+      boardId: string;
+      column?: string;
+      title?: string;
+      noteId?: string;
+      content?: string;
+      workspaceRef?: string;
+    }
+  ): Promise<{ card: KanbanCardRow; column: { id: string; title: string } }> {
+    if ((input.title !== undefined) === Boolean(input.noteId)) {
+      throw new HttpError('Pass title to create a card, or noteId to place an existing note', 400, 'INVALID_ARGS');
+    }
+    if (input.content !== undefined && input.title === undefined) {
+      throw new HttpError('content applies only when creating a card with title', 400, 'INVALID_ARGS');
+    }
+    const current = await this.visibleNote(userId, tokenId, input.boardId, true, input.workspaceRef);
+    const before = await this.notes.getBoard(userId, input.boardId);
+    const column = resolveKanbanColumn(before.columns, input.column);
+    const board = await this.notes.addCard(
+      userId,
+      input.boardId,
+      input.noteId ? { columnId: column.id, noteId: input.noteId } : { columnId: column.id, title: input.title }
+    );
+    const previous = new Set(before.columns.flatMap((item) => item.cards.map((card) => card.noteId)));
+    const placed = board.columns
+      .flatMap((item) => item.cards.map((card) => ({ column: item, card })))
+      .find((item) => !previous.has(item.card.noteId));
+    if (!placed) {
+      throw new HttpError('Card was not added', 500, 'CARD_NOT_FOUND');
+    }
+    if (input.content !== undefined) {
+      await this.notes.putContent(userId, placed.card.noteId, input.content);
+    }
+    return {
+      card: this.toCardRow(current.note.workspaceId, placed.card.noteId, placed.card.note.title),
+      column: { id: placed.column.id, title: placed.column.title },
+    };
+  }
+
   async trashNote(
     userId: string,
     tokenId: string | null,
@@ -445,6 +556,7 @@ export class NotesMcpService {
       title: note.title,
       parentId: note.parentId,
       visibility: note.visibility,
+      kind: note.kind,
       editable: note.editable,
       icon: note.icon,
       pinned: note.pinnedAt != null,
@@ -453,6 +565,15 @@ export class NotesMcpService {
       breadcrumb: breadcrumbTitles(all, note.id),
       url: this.noteUrl(note.workspaceId, note.id),
       link: formatNoteLink(note.title, note.id),
+    };
+  }
+
+  private toCardRow(workspaceId: string, noteId: string, title: string): KanbanCardRow {
+    return {
+      noteId,
+      title,
+      url: this.noteUrl(workspaceId, noteId),
+      link: formatNoteLink(title, noteId),
     };
   }
 

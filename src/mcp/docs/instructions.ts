@@ -4,6 +4,7 @@ export const DIRA_DOCS_INSTRUCTIONS = `Dirah is the team's markdown knowledge ba
 
 - Prefer search_docs before inventing APIs, runbooks, or architecture. Hyphens and spaces in ticket ids fold together (PP-B4 matches "PP - B4"). Snippets are plain text (safe to copy into oldString).
 - Notes are not pages. Use search_notes, list_notes, and read_note for notes. search_docs, list_tree, and read_file never return notes.
+- Kanban boards are notes with kind "kanban". Use read_kanban, then create_kanban_card with a column title or id. title makes a new card; noteId places an existing note. write_note with kind "kanban" creates a board (columns: To do, Doing, Done).
 - A note is visible when you wrote it, or when its visibility is workspace. Only the author can edit. Pass hash from read_note on edit_note and write_note. Notes have no file path; use noteId.
 - Link notes with [[Label|noteId]] in note content; every note row includes a ready-made link field. [[Title]] also works but breaks on rename. read_note returns backlinks: notes that link to it.
 - For a list with a note per item ("list books, each with a note to write in"), call create_linked_notes once instead of write_note per item.
