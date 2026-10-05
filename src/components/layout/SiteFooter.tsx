@@ -19,6 +19,9 @@ export function SiteFooter() {
             <h2>Product</h2>
             <ul>
               <li>
+                <Link to="/#features">Docs, notes and tasks</Link>
+              </li>
+              <li>
                 <Link to="/#connect">Set up your agent</Link>
               </li>
               <li>

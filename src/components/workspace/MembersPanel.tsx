@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react';
+import { confirmDelete } from '../layout/deleteDialogue';
 import { encryptWorkspace, isUnlocked, provisionAccount, syncMemberKeys, useEncryptionStore } from '../../crypto/workspaceCrypto';
 import { EMPTY_INVITES, EMPTY_MEMBERS, useAuthStore, useMarkdownContentStore, useMembersStore, useWorkspaceStore } from '../../stores/StoresIndex';
 
@@ -158,8 +159,16 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
               type="button"
               className="linkish danger"
               onClick={() => {
-                void removeMember(workspaceId, member.userId).catch((error: unknown) => {
-                  setMessage(error instanceof Error ? error.message : 'Could not remove');
+                const label = member.name?.trim() || member.email;
+                void confirmDelete({
+                  title: 'Remove member?',
+                  message: `Remove ${label} from this workspace?`,
+                  confirmLabel: 'Remove',
+                }).then((confirmed) => {
+                  if (!confirmed) return;
+                  void removeMember(workspaceId, member.userId).catch((error: unknown) => {
+                    setMessage(error instanceof Error ? error.message : 'Could not remove');
+                  });
                 });
               }}
             >
@@ -180,8 +189,15 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
               type="button"
               className="linkish danger"
               onClick={() => {
-                void revokeInvite(workspaceId, invite.id).catch((error: unknown) => {
-                  setMessage(error instanceof Error ? error.message : 'Could not revoke');
+                void confirmDelete({
+                  title: 'Revoke invite?',
+                  message: `Revoke the invite for ${invite.email}?`,
+                  confirmLabel: 'Revoke',
+                }).then((confirmed) => {
+                  if (!confirmed) return;
+                  void revokeInvite(workspaceId, invite.id).catch((error: unknown) => {
+                    setMessage(error instanceof Error ? error.message : 'Could not revoke');
+                  });
                 });
               }}
             >

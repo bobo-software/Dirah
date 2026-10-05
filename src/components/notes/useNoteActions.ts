@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { NoteKind, PublicNote } from '../../api/client';
 import { EMPTY_NOTES, useNoteStore } from '../../stores/StoresIndex';
+import { confirmDelete } from '../layout/deleteDialogue';
 import type { DropZone } from './noteTreeModel';
 
 export function useNoteActions(workspaceId: string) {
@@ -32,7 +33,12 @@ export function useNoteActions(workspaceId: string) {
   }
 
   async function trash(note: PublicNote) {
-    if (!window.confirm(`Move “${note.title}” and its sub-notes to trash?`)) return;
+    const confirmed = await confirmDelete({
+      title: 'Move to trash?',
+      message: `Move “${note.title}” and its sub-notes to trash?`,
+      confirmLabel: 'Move to trash',
+    });
+    if (!confirmed) return;
     try {
       await trashNote(note.id);
       // Trashing removes the whole subtree; leave the open note if it went with it.

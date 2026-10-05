@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './stores/StoresIndex';
-import { AdminShell, AppFrame, RequireAuth, RequireSystemAdmin } from './components/ComponentsIndex';
+import { AdminShell, AppFrame, DeleteDialogue, RequireAuth, RequireSystemAdmin } from './components/ComponentsIndex';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { InvitePage } from './pages/InvitePage';
@@ -79,6 +79,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <DeleteDialogue />
       <Routes>
         <Route path="/" element={<HomeGate />} />
         <Route path="/login" element={<LoginPage />} />

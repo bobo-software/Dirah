@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { confirmDelete } from '../layout/deleteDialogue';
 import { useWorkspaceStore } from '../../stores/StoresIndex';
 import type { PublicWorkspace } from '../../api/client';
 
@@ -48,7 +49,6 @@ export default function WorkspacesModal({
   const [createName, setCreateName] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pending, setPending] = useState<null | 'create' | 'rename' | 'delete'>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -57,7 +57,6 @@ export default function WorkspacesModal({
     setCreateName('');
     setRenamingId(null);
     setRenameValue('');
-    setDeletingId(null);
     setPending(null);
     setMessage(null);
     const timer = window.setTimeout(() => createRef.current?.focus(), 0);
@@ -109,13 +108,17 @@ export default function WorkspacesModal({
     }
   }
 
-  async function onDelete(id: string) {
+  async function onDelete(item: PublicWorkspace) {
+    const confirmed = await confirmDelete({
+      title: 'Delete workspace?',
+      message: `Delete “${item.name}”? Pages in it are removed.`,
+    });
+    if (!confirmed) return;
     setPending('delete');
     setMessage(null);
     try {
-      await deleteWorkspace(id);
-      onDeleted(id);
-      setDeletingId(null);
+      await deleteWorkspace(item.id);
+      onDeleted(item.id);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not delete workspace');
     } finally {
@@ -170,25 +173,6 @@ export default function WorkspacesModal({
                 </li>
               );
             }
-            if (deletingId === item.id) {
-              return (
-                <li key={item.id} className={current ? 'current' : undefined}>
-                  <div className="workspace-delete-confirm">
-                    <p>
-                      Delete <strong>{item.name}</strong>? Pages in it are removed.
-                    </p>
-                    <div className="modal-actions">
-                      <button type="button" className="linkish" disabled={busy} onClick={() => setDeletingId(null)}>
-                        Cancel
-                      </button>
-                      <button type="button" className="danger-btn" disabled={busy} onClick={() => void onDelete(item.id)}>
-                        {pending === 'delete' ? 'Deleting…' : 'Delete'}
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            }
             return (
               <li key={item.id} className={current ? 'current' : undefined}>
                 <button
@@ -211,7 +195,6 @@ export default function WorkspacesModal({
                       title="Rename"
                       disabled={busy}
                       onClick={() => {
-                        setDeletingId(null);
                         setRenamingId(item.id);
                         setRenameValue(item.name);
                       }}
@@ -226,7 +209,7 @@ export default function WorkspacesModal({
                       disabled={busy}
                       onClick={() => {
                         setRenamingId(null);
-                        setDeletingId(item.id);
+                        void onDelete(item);
                       }}
                     >
                       <TrashIcon />

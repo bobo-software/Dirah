@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
 import { useMcpStore } from '../../stores/StoresIndex';
+import { confirmDelete } from '../layout/deleteDialogue';
 import { BackIcon } from '../layout/SectionIcons';
 import CopyTokenOnce from './CopyTokenOnce';
 import TokenAccessFields, { type TokenAccessValue } from './TokenAccessFields';
@@ -120,7 +121,12 @@ export function TokenDetailBody({
     const prompt = isOAuth
       ? `Disconnect ${token.name}? It will lose access to Dirah until you connect it again.`
       : 'Revoke this MCP token?';
-    if (!window.confirm(prompt)) return;
+    const confirmed = await confirmDelete({
+      title: isOAuth ? 'Disconnect app?' : 'Revoke token?',
+      message: prompt,
+      confirmLabel: isOAuth ? 'Disconnect' : 'Revoke',
+    });
+    if (!confirmed) return;
     try {
       await revokeToken(token.id);
       navigate(backLink);

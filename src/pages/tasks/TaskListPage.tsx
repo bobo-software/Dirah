@@ -4,6 +4,7 @@ import { useTaskStore } from '../../stores/StoresIndex';
 import type { TaskItem } from '../../api/tasks';
 import { TaskProgress } from '../../components/tasks/TaskProgress';
 import { taskMode } from '../../components/tasks/runner/modes';
+import { confirmDelete } from '../../components/layout/deleteDialogue';
 import { canEdit, type WorkspaceOutlet } from '../workspaceContext';
 
 function message(error: unknown, fallback: string): string {
@@ -94,11 +95,16 @@ export function TaskListPage() {
   }
 
   function onDelete() {
-    if (!window.confirm(`Delete “${list.title}” and its ${items.length} items?`)) return;
-    deleteList(listId).then(
-      () => navigate(`/w/${workspaceId}/tasks`),
-      (err: unknown) => setError(message(err, 'Could not delete the list'))
-    );
+    void confirmDelete({
+      title: 'Delete list?',
+      message: `Delete “${list.title}” and its ${items.length} items?`,
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      deleteList(listId).then(
+        () => navigate(`/w/${workspaceId}/tasks`),
+        (err: unknown) => setError(message(err, 'Could not delete the list'))
+      );
+    });
   }
 
   return (
@@ -231,7 +237,15 @@ export function TaskListPage() {
                     type="button"
                     className="task-plain task-item-tool danger"
                     aria-label={`Delete “${item.text}”`}
-                    onClick={() => run(() => removeItem(listId, item.id), 'Could not delete the item')}
+                    onClick={() => {
+                      void confirmDelete({
+                        title: 'Delete item?',
+                        message: `Delete “${item.text}”?`,
+                      }).then((confirmed) => {
+                        if (!confirmed) return;
+                        run(() => removeItem(listId, item.id), 'Could not delete the item');
+                      });
+                    }}
                   >
                     ×
                   </button>

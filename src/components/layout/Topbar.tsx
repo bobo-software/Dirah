@@ -80,6 +80,14 @@ export function TopbarSectionTabs() {
 
   return (
     <nav className="topbar-nav" aria-label="Workspace sections">
+      <Link
+        to={`/w/${workspaceId}/docs`}
+        className={section === 'docs' ? 'topbar-tab active' : 'topbar-tab'}
+        aria-current={section === 'docs' ? 'page' : undefined}
+      >
+        <DocsIcon />
+        Docs
+      </Link>
       {encrypted ? null : (
         <Link
           to={`/w/${workspaceId}`}
@@ -90,14 +98,6 @@ export function TopbarSectionTabs() {
           Notes
         </Link>
       )}
-      <Link
-        to={`/w/${workspaceId}/docs`}
-        className={section === 'docs' ? 'topbar-tab active' : 'topbar-tab'}
-        aria-current={section === 'docs' ? 'page' : undefined}
-      >
-        <DocsIcon />
-        Docs
-      </Link>
       {encrypted ? null : (
         <Link
           to={`/w/${workspaceId}/tasks`}

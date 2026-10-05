@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
+import { confirmDelete } from '../layout/deleteDialogue';
 import { useMcpStore } from '../../stores/StoresIndex';
 
 function KebabIcon() {
@@ -222,7 +223,12 @@ export function McpTokensSection({
     : tokens;
 
   async function onRevoke(id: string) {
-    if (!window.confirm('Revoke this MCP token?')) return;
+    const confirmed = await confirmDelete({
+      title: 'Revoke token?',
+      message: 'Revoke this MCP token?',
+      confirmLabel: 'Revoke',
+    });
+    if (!confirmed) return;
     try {
       await revokeMcpToken(id);
     } catch (error) {

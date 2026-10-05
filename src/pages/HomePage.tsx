@@ -13,6 +13,7 @@ import {
   MCP_URL,
   PricingPlans,
   SiteFooter,
+  WorkspaceFeatures,
   ThemeToggle,
 } from '../components/ComponentsIndex';
 import { useAuthStore } from '../stores/StoresIndex';
@@ -86,6 +87,9 @@ function HomePage() {
         <header className="home-bar">
           <BrandLink size="sm" />
           <div className="home-bar-actions">
+            <a className="home-bar-link" href="#features">
+              Features
+            </a>
             <a className="home-bar-link" href="#pricing">
               Pricing
             </a>
@@ -128,6 +132,8 @@ function HomePage() {
             </motion.div>
             <AgentDemo />
           </section>
+
+          <WorkspaceFeatures />
 
           <section className="home-steps" aria-labelledby="home-steps-title">
             <motion.h2 id="home-steps-title" className="home-section-title" variants={revealItem} {...inView}>

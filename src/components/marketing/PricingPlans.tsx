@@ -36,7 +36,7 @@ export function PricingPlans() {
         ))}
       </motion.ol>
       <motion.p className="pricing-every" variants={item} {...inView}>
-        Every plan includes unlimited pages, public share links, encrypted workspaces, and connections from Claude,
+        Every plan includes unlimited pages, notes and task lists, public share links, encrypted workspaces, and connections from Claude,
         Claude Code, Cursor or any MCP client.
       </motion.p>
     </section>

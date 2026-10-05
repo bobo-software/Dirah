@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore } from '../stores/StoresIndex';
 import type { PublicPage } from '../api/client';
+import { confirmDelete } from '../components/layout/deleteDialogue';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 
 export function TrashPage() {
@@ -33,9 +34,12 @@ export function TrashPage() {
   }
 
   async function onPermanent(page: PublicPage) {
-    if (!window.confirm(`Permanently delete “${page.title}” and any nested pages still in trash?`)) {
-      return;
-    }
+    const confirmed = await confirmDelete({
+      title: 'Delete forever?',
+      message: `Permanently delete “${page.title}” and any nested pages still in trash?`,
+      confirmLabel: 'Delete forever',
+    });
+    if (!confirmed) return;
     try {
       await deletePagePermanent(page.id);
     } catch (error) {

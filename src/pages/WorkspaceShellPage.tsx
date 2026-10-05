@@ -14,6 +14,7 @@ import {
   setLastWorkspaceId,
   useSidebarDrawer,
 } from '../components/ComponentsIndex';
+import { confirmDelete } from '../components/layout/deleteDialogue';
 import { canEdit, workspaceSection } from './workspaceContext';
 
 export function WorkspaceShellPage() {
@@ -96,7 +97,12 @@ export function WorkspaceShellPage() {
 
   async function onTrash(page: PublicPage) {
     if (!workspaceId) return;
-    if (!window.confirm(`Move “${page.title}” and nested pages to trash?`)) return;
+    const confirmed = await confirmDelete({
+      title: 'Move to trash?',
+      message: `Move “${page.title}” and nested pages to trash?`,
+      confirmLabel: 'Move to trash',
+    });
+    if (!confirmed) return;
     try {
       await pageStoreTrashPage(page.id);
       if (pageId === page.id) {

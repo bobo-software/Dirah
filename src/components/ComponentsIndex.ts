@@ -32,6 +32,7 @@ export { BackIcon, DocsIcon, HomeIcon, KeyIcon, NotesIcon, PlusIcon, TasksIcon }
 export { default as Sidebar, useSidebarDrawer } from './layout/Sidebar';
 export { SiteFooter } from './layout/SiteFooter';
 export { ThemeToggle } from './layout/ThemeToggle';
+export { DeleteDialogue, confirmDelete } from './layout/deleteDialogue';
 export { TopbarSectionTabs, TopbarWorkspaceSwitcher } from './layout/Topbar';
 
 export { ContactLink, LegalLayout } from './legal/LegalLayout';
@@ -45,6 +46,7 @@ export type { ClientId } from './marketing/ClientSetup';
 export { CopyField } from './marketing/CopyField';
 export { CLAUDE_CODE_COMMAND, CURSOR_CONFIG, CURSOR_INSTALL_URL, MCP_URL } from './marketing/mcpConnect';
 export { PricingPlans } from './marketing/PricingPlans';
+export { WorkspaceFeatures } from './marketing/WorkspaceFeatures';
 
 export { ProfileSection } from './account/ProfileSection';
 export { SecuritySection } from './account/SecuritySection';

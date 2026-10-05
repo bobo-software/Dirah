@@ -15,6 +15,7 @@ import {
   type KanbanCard,
   type KanbanColumn,
 } from '../../../api/notes';
+import { confirmDelete } from '../../layout/deleteDialogue';
 import { EMPTY_NOTES, useAuthStore, useNoteStore } from '../../../stores/StoresIndex';
 import { NoteEditor } from '../NoteEditor';
 import { NoteGlyph } from '../NoteTree';
@@ -328,8 +329,13 @@ export function KanbanBoard({ workspaceId, noteId }: { workspaceId: string; note
               onColumnDrop={(event) => onColumnDrop(event, column.id)}
               onRenameColumn={(next) => void run(() => patchKanbanColumn(token(), column.id, { title: next }))}
               onDeleteColumn={() => {
-                if (!window.confirm(`Delete “${column.title}”? Cards leave the board. The notes stay.`)) return;
-                void run(() => deleteKanbanColumn(token(), column.id));
+                void confirmDelete({
+                  title: 'Delete column?',
+                  message: `Delete “${column.title}”? Cards leave the board. The notes stay.`,
+                }).then((confirmed) => {
+                  if (!confirmed) return;
+                  void run(() => deleteKanbanColumn(token(), column.id));
+                });
               }}
               takenIds={takenIds}
               onAddCard={(cardTitle) =>
@@ -341,8 +347,14 @@ export function KanbanBoard({ workspaceId, noteId }: { workspaceId: string; note
               onRenameCard={(note, next) => void commitCardTitle(note, next)}
               onOpenCard={(card) => setPeekId(card.noteId)}
               onRemoveCard={(card) => {
-                if (!window.confirm(`Remove “${card.note.title}” from this board? The note stays in your notes.`)) return;
-                void run(() => removeKanbanCard(token(), noteId, card.noteId));
+                void confirmDelete({
+                  title: 'Remove card?',
+                  message: `Remove “${card.note.title}” from this board? The note stays in your notes.`,
+                  confirmLabel: 'Remove',
+                }).then((confirmed) => {
+                  if (!confirmed) return;
+                  void run(() => removeKanbanCard(token(), noteId, card.noteId));
+                });
               }}
             />
           ))}
