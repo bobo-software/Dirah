@@ -19,6 +19,10 @@ function pkce(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
+function sha256(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
 function callMcp(app: Express, accessToken: string) {
   return request(app)
     .post('/mcp')
@@ -106,6 +110,12 @@ describe('MCP OAuth 2.1', () => {
     };
   }
 
+  function refreshWith(clientId: string, refreshToken: string) {
+    return request(app)
+      .post('/mcp/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId });
+  }
+
   it('serves discovery metadata with open CORS', async () => {
     const meta = await request(app).get('/.well-known/oauth-authorization-server').set('Origin', 'https://claude.ai');
     expect(meta.status).toBe(200);
@@ -154,15 +164,35 @@ describe('MCP OAuth 2.1', () => {
     expect(nextRefresh).not.toBe(refresh);
     expect((await callMcp(app, refreshed.body.access_token)).status).toBe(200);
 
-    // Reusing a rotated-out refresh token kills the whole chain.
-    const reused = await request(app)
-      .post('/mcp/oauth/token')
-      .send({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId });
-    expect(reused.body.error).toBe('invalid_grant');
-    const afterReuse = await request(app)
-      .post('/mcp/oauth/token')
-      .send({ grant_type: 'refresh_token', refresh_token: nextRefresh, client_id: clientId });
-    expect(afterReuse.body.error).toBe('invalid_grant');
+    // A retry right after rotation (lost response, second window) is forgiven.
+    const retried = await refreshWith(clientId, refresh);
+    expect(retried.status).toBe(200);
+    expect((await callMcp(app, retried.body.access_token)).status).toBe(200);
+
+    // Once the grace window passes, the stale token is rejected but the chain survives.
+    await pool.query(
+      `UPDATE mcp_oauth_refresh_tokens SET used_at = now() - interval '5 minutes' WHERE token_hash = $1`,
+      [sha256(refresh)]
+    );
+    const stale = await refreshWith(clientId, refresh);
+    expect(stale.body.error).toBe('invalid_grant');
+    expect((await refreshWith(clientId, nextRefresh)).status).toBe(200);
+  });
+
+  it('survives concurrent refreshes of the same token', async () => {
+    if (!dbReady) return;
+    const user = await registerUser('concurrent');
+    const clientId = await registerClient('Cursor');
+    const { refresh } = await connect(user.jwt, clientId, user.workspaceId);
+
+    const results = await Promise.all([refreshWith(clientId, refresh), refreshWith(clientId, refresh)]);
+    for (const res of results) {
+      expect(res.status).toBe(200);
+      expect((await callMcp(app, res.body.access_token)).status).toBe(200);
+    }
+    for (const res of results) {
+      expect((await refreshWith(clientId, res.body.refresh_token)).status).toBe(200);
+    }
   });
 
   it('revoking the connection stops access and refresh, and the app can reconnect', async () => {

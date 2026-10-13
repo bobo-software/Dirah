@@ -76,3 +76,19 @@ export function withRefreshCookie<T extends { tokens: { accessToken: string; ref
     tokens: { accessToken: result.tokens.accessToken },
   };
 }
+
+/**
+ * Browsers send Origin on cross-origin posts, so they never receive the refresh
+ * token in JSON. A native client omits Origin and can store the token itself.
+ */
+export function clientMayReadRefreshToken(req: Request): boolean {
+  return !req.get('origin');
+}
+
+export function publicTokens(
+  req: Request,
+  tokens: { accessToken: string; refreshToken: string }
+): { accessToken: string; refreshToken?: string } {
+  if (clientMayReadRefreshToken(req)) return tokens;
+  return { accessToken: tokens.accessToken };
+}

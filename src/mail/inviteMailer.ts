@@ -8,6 +8,7 @@ import {
   buildInviteEmailText,
   type InviteEmailContent,
 } from './templates/inviteEmail';
+import { buildPasswordResetHtml, buildPasswordResetText } from './templates/passwordResetEmail';
 
 async function recordEmailLog(opts: {
   to: string;
@@ -100,6 +101,73 @@ export async function sendInviteEmail(opts: InviteEmailContent): Promise<boolean
       to: opts.to,
       subject,
       kind: 'workspace_invite',
+      success: false,
+      error: message,
+      meta,
+    });
+    return false;
+  }
+}
+
+export async function sendPasswordResetEmail(to: string, code: string): Promise<boolean> {
+  const subject = 'Your Dirah password reset code';
+  const meta = { purpose: 'password_reset' };
+  if (!env.smtpConfigured) {
+    if (env.nodeEnv === 'development') {
+      console.info(`Password reset code for ${to}: ${code}`);
+    }
+    await recordEmailLog({
+      to,
+      subject,
+      kind: 'password_reset',
+      success: false,
+      error: 'SMTP not configured',
+      meta,
+    });
+    return env.nodeEnv !== 'production';
+  }
+
+  try {
+    const nodeRequire = createRequire(__filename);
+    const nodemailer = nodeRequire('nodemailer') as {
+      createTransport: (options: {
+        host: string;
+        port: number;
+        secure: boolean;
+        auth?: { user: string; pass: string };
+      }) => {
+        sendMail: (mail: {
+          from: string;
+          to: string;
+          subject: string;
+          text: string;
+          html: string;
+        }) => Promise<unknown>;
+      };
+    };
+    const { host, port, secure, user, password, from } = env.smtp;
+    const transport = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      ...(user ? { auth: { user, pass: password } } : {}),
+    });
+    await transport.sendMail({
+      from,
+      to,
+      subject,
+      text: buildPasswordResetText(code),
+      html: buildPasswordResetHtml(code),
+    });
+    await recordEmailLog({ to, subject, kind: 'password_reset', success: true, meta });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('Password reset email failed:', error);
+    await recordEmailLog({
+      to,
+      subject,
+      kind: 'password_reset',
       success: false,
       error: message,
       meta,

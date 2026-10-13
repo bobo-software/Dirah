@@ -1,9 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import crypto from 'node:crypto';
 import request from 'supertest';
+import { eq } from 'drizzle-orm';
 import type { Express } from 'express';
 import { createApp } from '../app';
 import { pool, db } from '../db';
 import { runPendingMigrations } from '../db/migrationRunner';
+import { oauthMobileCodes } from '../db/schemas';
+import { env } from '../config/env';
 import type { OAuthExchanger } from '../oauth/providers';
 
 const stamp = Date.now();
@@ -158,5 +162,64 @@ describe('oauth API', () => {
       .query({ code: 'unverified', state: state4 });
     expect(unverified.status).toBe(400);
     expect(unverified.body.message).toMatch(/not verified/i);
+  });
+
+  it('exchanges a one-time mobile code and rejects unknown returns, replays, and expiry', async () => {
+    if (!dbReady) return;
+
+    const unknown = await request(appOn).get('/api/auth/oauth/google/start').query({ return: 'https://evil.example/oauth' });
+    expect(unknown.status).toBe(400);
+
+    const start = await request(appOn).get('/api/auth/oauth/google/start').query({ return: 'diramobile://oauth' });
+    expect(start.status).toBe(302);
+    const state = new URL(start.headers.location ?? '').searchParams.get('state') ?? '';
+    const callback = await request(appOn).get('/api/auth/oauth/google/callback').query({ code: 'new', state });
+    expect(callback.status).toBe(302);
+    const redirected = new URL(callback.headers.location ?? '');
+    expect(redirected.protocol).toBe('diramobile:');
+    expect(redirected.hostname).toBe('oauth');
+    expect(redirected.search).not.toContain('refreshToken');
+    const cookie = callback.headers['set-cookie'];
+    const cookieText = Array.isArray(cookie) ? cookie.join('\n') : (cookie ?? '');
+    expect(cookieText).not.toContain('dirah_refresh=');
+    const code = redirected.searchParams.get('code') ?? '';
+    expect(code.length).toBeGreaterThan(20);
+
+    const exchanged = await request(appOn).post('/api/auth/oauth/mobile-exchange').send({ code });
+    expect(exchanged.status).toBe(200);
+    expect(exchanged.body.data.user.email).toBe(oauthEmail);
+    expect(typeof exchanged.body.data.tokens.accessToken).toBe('string');
+    expect(typeof exchanged.body.data.tokens.refreshToken).toBe('string');
+
+    const replay = await request(appOn).post('/api/auth/oauth/mobile-exchange').send({ code });
+    expect(replay.status).toBe(400);
+
+    const startBrowser = await request(appOn).get('/api/auth/oauth/google/start').query({ return: 'diramobile://oauth' });
+    const stateBrowser = new URL(startBrowser.headers.location ?? '').searchParams.get('state') ?? '';
+    const callbackBrowser = await request(appOn).get('/api/auth/oauth/google/callback').query({
+      code: 'new',
+      state: stateBrowser,
+    });
+    const browserCode = new URL(callbackBrowser.headers.location ?? '').searchParams.get('code') ?? '';
+    const origin = env.corsOrigin === '*' ? 'http://localhost:5181' : env.corsOrigin;
+    const asBrowser = await request(appOn)
+      .post('/api/auth/oauth/mobile-exchange')
+      .set('Origin', origin)
+      .send({ code: browserCode });
+    expect(asBrowser.status).toBe(200);
+    expect(asBrowser.body.data.tokens.refreshToken).toBeUndefined();
+    expect(JSON.stringify(asBrowser.headers['set-cookie'] ?? '')).toContain('dirah_refresh=');
+
+    const startExpired = await request(appOn).get('/api/auth/oauth/google/start').query({ return: 'diramobile://oauth' });
+    const stateExpired = new URL(startExpired.headers.location ?? '').searchParams.get('state') ?? '';
+    const callbackExpired = await request(appOn).get('/api/auth/oauth/google/callback').query({
+      code: 'new',
+      state: stateExpired,
+    });
+    const expiredCode = new URL(callbackExpired.headers.location ?? '').searchParams.get('code') ?? '';
+    const expiredHash = crypto.createHash('sha256').update(expiredCode).digest('hex');
+    await db.update(oauthMobileCodes).set({ expiresAt: new Date(0) }).where(eq(oauthMobileCodes.codeHash, expiredHash));
+    const expired = await request(appOn).post('/api/auth/oauth/mobile-exchange').send({ code: expiredCode });
+    expect(expired.status).toBe(400);
   });
 });

@@ -10,7 +10,7 @@ export { taskLists, taskListItems } from './tasks';
 export { blobs } from './docs';
 export { shareLinks } from './shareLinks';
 export { workspaceInvites } from './invites';
-export { oauthAccounts } from './oauth';
+export { oauthAccounts, oauthMobileCodes } from './oauth';
 export {
   mcpTokens,
   mcpTokenWorkspaceAccess,
@@ -22,3 +22,4 @@ export {
 export { systemAdmins, systemAdminRefreshTokens } from './systemAdmins';
 export { requestLogs } from './requestLogs';
 export { emailLogs } from './emailLogs';
+export { passwordResetCodes } from './passwordReset';
