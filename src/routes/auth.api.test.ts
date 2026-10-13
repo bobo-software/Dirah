@@ -1,11 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../app';
 import { pool } from '../db';
 import { runPendingMigrations } from '../db/migrationRunner';
 import { db } from '../db';
+import { emailLogs, passwordResetCodes } from '../db/schemas';
 import { env } from '../config/env';
+import { passwordResetCodeForTests } from '../services/PasswordResetService';
 
 function refreshCookieLine(setCookie: string | string[] | undefined): string {
   const list = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
@@ -18,6 +21,12 @@ function refreshCookieLine(setCookie: string | string[] | undefined): string {
 
 function cookiePair(setCookieLine: string): string {
   return setCookieLine.split(';')[0] ?? '';
+}
+
+/** A browser always sends Origin. Supertest does not, unless we set it. */
+function asBrowser(req: request.Test): request.Test {
+  const origin = env.corsOrigin === '*' ? 'http://localhost:5181' : env.corsOrigin;
+  return req.set('Origin', origin);
 }
 
 const email = `phase0-${Date.now()}@example.com`;
@@ -55,9 +64,7 @@ describe('auth and workspaces API', () => {
       return;
     }
 
-    const registered = await request(app)
-      .post('/api/auth/register')
-      .send({ email, password });
+    const registered = await asBrowser(request(app).post('/api/auth/register')).send({ email, password });
 
     expect(registered.status).toBe(201);
     expect(registered.body.success).toBe(true);
@@ -102,7 +109,9 @@ describe('auth and workspaces API', () => {
       .post('/api/auth/refresh')
       .send({ refreshToken: legacyRefresh });
     expect(upgraded.status).toBe(200);
-    expect(upgraded.body.data.tokens).toEqual({ accessToken: expect.any(String) });
+    expect(upgraded.body.data.tokens.accessToken).toEqual(expect.any(String));
+    expect(upgraded.body.data.tokens.refreshToken).toEqual(expect.any(String));
+    expect(upgraded.body.data.tokens.refreshToken).not.toBe(legacyRefresh);
     expect(upgraded.text).not.toContain(legacyRefresh);
     const rotated = refreshCookieLine(upgraded.headers['set-cookie']);
 
@@ -111,9 +120,7 @@ describe('auth and workspaces API', () => {
       .send({ refreshToken: legacyRefresh });
     expect(reused.status).toBe(401);
 
-    const refreshed = await request(app)
-      .post('/api/auth/refresh')
-      .set('Cookie', cookiePair(rotated));
+    const refreshed = await asBrowser(request(app).post('/api/auth/refresh')).set('Cookie', cookiePair(rotated));
     expect(refreshed.status).toBe(200);
     expect(refreshed.body.data.tokens.refreshToken).toBeUndefined();
     const current = refreshCookieLine(refreshed.headers['set-cookie']);
@@ -128,6 +135,49 @@ describe('auth and workspaces API', () => {
       .post('/api/auth/refresh')
       .set('Cookie', cookiePair(current));
     expect(afterLogout.status).toBe(401);
+  });
+
+  it('returns the refresh token when the request has no Origin', async () => {
+    if (!dbReady) {
+      return;
+    }
+
+    const nativeEmail = `native-${Date.now()}@example.com`;
+    const registered = await request(app)
+      .post('/api/auth/register')
+      .send({ email: nativeEmail, password });
+    expect(registered.status).toBe(201);
+    const issued = registered.body.data.tokens.refreshToken as string;
+    expect(issued).toEqual(expect.any(String));
+    expect(issued.length).toBeGreaterThan(10);
+    expect(refreshCookieLine(registered.headers['set-cookie'])).toMatch(/dirah_refresh=/);
+
+    const loggedOut = await request(app).post('/api/auth/logout').send({ refreshToken: issued });
+    expect(loggedOut.status).toBe(200);
+
+    const loggedIn = await request(app).post('/api/auth/login').send({ email: nativeEmail, password });
+    expect(loggedIn.status).toBe(200);
+    const loginRefresh = loggedIn.body.data.tokens.refreshToken as string;
+    expect(loginRefresh).toEqual(expect.any(String));
+    expect(loggedIn.body.data.user.email).toBe(nativeEmail);
+
+    const refreshed = await request(app).post('/api/auth/refresh').send({ refreshToken: loginRefresh });
+    expect(refreshed.status).toBe(200);
+    const rotated = refreshed.body.data.tokens.refreshToken as string;
+    expect(rotated).toEqual(expect.any(String));
+    expect(rotated).not.toBe(loginRefresh);
+
+    const browserLogin = await asBrowser(request(app).post('/api/auth/login')).send({
+      email: nativeEmail,
+      password,
+    });
+    expect(browserLogin.status).toBe(200);
+    expect(browserLogin.body.data.tokens).toEqual({ accessToken: expect.any(String) });
+    expect(browserLogin.body.data.tokens.refreshToken).toBeUndefined();
+    const browserCookie = decodeURIComponent(
+      cookiePair(refreshCookieLine(browserLogin.headers['set-cookie'])).slice('dirah_refresh='.length)
+    );
+    expect(browserLogin.text).not.toContain(browserCookie);
   });
 
   it('rejects a session post from a different origin', async () => {
@@ -322,5 +372,91 @@ describe('auth and workspaces API', () => {
       .set('Authorization', `Bearer ${newLogin.body.data.tokens.accessToken as string}`);
     expect(bundle.body.data.crypto.wrappedPrivateKey).toBe('wrap-new');
     expect(bundle.body.data.crypto.publicKey).toBe('pk-profile');
+  });
+
+  it('sends a password reset code only for an existing account, then accepts it once', async () => {
+    if (!dbReady) {
+      return;
+    }
+
+    const unknown = `missing-${Date.now()}@example.com`;
+    const first = await request(app).post('/api/auth/password/forgot').send({ email: unknown });
+    expect(first.status).toBe(200);
+    expect(first.body.message).toBe('If an account exists for that email, we sent a code.');
+    const unknownLogs = await db.select().from(emailLogs).where(eq(emailLogs.to, unknown));
+    expect(unknownLogs).toHaveLength(0);
+
+    const resentUnknown = await request(app).post('/api/auth/password/forgot').send({ email: unknown });
+    expect(resentUnknown.status).toBe(429);
+    expect(resentUnknown.body.error).toBe('RATE_LIMITED');
+    expect(resentUnknown.body.retryAfterSeconds).toBeGreaterThan(0);
+    expect(resentUnknown.body.retryAfterSeconds).toBeLessThanOrEqual(60);
+
+    const accountEmail = `reset-${Date.now()}@example.com`;
+    const registered = await asBrowser(request(app).post('/api/auth/register')).send({
+      email: accountEmail,
+      password,
+    });
+    expect(registered.status).toBe(201);
+    const userId = registered.body.data.user.id as string;
+    const oldRefresh = decodeURIComponent(
+      cookiePair(refreshCookieLine(registered.headers['set-cookie'])).slice('dirah_refresh='.length)
+    );
+
+    const sent = await request(app).post('/api/auth/password/forgot').send({ email: accountEmail });
+    expect(sent.status).toBe(200);
+    expect(sent.body.message).toBe(first.body.message);
+    const code = passwordResetCodeForTests(accountEmail);
+    expect(code).toMatch(/^\d{6}$/);
+    expect(JSON.stringify(sent.body)).not.toContain(code);
+
+    const [stored] = await db
+      .select()
+      .from(passwordResetCodes)
+      .where(eq(passwordResetCodes.userId, userId));
+    expect(stored.codeHash).toHaveLength(64);
+    expect(stored.codeHash).not.toBe(code);
+    const sentLogs = await db.select().from(emailLogs).where(eq(emailLogs.to, accountEmail));
+    expect(sentLogs.length).toBeGreaterThan(0);
+    expect(sentLogs.every((row) => row.subject !== undefined && !row.subject.includes(code!))).toBe(true);
+    expect(sentLogs.every((row) => JSON.stringify(row.meta ?? {}) === JSON.stringify({ purpose: 'password_reset' }))).toBe(true);
+
+    const resent = await request(app).post('/api/auth/password/forgot').send({ email: accountEmail });
+    expect(resent.status).toBe(429);
+    expect(resent.body.error).toBe('RATE_LIMITED');
+    expect(resent.body.retryAfterSeconds).toBeGreaterThan(0);
+    expect(resent.body.retryAfterSeconds).toBeLessThanOrEqual(60);
+
+    const wrongCode = code === '000000' ? '111111' : '000000';
+    const wrong = await request(app)
+      .post('/api/auth/password/reset')
+      .send({ email: accountEmail, code: wrongCode, password: 'newpassword1' });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error).toBe('INVALID_CODE');
+    const [attempted] = await db
+      .select()
+      .from(passwordResetCodes)
+      .where(eq(passwordResetCodes.userId, userId));
+    expect(attempted.attempts).toBe(1);
+
+    const reset = await request(app)
+      .post('/api/auth/password/reset')
+      .send({ email: accountEmail, code, password: 'newpassword1' });
+    expect(reset.status).toBe(200);
+    expect(reset.body.data.hasEncryptionKey).toBe(false);
+
+    const reused = await request(app)
+      .post('/api/auth/password/reset')
+      .send({ email: accountEmail, code, password: 'anotherpass1' });
+    expect(reused.status).toBe(400);
+    expect(reused.body.error).toBe('INVALID_CODE');
+
+    const oldSession = await request(app).post('/api/auth/refresh').send({ refreshToken: oldRefresh });
+    expect(oldSession.status).toBe(401);
+
+    const loggedIn = await request(app)
+      .post('/api/auth/login')
+      .send({ email: accountEmail, password: 'newpassword1' });
+    expect(loggedIn.status).toBe(200);
   });
 });

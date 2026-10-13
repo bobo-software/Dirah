@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
-import { and, eq } from 'drizzle-orm';
-import { oauthAccounts, users, workspaceMembers, workspaces } from '../db/schemas';
+import crypto from 'node:crypto';
+import { and, eq, gt, isNull } from 'drizzle-orm';
+import { oauthAccounts, oauthMobileCodes, users, workspaceMembers, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { env } from '../config/env';
 import {
@@ -18,7 +19,16 @@ import {
   type PublicWorkspace,
 } from './AuthService';
 
-type StatePayload = { provider: OAuthProvider };
+type StatePayload = { provider: OAuthProvider; returnTo?: string };
+
+/** The only return URL a mobile OAuth start may ask the callback to use. */
+export const MOBILE_OAUTH_RETURN = 'diramobile://oauth';
+const MOBILE_CODE_TTL_MS = 2 * 60 * 1000;
+
+function hashCode(code: string): string {
+  return crypto.createHash('sha256').update(code).digest('hex');
+}
+
 type OAuthConfig = ReturnType<typeof oauthConfigFromEnv>;
 
 export class OAuthService {
@@ -40,7 +50,7 @@ export class OAuthService {
     };
   }
 
-  authorizeUrl(providerRaw: string): string {
+  authorizeUrl(providerRaw: string, returnTo?: string): string {
     if (!isOAuthProvider(providerRaw)) {
       throw new HttpError('Unknown OAuth provider', 404, 'OAUTH_PROVIDER');
     }
@@ -48,9 +58,15 @@ export class OAuthService {
     if (!creds.clientId || !creds.clientSecret) {
       throw new HttpError('OAuth is not configured', 503, 'OAUTH_UNAVAILABLE');
     }
-    const state = jwt.sign({ provider: providerRaw } satisfies StatePayload, env.jwtSecret, {
-      expiresIn: '10m',
-    });
+    const mobileReturn = returnTo?.trim() || undefined;
+    if (mobileReturn && mobileReturn !== MOBILE_OAUTH_RETURN) {
+      throw new HttpError('Unknown return URL', 400, 'OAUTH_RETURN');
+    }
+    const state = jwt.sign(
+      mobileReturn ? { provider: providerRaw, returnTo: mobileReturn } : { provider: providerRaw },
+      env.jwtSecret,
+      { expiresIn: '10m' }
+    );
     const redirectUri = this.redirectUri(providerRaw);
     if (providerRaw === 'google') {
       const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -69,25 +85,22 @@ export class OAuthService {
     return url.toString();
   }
 
+  mobileReturn(providerRaw: string, state: string): string | null {
+    return this.readState(providerRaw, state).returnTo;
+  }
+
   async finish(
     providerRaw: string,
     code: string,
-    state: string
-  ): Promise<{ tokens: AuthTokens; user: PublicUser; workspace: PublicWorkspace | null }> {
-    if (!isOAuthProvider(providerRaw)) {
-      throw new HttpError('Unknown OAuth provider', 404, 'OAUTH_PROVIDER');
-    }
+    state: string,
+    options?: { issueTokens?: boolean }
+  ): Promise<{ tokens: AuthTokens | null; user: PublicUser; workspace: PublicWorkspace | null }> {
     if (!code.trim() || !state.trim()) {
       throw new HttpError('Invalid OAuth callback', 400, 'OAUTH_CALLBACK');
     }
-    let payload: StatePayload;
-    try {
-      payload = jwt.verify(state, env.jwtSecret) as StatePayload;
-    } catch {
-      throw new HttpError('Invalid OAuth state', 400, 'OAUTH_STATE');
-    }
-    if (payload.provider !== providerRaw) {
-      throw new HttpError('Invalid OAuth state', 400, 'OAUTH_STATE');
+    this.readState(providerRaw, state);
+    if (!isOAuthProvider(providerRaw)) {
+      throw new HttpError('Unknown OAuth provider', 404, 'OAUTH_PROVIDER');
     }
     const creds = this.config[providerRaw];
     if (!creds.clientId || !creds.clientSecret) {
@@ -176,7 +189,7 @@ export class OAuthService {
           });
           return { user, workspace };
         });
-        const tokens = await this.auth.issueSession(created.user.id);
+        const tokens = options?.issueTokens === false ? null : await this.auth.issueSession(created.user.id);
         return {
           user: created.user,
           tokens,
@@ -186,13 +199,66 @@ export class OAuthService {
     }
 
     const user = await this.auth.me(userId);
-    const tokens = await this.auth.issueSession(user.id);
+    const tokens = options?.issueTokens === false ? null : await this.auth.issueSession(user.id);
     const workspacesForUser = await this.auth.listWorkspaces(user.id);
     return { user, tokens, workspace: workspacesForUser[0] ?? null };
   }
 
+  async createMobileCode(userId: string): Promise<string> {
+    const code = crypto.randomBytes(32).toString('base64url');
+    await this.database.insert(oauthMobileCodes).values({
+      userId,
+      codeHash: hashCode(code),
+      expiresAt: new Date(Date.now() + MOBILE_CODE_TTL_MS),
+    });
+    return code;
+  }
+
+  async exchangeMobileCode(code: string): Promise<{ user: PublicUser; tokens: AuthTokens }> {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      throw new HttpError('This sign-in code is invalid or expired', 400, 'OAUTH_CODE');
+    }
+    const [row] = await this.database
+      .update(oauthMobileCodes)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(oauthMobileCodes.codeHash, hashCode(trimmed)),
+          isNull(oauthMobileCodes.usedAt),
+          gt(oauthMobileCodes.expiresAt, new Date())
+        )
+      )
+      .returning({ userId: oauthMobileCodes.userId });
+    if (!row) {
+      throw new HttpError('This sign-in code is invalid or expired', 400, 'OAUTH_CODE');
+    }
+    const user = await this.auth.me(row.userId);
+    const tokens = await this.auth.issueSession(user.id);
+    return { user, tokens };
+  }
+
   appRedirect(): string {
     return `${env.appPublicUrl}/oauth`;
+  }
+
+  private readState(providerRaw: string, state: string): { returnTo: string | null } {
+    if (!isOAuthProvider(providerRaw)) {
+      throw new HttpError('Unknown OAuth provider', 404, 'OAUTH_PROVIDER');
+    }
+    let payload: StatePayload;
+    try {
+      payload = jwt.verify(state, env.jwtSecret) as StatePayload;
+    } catch {
+      throw new HttpError('Invalid OAuth state', 400, 'OAUTH_STATE');
+    }
+    if (payload.provider !== providerRaw) {
+      throw new HttpError('Invalid OAuth state', 400, 'OAUTH_STATE');
+    }
+    if (payload.returnTo !== undefined && payload.returnTo !== MOBILE_OAUTH_RETURN) {
+      throw new HttpError('Unknown return URL', 400, 'OAUTH_RETURN');
+    }
+    return { returnTo: payload.returnTo ?? null };
   }
 
   private redirectUri(provider: OAuthProvider): string {

@@ -49,6 +49,14 @@ export const authLoginRateLimit = skipInTest(
   })
 );
 
+export const authPasswordResetRateLimit = skipInTest(
+  createIpRateLimit({
+    max: env.authRateLimit.loginMax,
+    windowMs: env.authRateLimit.loginWindowMs,
+    message: 'Too many password reset attempts. Try again later.',
+  })
+);
+
 export const authRefreshRateLimit = skipInTest(
   createIpRateLimit({
     max: env.authRateLimit.refreshMax,

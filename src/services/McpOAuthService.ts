@@ -9,6 +9,8 @@ import type { McpTokenService } from './McpTokenService';
 const SCOPE = 'dirah.docs';
 const CODE_TTL_MS = 10 * 60 * 1000;
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** How long a rotated-out refresh token may still be exchanged (concurrent refreshes, retries). */
+const REUSE_GRACE_MS = 60 * 1000;
 const MAX_REDIRECT_URIS = 10;
 const BLOCKED_SCHEMES = new Set(['javascript:', 'data:', 'file:', 'vbscript:', 'blob:', 'about:']);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -38,6 +40,13 @@ function hash(value: string): string {
 
 function s256(verifier: string): string {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
+
+function logRefreshRejection(
+  row: { tokenId: string; clientId: string },
+  reason: 'grace-reuse' | 'stale-reuse' | 'expired' | 'revoked'
+): void {
+  console.warn(`[mcp-oauth] refresh ${reason}`, { tokenId: row.tokenId, clientId: row.clientId });
 }
 
 function trimSlash(value: string): string {
@@ -326,16 +335,22 @@ export class McpOAuthService {
     if (!row || row.clientId !== clientId) {
       throw oauthError('invalid_grant', 'Invalid refresh token');
     }
-    if (row.usedAt) {
-      // A rotated-out refresh token came back: assume it leaked and kill the whole chain.
-      await this.revokeChain(row.tokenId);
-      throw oauthError('invalid_grant', 'Refresh token was already used');
-    }
     if (row.revokedAt || row.expiresAt.getTime() < Date.now()) {
+      logRefreshRejection(row, row.revokedAt ? 'revoked' : 'expired');
       throw oauthError('invalid_grant', 'Refresh token is expired or revoked');
     }
     if (!(await this.tokens.isTokenUsable(row.tokenId))) {
       throw oauthError('invalid_grant', 'This connection was revoked');
+    }
+    if (row.usedAt) {
+      // Clients like Cursor refresh from several windows at once, or retry after a lost
+      // response. Forgive a reuse shortly after rotation; reject (but don't revoke) later ones.
+      if (Date.now() - row.usedAt.getTime() <= REUSE_GRACE_MS) {
+        logRefreshRejection(row, 'grace-reuse');
+        return this.issue(row.userId, row.tokenId, row.clientId, row.resource, row.scope);
+      }
+      logRefreshRejection(row, 'stale-reuse');
+      throw oauthError('invalid_grant', 'Refresh token was already used');
     }
     const claimed = await this.database
       .update(mcpOauthRefreshTokens)
@@ -349,8 +364,8 @@ export class McpOAuthService {
       )
       .returning({ tokenHash: mcpOauthRefreshTokens.tokenHash });
     if (!claimed.length) {
-      await this.revokeChain(row.tokenId);
-      throw oauthError('invalid_grant', 'Refresh token was already used');
+      // Lost a race with a concurrent refresh of the same token milliseconds ago.
+      logRefreshRejection(row, 'grace-reuse');
     }
     return this.issue(row.userId, row.tokenId, row.clientId, row.resource, row.scope);
   }

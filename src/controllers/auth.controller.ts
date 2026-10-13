@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { AuthService } from '../services/AuthService';
+import { PasswordResetService } from '../services/PasswordResetService';
 import ResponseUtils from '../utils/ResponseUtils';
+import { HttpError } from '../utils/HttpError';
 import { asyncHandler } from '../utils/asyncHandler';
 import {
   clearRefreshCookie,
+  publicTokens,
   refreshTokenFromRequest,
   setRefreshCookie,
   withRefreshCookie,
@@ -42,7 +45,29 @@ const changePasswordSchema = z.object({
   crypto: cryptoRewrapSchema.optional(),
 });
 
-export function createAuthController(authService: AuthService) {
+const forgotPasswordSchema = z.object({
+  email: z.string().min(1),
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().min(1),
+  code: z.string().min(1),
+  password: z.string().min(1),
+});
+
+function sendRateLimit(res: Response, error: unknown): boolean {
+  if (!(error instanceof HttpError) || error.status !== 429) return false;
+  const retryAfterSeconds = error.details?.retryAfterSeconds;
+  res.status(429).json({
+    success: false,
+    message: error.message,
+    error: 'RATE_LIMITED',
+    ...(typeof retryAfterSeconds === 'number' ? { retryAfterSeconds } : {}),
+  });
+  return true;
+}
+
+export function createAuthController(authService: AuthService, passwordResets: PasswordResetService) {
   return {
     register: asyncHandler(async (req: Request, res: Response) => {
       const parsed = credentialsSchema.safeParse(req.body);
@@ -50,7 +75,12 @@ export function createAuthController(authService: AuthService) {
         return ResponseUtils.error(res, 'Email and password are required', parsed.error.flatten(), 400);
       }
       const result = await authService.register(parsed.data.email, parsed.data.password);
-      return ResponseUtils.success(res, 'Registered', withRefreshCookie(res, 'user', result), 201);
+      return ResponseUtils.success(
+        res,
+        'Registered',
+        { ...withRefreshCookie(res, 'user', result), tokens: publicTokens(req, result.tokens) },
+        201
+      );
     }),
 
     login: asyncHandler(async (req: Request, res: Response) => {
@@ -59,7 +89,10 @@ export function createAuthController(authService: AuthService) {
         return ResponseUtils.error(res, 'Email and password are required', parsed.error.flatten(), 400);
       }
       const result = await authService.login(parsed.data.email, parsed.data.password);
-      return ResponseUtils.success(res, 'Logged in', withRefreshCookie(res, 'user', result));
+      return ResponseUtils.success(res, 'Logged in', {
+        ...withRefreshCookie(res, 'user', result),
+        tokens: publicTokens(req, result.tokens),
+      });
     }),
 
     refresh: asyncHandler(async (req: Request, res: Response) => {
@@ -70,7 +103,7 @@ export function createAuthController(authService: AuthService) {
       const tokens = await authService.refresh(refreshToken);
       setRefreshCookie(res, 'user', tokens.refreshToken);
       return ResponseUtils.success(res, 'Token refreshed', {
-        tokens: { accessToken: tokens.accessToken },
+        tokens: publicTokens(req, tokens),
       });
     }),
 
@@ -110,6 +143,38 @@ export function createAuthController(authService: AuthService) {
         refreshTokenFromRequest(req, 'user') ?? undefined
       );
       return ResponseUtils.success(res, 'Password updated', { user });
+    }),
+
+    forgotPassword: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = forgotPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'A valid email is required', parsed.error.flatten(), 400);
+      }
+      try {
+        await passwordResets.requestReset(parsed.data.email);
+      } catch (error) {
+        if (sendRateLimit(res, error)) return;
+        throw error;
+      }
+      return ResponseUtils.success(res, 'If an account exists for that email, we sent a code.');
+    }),
+
+    resetPassword: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = resetPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Email, code, and a new password are required', parsed.error.flatten(), 400);
+      }
+      try {
+        const result = await passwordResets.resetPassword(
+          parsed.data.email,
+          parsed.data.code,
+          parsed.data.password
+        );
+        return ResponseUtils.success(res, 'Password updated', result);
+      } catch (error) {
+        if (sendRateLimit(res, error)) return;
+        throw error;
+      }
     }),
   };
 }
