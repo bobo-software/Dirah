@@ -1553,4 +1553,74 @@ describe('docs MCP protocol', () => {
       (toolResult(listed).data as { id: string; kind: string }[]).find((row) => row.id === board.id)?.kind
     ).toBe('kanban');
   });
+
+  it('creates, updates, reads, comments on and searches tickets by key', async () => {
+    if (!dbReady) return;
+    const email = `tickets-mcp-${stamp}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    const board = await request(app)
+      .post(`/api/workspaces/${workspaceId}/ticket-boards`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Agent work', key: 'AGT' });
+    expect(board.status).toBe(201);
+
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'ticket-agent' });
+    const secret = tokenRes.body.data.token.secret as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+
+    const call = async (name: string, args: Record<string, unknown>) =>
+      toolResult(
+        await mcpPost(app, secret, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
+      );
+
+    const boards = await call('list_ticket_boards', {});
+    expect((boards.data as { key: string }[]).map((row) => row.key)).toEqual(['AGT']);
+
+    const created = await call('create_ticket', {
+      board: 'agt',
+      title: 'Wire up billing',
+      status: 'in progress',
+      priority: 'high',
+      assignees: [email],
+      dueDate: '2026-11-01',
+    });
+    expect(created.success).toBe(true);
+    const ticket = created.data as { key: string; status: string; assignees: string[]; url: string };
+    expect(ticket.key).toBe('AGT-1');
+    expect(ticket.status).toBe('In progress');
+    expect(ticket.assignees).toEqual([email]);
+    expect(ticket.url).toContain('?ticket=AGT-1');
+
+    const badStatus = await call('update_ticket', { key: 'AGT-1', status: 'Nope' });
+    expect(badStatus.success).toBe(false);
+    expect(badStatus.error).toBe('UNKNOWN_STATUS');
+
+    const updated = await call('update_ticket', { key: 'agt 1', status: 'Done', assignees: [] });
+    expect((updated.data as { status: string; assignees: string[] }).status).toBe('Done');
+    expect((updated.data as { assignees: string[] }).assignees).toEqual([]);
+
+    await call('comment_ticket', { key: 'AGT-1', body: 'Shipped' });
+    const read = await call('read_ticket', { key: 'AGT-1' });
+    const detail = read.data as { comments: { body: string }[]; activity: { type: string }[] };
+    expect(detail.comments.map((comment) => comment.body)).toEqual(['Shipped']);
+    expect(detail.activity.map((entry) => entry.type)).toEqual(
+      expect.arrayContaining(['created', 'status', 'assignees'])
+    );
+
+    const openBoard = await call('read_ticket_board', { board: 'AGT' });
+    expect((openBoard.data as { tickets: unknown[] }).tickets).toEqual([]);
+    const allBoard = await call('read_ticket_board', { board: 'AGT', state: 'all' });
+    expect((allBoard.data as { tickets: unknown[] }).tickets).toHaveLength(1);
+
+    const found = await call('search_tickets', { q: 'billing', status: 'done' });
+    expect((found.data as { key: string }[]).map((row) => row.key)).toEqual(['AGT-1']);
+  });
 });

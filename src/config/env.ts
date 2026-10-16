@@ -5,6 +5,18 @@ import { resolveDatabaseConfig, resolveLiveDatabaseConfig } from './databaseEnv'
 
 dotenv.config();
 
+/** Values written in `.env`. These win over Infisical for the system-admin login. */
+function dotenvFile(): Record<string, string> {
+  const filePath = path.resolve(process.cwd(), '.env');
+  try {
+    return dotenv.parse(fs.readFileSync(filePath));
+  } catch {
+    return {};
+  }
+}
+
+const dotenvValues = dotenvFile();
+
 export type { DbSslMode } from './databaseEnv';
 
 const DEFAULT_JWT_SECRET = 'dev-jwt-secret-change-me';
@@ -133,8 +145,8 @@ export const env = {
   smtpConfigured: Boolean((process.env.SMTP_HOST ?? '').trim()),
   jwtSecret: process.env.JWT_SECRET ?? DEFAULT_JWT_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET ?? DEFAULT_JWT_REFRESH_SECRET,
-  systemAdminEmail: (process.env.SYSTEM_ADMIN_EMAIL ?? '').trim(),
-  systemAdminPassword: process.env.SYSTEM_ADMIN_PASSWORD ?? '',
+  systemAdminEmail: (dotenvValues.SYSTEM_ADMIN_EMAIL ?? process.env.SYSTEM_ADMIN_EMAIL ?? '').trim(),
+  systemAdminPassword: dotenvValues.SYSTEM_ADMIN_PASSWORD || process.env.SYSTEM_ADMIN_PASSWORD || '',
   blobDir: path.resolve(process.env.BLOB_DIR ?? 'uploads'),
   ai: {
     apiKey: process.env.AI_API_KEY ?? '',

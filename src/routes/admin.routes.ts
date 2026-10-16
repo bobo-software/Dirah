@@ -21,6 +21,7 @@ export function createAdminRouter(
   router.get('/metrics', requireSystemAdmin, controller.metrics);
   router.get('/users', requireSystemAdmin, controller.users);
   router.get('/emails', requireSystemAdmin, controller.emails);
+  router.post('/emails/test', requireSystemAdmin, controller.sendTestEmail);
   router.get('/request-logs/analytics', requireSystemAdmin, controller.requestAnalytics);
   router.get('/request-logs', requireSystemAdmin, controller.requestLogs);
   router.get('/mcp-audit', requireSystemAdmin, controller.mcpAudit);
