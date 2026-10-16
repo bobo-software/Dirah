@@ -11,6 +11,12 @@ import {
 } from './templates/inviteEmail';
 import { buildPasswordResetHtml, buildPasswordResetText } from './templates/passwordResetEmail';
 import { buildTestEmailHtml, buildTestEmailText } from './templates/testEmail';
+import {
+  buildTicketEmailHtml,
+  buildTicketEmailText,
+  ticketEmailSubject,
+  type TicketEmailContent,
+} from './templates/ticketEmail';
 
 async function recordEmailLog(opts: {
   to: string;
@@ -134,6 +140,21 @@ export async function sendInviteEmail(opts: InviteEmailContent): Promise<boolean
       invitedByEmail: opts.invitedByEmail,
     },
   });
+  return result.ok;
+}
+
+export async function sendTicketEmail(opts: TicketEmailContent): Promise<boolean> {
+  const result = await deliver({
+    to: opts.to,
+    subject: ticketEmailSubject(opts),
+    kind: `ticket_${opts.kind}`,
+    text: buildTicketEmailText(opts),
+    html: buildTicketEmailHtml(opts),
+    meta: { ticketKey: opts.ticketKey, ticketUrl: opts.ticketUrl, workspaceName: opts.workspaceName },
+  });
+  if (!result.ok && result.error === 'SMTP not configured') {
+    console.info(`Ticket email skipped (SMTP not configured): ticket_${opts.kind} ${opts.ticketKey} to ${opts.to}`);
+  }
   return result.ok;
 }
 
