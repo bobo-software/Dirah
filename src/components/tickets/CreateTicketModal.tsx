@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import type { PublicMember } from '../../api/members';
 import { TICKET_PRIORITIES, type Ticket, type TicketBoardView, type TicketPriority } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
+import { RichMarkdownInput } from '../editor/RichMarkdownInput';
 import { AssigneeCell } from './TicketCells';
 import { PRIORITY_META } from './ticketMeta';
 
@@ -106,16 +107,18 @@ export function CreateTicketModal({
               required
             />
           </label>
-          <label>
-            Description
-            <textarea
-              className="ticket-textarea"
-              rows={5}
+          <div className="ticket-create-field">
+            <span>Description</span>
+            <RichMarkdownInput
               value={description}
-              placeholder="Details, acceptance criteria, links… Markdown supported."
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={setDescription}
+              label="Description"
+              placeholder="Details, acceptance criteria, links… Paste images straight in."
+              workspaceId={view.board.workspaceId}
+              onSubmit={() => void onSubmit()}
+              onError={setMessage}
             />
-          </label>
+          </div>
           <div className="ticket-create-grid">
             <label>
               Status

@@ -46,16 +46,18 @@ export function StatusCell({
 export function PriorityCell({
   priority,
   editable,
+  emptyLabel = '—',
   onChange,
 }: {
   priority: TicketPriority;
   editable: boolean;
+  emptyLabel?: string;
   onChange: (priority: TicketPriority) => void;
 }) {
   const meta = PRIORITY_META[priority];
   const pill =
     priority === 'none' ? (
-      <span className="ticket-empty">—</span>
+      <span className="ticket-empty">{emptyLabel}</span>
     ) : (
       <span className={`ticket-pill ticket-pill-soft note-type-${meta.color}`}>{meta.label}</span>
     );
@@ -123,16 +125,18 @@ export function DueCell({
   dueDate,
   done,
   editable,
+  emptyLabel = '—',
   onChange,
 }: {
   dueDate: string | null;
   done: boolean;
   editable: boolean;
+  emptyLabel?: string;
   onChange: (date: string | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const tone = dueTone(dueDate, done);
-  const text = dueDate ? formatDue(dueDate) : <span className="ticket-empty">—</span>;
+  const text = dueDate ? formatDue(dueDate) : <span className="ticket-empty">{emptyLabel}</span>;
   if (!editable) return <span className={`ticket-due ${tone}`}>{text}</span>;
   return (
     <span className={`ticket-due ticket-due-edit ${tone}`}>

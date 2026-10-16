@@ -138,6 +138,7 @@ export function TicketBoardPage() {
           ticketKey={openKey}
           members={members}
           editable={editable}
+          onSelect={(key) => setParam('ticket', key)}
           onClose={() => setParam('ticket', null)}
         />
       ) : null}

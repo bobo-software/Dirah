@@ -100,22 +100,22 @@ export function TopbarSectionTabs() {
       )}
       {encrypted ? null : (
         <Link
-          to={`/w/${workspaceId}/tasks`}
-          className={section === 'tasks' ? 'topbar-tab active' : 'topbar-tab'}
-          aria-current={section === 'tasks' ? 'page' : undefined}
-        >
-          <TasksIcon />
-          Tasks
-        </Link>
-      )}
-      {encrypted ? null : (
-        <Link
           to={`/w/${workspaceId}/tickets`}
           className={section === 'tickets' ? 'topbar-tab active' : 'topbar-tab'}
           aria-current={section === 'tickets' ? 'page' : undefined}
         >
           <TicketsIcon />
           Tickets
+        </Link>
+      )}
+      {encrypted ? null : (
+        <Link
+          to={`/w/${workspaceId}/tasks`}
+          className={section === 'tasks' ? 'topbar-tab active' : 'topbar-tab'}
+          aria-current={section === 'tasks' ? 'page' : undefined}
+        >
+          <TasksIcon />
+          Tasks
         </Link>
       )}
     </nav>

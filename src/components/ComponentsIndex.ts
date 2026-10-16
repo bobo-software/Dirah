@@ -28,6 +28,11 @@ export type { PageStatus } from './docs/pageStatus';
 export { buildPageTree, draggedPageId, PageTree } from './docs/PageTree';
 export type { PageNode } from './docs/PageTree';
 
+export { BlobImage, ViewableImage } from './editor/BlobImage';
+export { ImageLightbox } from './editor/ImageLightbox';
+export { EmojiPicker } from './editor/EmojiPicker';
+export { RichMarkdownInput } from './editor/RichMarkdownInput';
+
 export { BrandLink, Logo } from './layout/Logo';
 export type { LogoSize } from './layout/Logo';
 export { AdminShell, RequireSystemAdmin } from './layout/AdminShell';
@@ -75,6 +80,8 @@ export { NotesBrowser } from './notes/NotesBrowser';
 export { NotesSidebarSection } from './notes/NotesSidebarSection';
 export { TasksSidebarSection } from './tasks/TasksSidebarSection';
 export { TicketsSidebarSection } from './tickets/TicketsSidebarSection';
+export { TicketDetailPanel } from './tickets/TicketDetailPanel';
+export { TicketViewer } from './tickets/viewer/TicketViewer';
 export { buildNoteTree } from './notes/noteTreeModel';
 export type { DropZone, NoteNode } from './notes/noteTreeModel';
 export { useNoteActions } from './notes/useNoteActions';
