@@ -8,11 +8,16 @@ export type WorkspaceOutlet = {
 };
 
 export function canEdit(role: string): boolean {
-  return role === 'owner' || role === 'editor';
+  return role === 'owner' || role === 'admin' || role === 'editor';
 }
 
+/** Owner-only: rename, encrypt, delete. */
 export function canAdmin(role: string): boolean {
   return role === 'owner';
+}
+
+export function canManageMembers(role: string): boolean {
+  return role === 'owner' || role === 'admin';
 }
 
 export type WorkspaceSection = 'notes' | 'docs' | 'tasks' | 'tickets';

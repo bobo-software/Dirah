@@ -1,6 +1,6 @@
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { AppearanceSection, McpTokensSection, MembersPanel, PreferencesSection } from '../components/ComponentsIndex';
-import { canAdmin, type WorkspaceOutlet } from './workspaceContext';
+import { canAdmin, canManageMembers, type WorkspaceOutlet } from './workspaceContext';
 
 type SettingsTab = 'appearance' | 'members' | 'preferences' | 'mcp';
 
@@ -15,7 +15,8 @@ export function SettingsPage() {
   const { workspaceId, role } = useOutletContext<WorkspaceOutlet>();
   const [searchParams, setSearchParams] = useSearchParams();
   const owner = canAdmin(role);
-  const tabs = ALL_TABS.filter((tab) => tab.id !== 'members' || owner);
+  const manager = canManageMembers(role);
+  const tabs = ALL_TABS.filter((tab) => tab.id !== 'members' || manager);
   const requestedTab = searchParams.get('tab');
   const activeTab = tabs.some((tab) => tab.id === requestedTab) ? (requestedTab as SettingsTab) : tabs[0].id;
 
@@ -47,7 +48,7 @@ export function SettingsPage() {
         <div className="settings-content">
           {activeTab === 'appearance' ? <AppearanceSection /> : null}
 
-          {activeTab === 'members' && owner ? <MembersPanel workspaceId={workspaceId} /> : null}
+          {activeTab === 'members' && manager ? <MembersPanel workspaceId={workspaceId} owner={owner} /> : null}
 
           {activeTab === 'preferences' ? <PreferencesSection /> : null}
 

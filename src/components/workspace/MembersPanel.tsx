@@ -3,7 +3,8 @@ import { confirmDelete } from '../layout/deleteDialogue';
 import { encryptWorkspace, isUnlocked, provisionAccount, syncMemberKeys, useEncryptionStore } from '../../crypto/workspaceCrypto';
 import { EMPTY_INVITES, EMPTY_MEMBERS, useAuthStore, useMarkdownContentStore, useMembersStore, useWorkspaceStore } from '../../stores/StoresIndex';
 
-export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
+/** Owners and admins see this panel; `owner` unlocks encryption and owner rows. */
+export default function MembersPanel({ workspaceId, owner }: { workspaceId: string; owner: boolean }) {
   const members = useMembersStore((state) => state.byWorkspace[workspaceId]?.members ?? EMPTY_MEMBERS);
   const invites = useMembersStore((state) => state.byWorkspace[workspaceId]?.invites ?? EMPTY_INVITES);
   const fetchMembers = useMembersStore((state) => state.fetchMembers);
@@ -96,7 +97,7 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
       </div>
       {encrypted && !sealError ? (
         <p className="muted">Pages are encrypted. Search, Ask, and public share are off for this workspace.</p>
-      ) : (
+      ) : owner ? (
         <form
           className="invite-form"
           onSubmit={(event) => {
@@ -128,54 +129,64 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
             </p>
           ) : null}
         </form>
-      )}
+      ) : null}
       <ul className="member-list">
-        {members.map((member) => (
-          <li key={member.userId}>
-            <span className="member-email">
-              {member.name?.trim() ? (
-                <>
-                  {member.name}
-                  <span className="member-email-sub">{member.email}</span>
-                </>
+        {members.map((member) => {
+          const locked = !owner && member.role === 'owner';
+          return (
+            <li key={member.userId}>
+              <span className="member-email">
+                {member.name?.trim() ? (
+                  <>
+                    {member.name}
+                    <span className="member-email-sub">{member.email}</span>
+                  </>
+                ) : (
+                  member.email
+                )}
+              </span>
+              {locked ? (
+                <span className="muted">owner</span>
               ) : (
-                member.email
+                <select
+                  aria-label={`Role for ${member.email}`}
+                  value={member.role}
+                  onChange={(event) => {
+                    void setMemberRole(workspaceId, member.userId, event.target.value).catch((error: unknown) => {
+                      setMessage(error instanceof Error ? error.message : 'Could not change role');
+                    });
+                  }}
+                >
+                  {owner ? <option value="owner">owner</option> : null}
+                  <option value="admin">admin</option>
+                  <option value="editor">editor</option>
+                  <option value="viewer">viewer</option>
+                </select>
               )}
-            </span>
-            <select
-              aria-label={`Role for ${member.email}`}
-              value={member.role}
-              onChange={(event) => {
-                void setMemberRole(workspaceId, member.userId, event.target.value).catch((error: unknown) => {
-                  setMessage(error instanceof Error ? error.message : 'Could not change role');
-                });
-              }}
-            >
-              <option value="owner">owner</option>
-              <option value="editor">editor</option>
-              <option value="viewer">viewer</option>
-            </select>
-            <button
-              type="button"
-              className="linkish danger"
-              onClick={() => {
-                const label = member.name?.trim() || member.email;
-                void confirmDelete({
-                  title: 'Remove member?',
-                  message: `Remove ${label} from this workspace?`,
-                  confirmLabel: 'Remove',
-                }).then((confirmed) => {
-                  if (!confirmed) return;
-                  void removeMember(workspaceId, member.userId).catch((error: unknown) => {
-                    setMessage(error instanceof Error ? error.message : 'Could not remove');
-                  });
-                });
-              }}
-            >
-              Remove
-            </button>
-          </li>
-        ))}
+              {locked ? null : (
+                <button
+                  type="button"
+                  className="linkish danger"
+                  onClick={() => {
+                    const label = member.name?.trim() || member.email;
+                    void confirmDelete({
+                      title: 'Remove member?',
+                      message: `Remove ${label} from this workspace?`,
+                      confirmLabel: 'Remove',
+                    }).then((confirmed) => {
+                      if (!confirmed) return;
+                      void removeMember(workspaceId, member.userId).catch((error: unknown) => {
+                        setMessage(error instanceof Error ? error.message : 'Could not remove');
+                      });
+                    });
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </li>
+          );
+        })}
         {invites.map((invite) => (
           <li key={invite.id} className="pending-invite">
             <span className="member-email">{invite.email}</span>
@@ -216,6 +227,7 @@ export default function MembersPanel({ workspaceId }: { workspaceId: string }) {
           aria-label="Invite email"
         />
         <select value={role} onChange={(event) => setRole(event.target.value)} aria-label="Invite role">
+          <option value="admin">admin</option>
           <option value="editor">editor</option>
           <option value="viewer">viewer</option>
         </select>
