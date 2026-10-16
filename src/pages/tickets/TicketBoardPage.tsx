@@ -8,6 +8,8 @@ import { CreateTicketModal, type NewTicketDefaults } from '../../components/tick
 import { TicketDetailPanel } from '../../components/tickets/TicketDetailPanel';
 import { TicketKanbanView } from '../../components/tickets/TicketKanbanView';
 import { TicketTableView } from '../../components/tickets/TicketTableView';
+import { TICKET_POLL_MS } from '../../components/tickets/ticketMeta';
+import { useVisiblePoll } from '../../hooks/useVisiblePoll';
 import { EMPTY_MEMBERS, useMembersStore, useTicketStore, useWorkspaceStore } from '../../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from '../workspaceContext';
 
@@ -21,6 +23,7 @@ export function TicketBoardPage() {
   const workspace = useWorkspaceStore((state) => state.workspaces.find((item) => item.id === workspaceId));
   const view = useTicketStore((state) => state.views[boardId]);
   const fetchBoard = useTicketStore((state) => state.fetchBoard);
+  const refreshBoard = useTicketStore((state) => state.refreshBoard);
   const members = useMembersStore((state) => state.byWorkspace[workspaceId]?.members ?? EMPTY_MEMBERS);
   const fetchMembers = useMembersStore((state) => state.fetchMembers);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +44,9 @@ export function TicketBoardPage() {
   useEffect(() => {
     void fetchMembers(workspaceId).catch(() => undefined);
   }, [workspaceId, fetchMembers]);
+
+  // Other people's changes show up without a reload.
+  useVisiblePoll(() => refreshBoard(boardId), TICKET_POLL_MS, Boolean(view));
 
   if (workspace?.encrypted) {
     return <Navigate to={`/w/${workspaceId}/docs`} replace />;

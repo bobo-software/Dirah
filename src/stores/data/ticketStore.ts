@@ -38,6 +38,14 @@ type TicketState = {
   fetchBoards: (workspaceId: string) => Promise<TicketBoard[]>;
   createBoard: (workspaceId: string, input: { name?: string; key?: string }) => Promise<TicketBoardView>;
   fetchBoard: (boardId: string) => Promise<TicketBoardView>;
+  /**
+   * Background refetch for polling. Skipped while a local write or drag is in
+   * flight, and dropped if one started meanwhile, so it never undoes an
+   * optimistic update.
+   */
+  refreshBoard: (boardId: string) => Promise<void>;
+  /** The board views call this on drag start and end. */
+  setDragging: (boardId: string, dragging: boolean) => void;
   patchBoard: (boardId: string, input: BoardPatch) => Promise<TicketBoard>;
   deleteBoard: (boardId: string) => Promise<void>;
   createTicket: (boardId: string, input: TicketPatch & { title: string }) => Promise<Ticket>;
@@ -138,6 +146,29 @@ export function applyTicketMove(view: TicketBoardView, ticketId: string, move: T
   return withCounts({ ...view, tickets });
 }
 
+// Local writes and drags per board, for refreshBoard. Not state: nothing renders from them.
+const inFlight = new Map<string, number>();
+const dragging = new Set<string>();
+const localEdits = new Map<string, number>();
+
+function quiet(boardId: string): boolean {
+  return !inFlight.get(boardId) && !dragging.has(boardId);
+}
+
+function touch(boardId: string) {
+  localEdits.set(boardId, (localEdits.get(boardId) ?? 0) + 1);
+}
+
+async function tracked<T>(boardId: string, run: () => Promise<T>): Promise<T> {
+  touch(boardId);
+  inFlight.set(boardId, (inFlight.get(boardId) ?? 0) + 1);
+  try {
+    return await run();
+  } finally {
+    inFlight.set(boardId, (inFlight.get(boardId) ?? 1) - 1);
+  }
+}
+
 export const useTicketStore = create<TicketState>((set, get) => {
   /** Stores a board view and keeps the workspace summary in step with it. */
   function putView(view: TicketBoardView) {
@@ -195,6 +226,23 @@ export const useTicketStore = create<TicketState>((set, get) => {
       return view;
     },
 
+    refreshBoard: async (boardId) => {
+      if (!quiet(boardId)) return;
+      const edits = localEdits.get(boardId) ?? 0;
+      const view = await getTicketBoard(token(), boardId);
+      if (!quiet(boardId) || (localEdits.get(boardId) ?? 0) !== edits) return;
+      putView(view);
+    },
+
+    setDragging: (boardId, on) => {
+      if (on) {
+        touch(boardId);
+        dragging.add(boardId);
+      } else {
+        dragging.delete(boardId);
+      }
+    },
+
     patchBoard: async (boardId, input) => {
       const board = await patchTicketBoard(token(), boardId, input);
       const view = get().views[boardId];
@@ -226,80 +274,92 @@ export const useTicketStore = create<TicketState>((set, get) => {
       });
     },
 
-    createTicket: async (boardId, input) => {
-      const ticket = await createTicket(token(), boardId, input);
-      putTicket(boardId, ticket);
-      return ticket;
-    },
+    createTicket: (boardId, input) =>
+      tracked(boardId, async () => {
+        const ticket = await createTicket(token(), boardId, input);
+        putTicket(boardId, ticket);
+        return ticket;
+      }),
 
     // Optimistic: cell edits should feel instant; the server copy replaces the guess.
-    patchTicket: async (boardId, ticketId, input) => {
-      const previous = get().views[boardId]?.tickets.find((ticket) => ticket.id === ticketId);
-      if (previous) putTicket(boardId, { ...previous, ...input });
-      try {
-        const saved = await patchTicket(token(), ticketId, input);
-        putTicket(boardId, saved);
-        return saved;
-      } catch (error) {
-        if (previous) putTicket(boardId, previous);
-        throw error;
-      }
-    },
+    patchTicket: (boardId, ticketId, input) =>
+      tracked(boardId, async () => {
+        const previous = get().views[boardId]?.tickets.find((ticket) => ticket.id === ticketId);
+        if (previous) putTicket(boardId, { ...previous, ...input });
+        try {
+          const saved = await patchTicket(token(), ticketId, input);
+          putTicket(boardId, saved);
+          return saved;
+        } catch (error) {
+          if (previous) putTicket(boardId, previous);
+          throw error;
+        }
+      }),
 
-    moveTicket: async (boardId, ticketId, move) => {
-      const previous = updateView(boardId, (view) => applyTicketMove(view, ticketId, move));
-      try {
-        putView(await moveTicket(token(), ticketId, move));
-      } catch (error) {
-        if (previous) putView(previous);
-        throw error;
-      }
-    },
+    moveTicket: (boardId, ticketId, move) =>
+      tracked(boardId, async () => {
+        const previous = updateView(boardId, (view) => applyTicketMove(view, ticketId, move));
+        try {
+          putView(await moveTicket(token(), ticketId, move));
+        } catch (error) {
+          if (previous) putView(previous);
+          throw error;
+        }
+      }),
 
-    deleteTicket: async (boardId, ticketId) => {
-      await deleteTicket(token(), ticketId);
-      updateView(boardId, (view) => ({ ...view, tickets: view.tickets.filter((ticket) => ticket.id !== ticketId) }));
-    },
+    deleteTicket: (boardId, ticketId) =>
+      tracked(boardId, async () => {
+        await deleteTicket(token(), ticketId);
+        updateView(boardId, (view) => ({ ...view, tickets: view.tickets.filter((ticket) => ticket.id !== ticketId) }));
+      }),
 
     rememberTicket: (ticket) => putTicket(ticket.boardId, ticket),
 
-    createStatus: async (boardId, input) => {
-      const status = await createTicketStatus(token(), boardId, input);
-      updateView(boardId, (view) => ({ ...view, statuses: upsert(view.statuses, status) }));
-    },
+    createStatus: (boardId, input) =>
+      tracked(boardId, async () => {
+        const status = await createTicketStatus(token(), boardId, input);
+        updateView(boardId, (view) => ({ ...view, statuses: upsert(view.statuses, status) }));
+      }),
 
-    patchStatus: async (boardId, statusId, input) => {
-      const status = await patchTicketStatus(token(), statusId, input);
-      updateView(boardId, (view) => ({ ...view, statuses: upsert(view.statuses, status) }));
-    },
+    patchStatus: (boardId, statusId, input) =>
+      tracked(boardId, async () => {
+        const status = await patchTicketStatus(token(), statusId, input);
+        updateView(boardId, (view) => ({ ...view, statuses: upsert(view.statuses, status) }));
+      }),
 
-    deleteStatus: async (_boardId, statusId, moveTo) => {
-      putView(await deleteTicketStatus(token(), statusId, moveTo));
-    },
+    deleteStatus: (boardId, statusId, moveTo) =>
+      tracked(boardId, async () => {
+        putView(await deleteTicketStatus(token(), statusId, moveTo));
+      }),
 
-    orderStatuses: async (boardId, ids) => {
-      const statuses = await orderTicketStatuses(token(), boardId, ids);
-      updateView(boardId, (view) => ({ ...view, statuses }));
-    },
+    orderStatuses: (boardId, ids) =>
+      tracked(boardId, async () => {
+        const statuses = await orderTicketStatuses(token(), boardId, ids);
+        updateView(boardId, (view) => ({ ...view, statuses }));
+      }),
 
-    createGroup: async (boardId, input) => {
-      const group = await createTicketGroup(token(), boardId, input);
-      updateView(boardId, (view) => ({ ...view, groups: upsert(view.groups, group) }));
-    },
+    createGroup: (boardId, input) =>
+      tracked(boardId, async () => {
+        const group = await createTicketGroup(token(), boardId, input);
+        updateView(boardId, (view) => ({ ...view, groups: upsert(view.groups, group) }));
+      }),
 
-    patchGroup: async (boardId, groupId, input) => {
-      const group = await patchTicketGroup(token(), groupId, input);
-      updateView(boardId, (view) => ({ ...view, groups: upsert(view.groups, group) }));
-    },
+    patchGroup: (boardId, groupId, input) =>
+      tracked(boardId, async () => {
+        const group = await patchTicketGroup(token(), groupId, input);
+        updateView(boardId, (view) => ({ ...view, groups: upsert(view.groups, group) }));
+      }),
 
-    deleteGroup: async (_boardId, groupId, moveTo) => {
-      putView(await deleteTicketGroup(token(), groupId, moveTo));
-    },
+    deleteGroup: (boardId, groupId, moveTo) =>
+      tracked(boardId, async () => {
+        putView(await deleteTicketGroup(token(), groupId, moveTo));
+      }),
 
-    orderGroups: async (boardId, ids) => {
-      const groups = await orderTicketGroups(token(), boardId, ids);
-      updateView(boardId, (view) => ({ ...view, groups }));
-    },
+    orderGroups: (boardId, ids) =>
+      tracked(boardId, async () => {
+        const groups = await orderTicketGroups(token(), boardId, ids);
+        updateView(boardId, (view) => ({ ...view, groups }));
+      }),
 
     reset: () => set({ byWorkspace: {}, loadedWorkspaces: new Set(), views: {} }),
   };

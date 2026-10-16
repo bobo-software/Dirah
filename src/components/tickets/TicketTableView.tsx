@@ -1,4 +1,4 @@
-import { useState, type DragEvent } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
 import type { PublicMember } from '../../api/members';
 import type { Ticket, TicketBoardView, TicketGroup, TicketPatch } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
@@ -39,11 +39,15 @@ export function TicketTableView({
 }) {
   const patchTicket = useTicketStore((state) => state.patchTicket);
   const moveTicket = useTicketStore((state) => state.moveTicket);
+  const setDragging = useTicketStore((state) => state.setDragging);
   const createGroup = useTicketStore((state) => state.createGroup);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
   const boardId = view.board.id;
+
+  // A drag cut short by unmounting must not leave polling paused.
+  useEffect(() => () => setDragging(boardId, false), [boardId, setDragging]);
   const filtering = filter.trim().length > 0;
   const canDrag = editable && !filtering;
   const groups = [...view.groups].sort((a, b) => a.position - b.position);
@@ -68,6 +72,7 @@ export function TicketTableView({
     const target = drop?.groupId === groupId ? drop : { groupId, targetId: null, after: true };
     setDrop(null);
     setDragId(null);
+    setDragging(boardId, false);
     if (!draggedId) return;
     const position = insertionIndex(ticketsIn(groupId), draggedId, target.targetId, target.after);
     const current = view.tickets.find((ticket) => ticket.id === draggedId);
@@ -146,9 +151,11 @@ export function TicketTableView({
                           event.dataTransfer.setData(ROW_DRAG, ticket.id);
                           event.dataTransfer.effectAllowed = 'move';
                           setDragId(ticket.id);
+                          setDragging(boardId, true);
                         }}
                         onDragEnd={() => {
                           setDragId(null);
+                          setDragging(boardId, false);
                           setDrop(null);
                         }}
                         onDragOver={(event) => {

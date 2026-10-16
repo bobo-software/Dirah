@@ -1,6 +1,9 @@
 import type { PublicMember } from '../../api/members';
 import type { Ticket, TicketActivity, TicketPriority } from '../../api/tickets';
 
+/** How often an open board, ticket drawer and the Tickets home refetch. */
+export const TICKET_POLL_MS = 15_000;
+
 export const PRIORITY_META: Record<TicketPriority, { label: string; color: string }> = {
   none: { label: 'No priority', color: 'gray' },
   low: { label: 'Low', color: 'teal' },

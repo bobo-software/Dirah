@@ -1,9 +1,10 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { searchTickets, type TicketSearchResult } from '../../api/tickets';
 import { categoryHue } from '../../components/docs/categoryColor';
 import { CreateBoardModal } from '../../components/tickets/BoardModals';
-import { dueTone, formatDue, PRIORITY_META } from '../../components/tickets/ticketMeta';
+import { dueTone, formatDue, PRIORITY_META, TICKET_POLL_MS } from '../../components/tickets/ticketMeta';
+import { useVisiblePoll } from '../../hooks/useVisiblePoll';
 import { EMPTY_TICKET_BOARDS, useAuthStore, useTicketStore, useWorkspaceStore } from '../../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from '../workspaceContext';
 
@@ -20,17 +21,27 @@ export function TicketsPage() {
   const [error, setError] = useState<string | null>(null);
   const editable = canEdit(role);
 
+  const enabled = Boolean(accessToken) && !workspace?.encrypted;
+  const loadMine = useCallback(
+    (isCancelled: () => boolean = () => false) =>
+      searchTickets(accessToken ?? '', workspaceId, { assignee: 'me', state: 'open' }).then(
+        (tickets) => !isCancelled() && setMine(tickets),
+        (err: unknown) => !isCancelled() && setError(err instanceof Error ? err.message : 'Could not load your tickets')
+      ),
+    [accessToken, workspaceId]
+  );
+
   useEffect(() => {
-    if (!accessToken || workspace?.encrypted) return;
+    if (!enabled) return;
     let cancelled = false;
-    searchTickets(accessToken, workspaceId, { assignee: 'me', state: 'open' }).then(
-      (tickets) => !cancelled && setMine(tickets),
-      (err: unknown) => !cancelled && setError(err instanceof Error ? err.message : 'Could not load your tickets')
-    );
+    void loadMine(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [accessToken, workspaceId, workspace?.encrypted]);
+  }, [enabled, loadMine]);
+
+  // Coming back to the tab shows work assigned meanwhile.
+  useVisiblePoll(() => loadMine(), TICKET_POLL_MS, enabled);
 
   if (workspace?.encrypted) {
     return <Navigate to={`/w/${workspaceId}/docs`} replace />;

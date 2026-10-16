@@ -1,4 +1,4 @@
-import { useState, type DragEvent } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
 import type { PublicMember } from '../../api/members';
 import type { Ticket, TicketBoardView } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
@@ -35,9 +35,13 @@ export function TicketKanbanView({
   onError: (message: string) => void;
 }) {
   const moveTicket = useTicketStore((state) => state.moveTicket);
+  const setDragging = useTicketStore((state) => state.setDragging);
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
   const boardId = view.board.id;
+
+  // A drag cut short by unmounting must not leave polling paused.
+  useEffect(() => () => setDragging(boardId, false), [boardId, setDragging]);
   const canDrag = editable && !filter.trim();
   const statuses = [...view.statuses].sort((a, b) => a.position - b.position);
   const byId = new Map(members.map((member) => [member.userId, member]));
@@ -54,6 +58,7 @@ export function TicketKanbanView({
     const target = drop?.statusId === statusId ? drop : { statusId, targetId: null, after: true };
     setDrop(null);
     setDragId(null);
+    setDragging(boardId, false);
     if (!draggedId) return;
     const column = ticketsIn(statusId);
     const statusPosition = insertionIndex(column, draggedId, target.targetId, target.after);
@@ -104,9 +109,11 @@ export function TicketKanbanView({
                       event.dataTransfer.setData(CARD_DRAG, ticket.id);
                       event.dataTransfer.effectAllowed = 'move';
                       setDragId(ticket.id);
+                      setDragging(boardId, true);
                     }}
                     onDragEnd={() => {
                       setDragId(null);
+                      setDragging(boardId, false);
                       setDrop(null);
                     }}
                     onDragOver={(event) => {
