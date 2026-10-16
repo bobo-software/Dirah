@@ -28,6 +28,8 @@ describe('workspace page encryption', () => {
       dbReady = true;
     } catch (error) {
       console.warn('Skipping workspace encryption API tests: database unavailable', error);
+      // Set ALLOW_DB_SKIP=1 to run without Postgres; otherwise a missing database must fail, not pass.
+      if (process.env.ALLOW_DB_SKIP !== '1') throw error;
     }
     app = await createApp();
   });
