@@ -295,6 +295,39 @@ button.linkish {
   padding-top: 1.75rem;
 }
 
+.invite-eyebrow {
+  margin: 0 0 0.25rem;
+  font-family: var(--ui);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.invite-card h1 {
+  margin-top: 0;
+}
+
+/* Info tag on the invite page: needs an account, or signed in as someone else. */
+.invite-info {
+  margin: 1rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--accent-soft-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--text-h);
+  font-size: 0.95rem;
+}
+
+.invite-card > button,
+.invite-card > .invite-primary {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  font-weight: 500;
+}
+
 .auth-card-corner {
   position: absolute;
   top: 1rem;

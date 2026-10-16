@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
 import { readReturnTo } from '../utils/returnTo';
@@ -11,10 +11,20 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [email, setEmail] = useState('');
+  // An invite hands over the invited address so the person only types a password.
+  const [email, setEmail] = useState(() => (location.state as { email?: string } | null)?.email ?? '');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState<string | null>(searchParams.get('oauth'));
   const [busy, setBusy] = useState(false);
+  // login() sets the user before it finishes unlocking keys, so the render below
+  // may already have redirected; a second navigate would replay the target page.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   if (!ready) return <p className="muted">Loading…</p>;
   if (user) {
@@ -28,6 +38,7 @@ export function LoginPage() {
     setMessage(null);
     try {
       await login(email, password);
+      if (!mounted.current) return;
       const from = (location.state as { from?: string } | null)?.from ?? readReturnTo();
       navigate(from ?? '/');
     } catch (error) {
