@@ -24,6 +24,14 @@ import type { AdminService } from '../services/AdminService';
 import type { NoteService } from '../services/NoteService';
 import { createTaskItemRouter, createTaskListRouter } from './task.routes';
 import type { TaskListService } from '../services/TaskListService';
+import {
+  createTicketBoardRouter,
+  createTicketCommentRouter,
+  createTicketGroupRouter,
+  createTicketRouter,
+  createTicketStatusRouter,
+} from './ticket.routes';
+import type { TicketService } from '../services/TicketService';
 import { createMcpSettingsRouter } from './mcpSettings.routes';
 import { createMcpOAuthApproveRouter } from './mcpOAuth.routes';
 
@@ -41,12 +49,13 @@ export function createApiRouter(
   systemAdminAuthService: SystemAdminAuthService,
   adminService: AdminService,
   noteService: NoteService,
-  taskListService: TaskListService
+  taskListService: TaskListService,
+  ticketService: TicketService
 ): Router {
   const router = Router();
   router.use('/health', healthRouter);
   router.use('/auth', createAuthRouter(authService, cryptoService, oauthService));
-  router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, noteService, taskListService, mcpTokenService));
+  router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, noteService, taskListService, ticketService, mcpTokenService));
   router.use('/pages', createPageRouter(pageService, shareService));
   router.use('/notes', createNoteRouter(noteService));
   router.use('/kanban-columns', createKanbanColumnRouter(noteService));
@@ -54,6 +63,11 @@ export function createApiRouter(
   router.use('/note-tags', createNoteTagRouter(noteService));
   router.use('/task-lists', createTaskListRouter(taskListService));
   router.use('/task-list-items', createTaskItemRouter(taskListService));
+  router.use('/ticket-boards', createTicketBoardRouter(ticketService));
+  router.use('/ticket-statuses', createTicketStatusRouter(ticketService));
+  router.use('/ticket-groups', createTicketGroupRouter(ticketService));
+  router.use('/tickets', createTicketRouter(ticketService));
+  router.use('/ticket-comments', createTicketCommentRouter(ticketService));
   router.use('/blobs', createBlobRouter(blobService));
   router.use('/public', createPublicRouter(shareService, blobService));
   router.use('/invites', createInviteRouter(memberService));

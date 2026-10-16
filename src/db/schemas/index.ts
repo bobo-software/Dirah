@@ -7,6 +7,15 @@ export { markdownBodies } from './markdown';
 export { pageFavorites } from './pageFavorites';
 export { notes, noteTags, noteTagLinks, kanbanColumns, kanbanCards, noteLinks } from './notes';
 export { taskLists, taskListItems } from './tasks';
+export {
+  ticketBoards,
+  ticketStatuses,
+  ticketGroups,
+  tickets,
+  ticketAssignees,
+  ticketComments,
+  ticketActivity,
+} from './tickets';
 export { blobs } from './docs';
 export { shareLinks } from './shareLinks';
 export { workspaceInvites } from './invites';

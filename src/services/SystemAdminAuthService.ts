@@ -130,14 +130,28 @@ export class SystemAdminAuthService {
       return false;
     }
 
-    const existing = await this.database.select({ id: systemAdmins.id }).from(systemAdmins).limit(1);
-    if (existing.length > 0) {
-      return false;
+    const [existing] = await this.database
+      .select({ id: systemAdmins.id, passwordHash: systemAdmins.passwordHash })
+      .from(systemAdmins)
+      .where(eq(systemAdmins.email, email))
+      .limit(1);
+
+    if (!existing) {
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      await this.database.insert(systemAdmins).values({ email, passwordHash });
+      console.log(`Bootstrapped system admin ${email}`);
+      return true;
     }
 
+    const matches = await bcrypt.compare(password, existing.passwordHash);
+    if (matches) return false;
+
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    await this.database.insert(systemAdmins).values({ email, passwordHash });
-    console.log(`Bootstrapped system admin ${email}`);
+    await this.database
+      .update(systemAdmins)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(systemAdmins.id, existing.id));
+    console.log(`Updated system admin password for ${email}`);
     return true;
   }
 

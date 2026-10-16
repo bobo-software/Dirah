@@ -10,10 +10,15 @@ import {
   setRefreshCookie,
   withRefreshCookie,
 } from '../auth/sessionCookie';
+import { sendTestEmail } from '../mail/inviteMailer';
 
 const credentialsSchema = z.object({
   email: z.string().min(1),
   password: z.string().min(1),
+});
+
+const testEmailSchema = z.object({
+  to: z.string().trim().min(3),
 });
 
 const paginationSchema = z.object({
@@ -93,6 +98,19 @@ export function createAdminController(
       }
       const result = await adminService.listEmails(parsed.data.page, parsed.data.pageSize);
       return ResponseUtils.success(res, 'ok', result);
+    }),
+
+    sendTestEmail: asyncHandler(async (req: Request, res: Response) => {
+      const parsed = testEmailSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'A valid email is required', parsed.error.flatten(), 400);
+      }
+      const to = parsed.data.to.toLowerCase();
+      if (!to.includes('@')) {
+        return ResponseUtils.error(res, 'A valid email is required', 'INVALID_EMAIL', 400);
+      }
+      await sendTestEmail(to);
+      return ResponseUtils.success(res, 'Test email sent', { to });
     }),
 
     requestLogs: asyncHandler(async (req: Request, res: Response) => {

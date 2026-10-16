@@ -6,6 +6,7 @@ import { createMemberController } from '../controllers/member.controller';
 import { createCryptoController } from '../controllers/crypto.controller';
 import { createNoteController } from '../controllers/note.controller';
 import { createTaskController } from '../controllers/task.controller';
+import { createTicketController } from '../controllers/ticket.controller';
 import type { AuthService } from '../services/AuthService';
 import type { PageService } from '../services/PageService';
 import type { BlobService } from '../services/BlobService';
@@ -14,6 +15,7 @@ import type { CryptoService } from '../services/CryptoService';
 import type { McpTokenService } from '../services/McpTokenService';
 import type { NoteService } from '../services/NoteService';
 import type { TaskListService } from '../services/TaskListService';
+import type { TicketService } from '../services/TicketService';
 import { requireAuth } from '../middlewares/auth';
 
 export function createWorkspaceRouter(
@@ -24,6 +26,7 @@ export function createWorkspaceRouter(
   cryptoService: CryptoService,
   noteService: NoteService,
   taskListService: TaskListService,
+  ticketService: TicketService,
   mcpTokenService?: McpTokenService
 ): Router {
   const router = Router();
@@ -34,6 +37,7 @@ export function createWorkspaceRouter(
   const crypto = createCryptoController(cryptoService);
   const notes = createNoteController(noteService);
   const tasks = createTaskController(taskListService);
+  const tickets = createTicketController(ticketService);
 
   router.use(requireAuth);
   router.get('/', controller.list);
@@ -46,6 +50,10 @@ export function createWorkspaceRouter(
   router.post('/:id/note-tags', notes.createTag);
   router.get('/:id/task-lists', tasks.list);
   router.post('/:id/task-lists', tasks.create);
+  router.get('/:id/ticket-boards', tickets.listBoards);
+  router.post('/:id/ticket-boards', tickets.createBoard);
+  router.get('/:id/tickets', tickets.search);
+  router.get('/:id/tickets/by-key/:key', tickets.getByKey);
   router.get('/:id/blobs', blobs.list);
   router.get('/:id/blobs/:blobId', blobs.downloadInWorkspace);
   router.post('/:id/blobs', raw({ type: '*/*', limit: '12mb' }), blobs.upload);
