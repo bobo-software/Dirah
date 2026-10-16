@@ -7,6 +7,7 @@ import {
   HomeIcon,
   NotesSidebarSection,
   TasksSidebarSection,
+  TicketsSidebarSection,
   PageTree,
   Sidebar,
   buildPageTree,
@@ -27,6 +28,7 @@ export function WorkspaceShellPage() {
   const isNote = Boolean(useMatch('/w/:workspaceId/n/:noteId'));
   const isCollection = Boolean(useMatch('/w/:workspaceId/collection'));
   const isTasks = Boolean(useMatch('/w/:workspaceId/tasks/*'));
+  const isTickets = Boolean(useMatch('/w/:workspaceId/tickets/*'));
   const isSettings = Boolean(useMatch('/w/:workspaceId/settings/*'));
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
@@ -201,6 +203,8 @@ export function WorkspaceShellPage() {
           <NotesSidebarSection workspaceId={workspaceId} noteId={noteId} />
         ) : section === 'tasks' ? (
           <TasksSidebarSection workspaceId={workspaceId} />
+        ) : section === 'tickets' ? (
+          <TicketsSidebarSection workspaceId={workspaceId} editable={editable} />
         ) : (
           <>
             <NavLink className="sidebar-home" to={`/w/${workspaceId}/docs`} end>
@@ -293,7 +297,7 @@ export function WorkspaceShellPage() {
               <line x1="3.5" y1="12" x2="20.5" y2="12" />
               <line x1="3.5" y1="17.5" x2="20.5" y2="17.5" />
             </svg>
-            {section === 'notes' ? 'Notes' : section === 'tasks' ? 'Tasks' : 'Pages'}
+            {section === 'notes' ? 'Notes' : section === 'tasks' ? 'Tasks' : section === 'tickets' ? 'Tickets' : 'Pages'}
           </button>
           {currentTitle ? (
             <span className="mobile-title">{currentTitle}</span>
@@ -307,11 +311,13 @@ export function WorkspaceShellPage() {
             <span className="mobile-title">Notes</span>
           ) : isTasks ? (
             <span className="mobile-title">Tasks</span>
+          ) : isTickets ? (
+            <span className="mobile-title">Tickets</span>
           ) : isSettings ? (
             <span className="mobile-title">Settings</span>
           ) : null}
         </div>
-        {pageId || isNotesHome || isDocsHome || isTrash || isCollection || isSettings || isNote || isTasks ? (
+        {pageId || isNotesHome || isDocsHome || isTrash || isCollection || isSettings || isNote || isTasks || isTickets ? (
           <Outlet
             context={{
               role: workspace.role,

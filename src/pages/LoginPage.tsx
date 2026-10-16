@@ -2,7 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
 import { readReturnTo } from '../utils/returnTo';
-import { BrandLink, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
+import { BrandLink, OAuthButtons, PasswordField, ThemeToggle } from '../components/ComponentsIndex';
 
 export function LoginPage() {
   const user = useAuthStore((state) => state.user);
@@ -59,16 +59,7 @@ export function LoginPage() {
               required
             />
           </label>
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
+          <PasswordField value={password} onChange={setPassword} />
           {message ? <p className="error">{message}</p> : null}
           <button type="submit" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'}

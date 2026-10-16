@@ -8,6 +8,7 @@ import { useWorkspaceStore } from './workspaceStore';
 import { usePageStore } from './pageStore';
 import { useNoteStore } from './noteStore';
 import { useTaskStore } from './taskStore';
+import { useTicketStore } from './ticketStore';
 
 export const REFRESH_KEY = 'dirah.refreshToken';
 
@@ -168,6 +169,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       usePageStore.getState().reset();
       useNoteStore.getState().reset();
       useTaskStore.getState().reset();
+      useTicketStore.getState().reset();
     }
   },
 }));

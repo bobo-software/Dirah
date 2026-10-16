@@ -4,6 +4,7 @@ export { useWorkspaceStore } from './data/workspaceStore';
 export { usePageStore, EMPTY_PAGES } from './data/pageStore';
 export { useNoteStore, EMPTY_NOTES } from './data/noteStore';
 export { useTaskStore, EMPTY_TASK_LISTS } from './data/taskStore';
+export { useTicketStore, EMPTY_TICKET_BOARDS, applyTicketMove } from './data/ticketStore';
 export { useMarkdownContentStore } from './data/markdownContentStore';
 export { useMembersStore, EMPTY_MEMBERS, EMPTY_INVITES } from './data/membersStore';
 export { useMcpStore } from './data/mcpStore';

@@ -10,7 +10,11 @@ export { McpAuditDetailModal } from './admin/McpAuditDetailModal';
 export { McpRequestsPanel } from './admin/McpRequestsPanel';
 export { RequestLogDetailModal } from './admin/RequestLogDetailModal';
 
+export { Button } from './buttons/Button';
+export type { ButtonProps, ButtonVariant } from './buttons/Button';
+
 export { OAuthButtons } from './auth/OAuthButtons';
+export { PasswordField } from './auth/PasswordField';
 export { ProfileMenu } from './auth/ProfileMenu';
 
 export { AskPanel } from './docs/AskPanel';
@@ -28,7 +32,7 @@ export { BrandLink, Logo } from './layout/Logo';
 export type { LogoSize } from './layout/Logo';
 export { AdminShell, RequireSystemAdmin } from './layout/AdminShell';
 export { AppFrame, RequireAuth } from './layout/AppFrame';
-export { BackIcon, DocsIcon, HomeIcon, KeyIcon, NotesIcon, PlusIcon, TasksIcon } from './layout/SectionIcons';
+export { BackIcon, DocsIcon, HomeIcon, KeyIcon, NotesIcon, PlusIcon, SettingsIcon, TasksIcon, TicketsIcon } from './layout/SectionIcons';
 export { default as Sidebar, useSidebarDrawer } from './layout/Sidebar';
 export { SiteFooter } from './layout/SiteFooter';
 export { ThemeToggle } from './layout/ThemeToggle';
@@ -70,6 +74,7 @@ export { TableOptionsMenu } from './notes/table/TableOptionsMenu';
 export { NotesBrowser } from './notes/NotesBrowser';
 export { NotesSidebarSection } from './notes/NotesSidebarSection';
 export { TasksSidebarSection } from './tasks/TasksSidebarSection';
+export { TicketsSidebarSection } from './tickets/TicketsSidebarSection';
 export { buildNoteTree } from './notes/noteTreeModel';
 export type { DropZone, NoteNode } from './notes/noteTreeModel';
 export { useNoteActions } from './notes/useNoteActions';

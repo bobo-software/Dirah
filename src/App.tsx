@@ -42,6 +42,16 @@ const TaskListPage = lazy(async () => {
   return { default: mod.TaskListPage };
 });
 
+const TicketsPage = lazy(async () => {
+  const mod = await import('./pages/tickets/TicketsPage');
+  return { default: mod.TicketsPage };
+});
+
+const TicketBoardPage = lazy(async () => {
+  const mod = await import('./pages/tickets/TicketBoardPage');
+  return { default: mod.TicketBoardPage };
+});
+
 const ChecklistRunPage = lazy(async () => {
   const mod = await import('./pages/tasks/ChecklistRunPage');
   return { default: mod.ChecklistRunPage };
@@ -166,6 +176,22 @@ export default function App() {
                 element={
                   <Suspense fallback={<p className="muted">Loading…</p>}>
                     <ChecklistRunPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="tickets"
+                element={
+                  <Suspense fallback={<p className="muted">Loading tickets…</p>}>
+                    <TicketsPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="tickets/:boardId"
+                element={
+                  <Suspense fallback={<p className="muted">Loading board…</p>}>
+                    <TicketBoardPage />
                   </Suspense>
                 }
               />

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/StoresIndex';
 import { workspaceSection } from '../../pages/workspaceContext';
-import { DocsIcon, NotesIcon, PlusIcon, TasksIcon } from './SectionIcons';
+import { DocsIcon, NotesIcon, PlusIcon, TasksIcon, TicketsIcon } from './SectionIcons';
 import { clearLastWorkspaceId, setLastWorkspaceId } from '../workspace/lastWorkspace';
 import WorkspacesModal from '../workspace/WorkspacesModal';
 
@@ -106,6 +106,16 @@ export function TopbarSectionTabs() {
         >
           <TasksIcon />
           Tasks
+        </Link>
+      )}
+      {encrypted ? null : (
+        <Link
+          to={`/w/${workspaceId}/tickets`}
+          className={section === 'tickets' ? 'topbar-tab active' : 'topbar-tab'}
+          aria-current={section === 'tickets' ? 'page' : undefined}
+        >
+          <TicketsIcon />
+          Tickets
         </Link>
       )}
     </nav>

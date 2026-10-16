@@ -15,10 +15,11 @@ export function canAdmin(role: string): boolean {
   return role === 'owner';
 }
 
-export type WorkspaceSection = 'notes' | 'docs' | 'tasks';
+export type WorkspaceSection = 'notes' | 'docs' | 'tasks' | 'tickets';
 
-// Notes own the workspace root and /n/*, Tasks owns /tasks*; everything else (pages, collection, trash, settings) is Docs.
+// Notes own the workspace root and /n/*, Tasks owns /tasks*, Tickets owns /tickets*; everything else (pages, collection, trash, settings) is Docs.
 export function workspaceSection(pathname: string): WorkspaceSection {
   if (/^\/w\/[^/]+\/tasks(\/|$)/.test(pathname)) return 'tasks';
+  if (/^\/w\/[^/]+\/tickets(\/|$)/.test(pathname)) return 'tickets';
   return /^\/w\/[^/]+\/?$/.test(pathname) || /^\/w\/[^/]+\/n\//.test(pathname) ? 'notes' : 'docs';
 }
