@@ -5,7 +5,7 @@ import { db } from '../db';
 import { refreshTokens, userCrypto, users, workspaceMembers, workspaces } from '../db/schemas';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { HttpError } from '../utils/HttpError';
-import { canAdminMembers, canEdit } from '../authz/roles';
+import { canAdminMembers, canEdit, isOwner } from '../authz/roles';
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -485,9 +485,17 @@ export class AuthService {
     return workspace;
   }
 
-  async requireWorkspaceOwner(userId: string, workspaceId: string): Promise<PublicWorkspace> {
+  async requireMemberAdmin(userId: string, workspaceId: string): Promise<PublicWorkspace> {
     const workspace = await this.getWorkspace(userId, workspaceId);
     if (!canAdminMembers(workspace.role)) {
+      throw new HttpError('Forbidden', 403, 'FORBIDDEN');
+    }
+    return workspace;
+  }
+
+  async requireWorkspaceOwner(userId: string, workspaceId: string): Promise<PublicWorkspace> {
+    const workspace = await this.getWorkspace(userId, workspaceId);
+    if (!isOwner(workspace.role)) {
       throw new HttpError('Forbidden', 403, 'FORBIDDEN');
     }
     return workspace;
