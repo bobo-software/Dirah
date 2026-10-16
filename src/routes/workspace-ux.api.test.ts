@@ -58,6 +58,10 @@ describe('workspace UX API', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: viewerEmail, role: 'viewer' });
     expect(invited.status).toBe(201);
+    const inviteToken = String(invited.body.data.invite.inviteUrl).split('/invite/')[1];
+    expect(
+      (await request(app).post(`/api/invites/${inviteToken}/accept`).set('Authorization', `Bearer ${viewerToken}`).send({})).status
+    ).toBe(201);
 
     const parent = await request(app)
       .post(`/api/workspaces/${workspaceId}/pages`)
@@ -81,10 +85,28 @@ describe('workspace UX API', () => {
     const childRow = listed.body.data.pages.find((p: { id: string }) => p.id === childId);
     expect(childRow.parentId).toBe(parentId);
 
-    const cycle = await request(app)
+    // A markdown child cannot have children at all, so that is not a cycle.
+    const underMarkdown = await request(app)
       .patch(`/api/pages/${parentId}`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ parentId: childId });
+    expect(underMarkdown.status).toBe(400);
+    expect(underMarkdown.body.error).toBe('INVALID_PARENT');
+
+    // A real cycle needs folders. Built in the other workspace so this one's counts stay put.
+    const loopTop = await request(app)
+      .post(`/api/workspaces/${otherWorkspaceId}/pages`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ title: 'Loop top', kind: 'folder' });
+    const loopBottom = await request(app)
+      .post(`/api/workspaces/${otherWorkspaceId}/pages`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ title: 'Loop bottom', kind: 'folder', parentId: loopTop.body.data.page.id });
+    expect(loopBottom.status).toBe(201);
+    const cycle = await request(app)
+      .patch(`/api/pages/${loopTop.body.data.page.id}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ parentId: loopBottom.body.data.page.id });
     expect(cycle.status).toBe(400);
     expect(cycle.body.error).toBe('CYCLE');
 

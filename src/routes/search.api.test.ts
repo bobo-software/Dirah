@@ -58,6 +58,10 @@ describe('full-text search API', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: viewerEmail, role: 'viewer' });
     expect(invited.status).toBe(201);
+    const inviteToken = String(invited.body.data.invite.inviteUrl).split('/invite/')[1];
+    expect(
+      (await request(app).post(`/api/invites/${inviteToken}/accept`).set('Authorization', `Bearer ${viewerToken}`).send({})).status
+    ).toBe(201);
 
     const page = await request(app)
       .post(`/api/workspaces/${workspaceId}/pages`)

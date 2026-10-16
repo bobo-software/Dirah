@@ -64,12 +64,20 @@ describe('sharing API', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: editorEmail, role: 'editor' });
     expect(invitedEditor.status).toBe(201);
+    const editorInviteToken = String(invitedEditor.body.data.invite.inviteUrl).split('/invite/')[1];
+    expect(
+      (await request(app).post(`/api/invites/${editorInviteToken}/accept`).set('Authorization', `Bearer ${editorToken}`).send({})).status
+    ).toBe(201);
 
     const invitedViewer = await request(app)
       .post(`/api/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: viewerEmail, role: 'viewer' });
     expect(invitedViewer.status).toBe(201);
+    const viewerInviteToken = String(invitedViewer.body.data.invite.inviteUrl).split('/invite/')[1];
+    expect(
+      (await request(app).post(`/api/invites/${viewerInviteToken}/accept`).set('Authorization', `Bearer ${viewerToken}`).send({})).status
+    ).toBe(201);
 
     const editorSees = await request(app)
       .get(`/api/workspaces/${workspaceId}`)

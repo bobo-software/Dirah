@@ -69,10 +69,14 @@ describe('MCP PAT and allowlist API', () => {
       .post('/api/auth/register')
       .send({ email: viewerEmail, password });
     const viewerToken = viewer.body.data.tokens.accessToken as string;
-    await request(app)
+    const invited = await request(app)
       .post(`/api/workspaces/${workspaceId}/members`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: viewerEmail, role: 'viewer' });
+    const inviteToken = String(invited.body.data.invite.inviteUrl).split('/invite/')[1];
+    expect(
+      (await request(app).post(`/api/invites/${inviteToken}/accept`).set('Authorization', `Bearer ${viewerToken}`).send({})).status
+    ).toBe(201);
 
     // Under the per-token model, a viewer must have their own token before they
     // can grant it any access. This still verifies the core invariant: a viewer's
