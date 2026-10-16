@@ -1625,4 +1625,96 @@ describe('docs MCP protocol', () => {
     const found = await call('search_tickets', { q: 'billing', status: 'done' });
     expect((found.data as { key: string }[]).map((row) => row.key)).toEqual(['AGT-1']);
   });
+
+  it('manages boards, statuses, groups, ordering, deletes and comments over MCP', async () => {
+    if (!dbReady) return;
+    const email = `tickets-admin-mcp-${stamp}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+    const tokenRes = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'ticket-admin-agent' });
+    const secret = tokenRes.body.data.token.secret as string;
+    const tokenId = tokenRes.body.data.token.id as string;
+    await request(app)
+      .put(`/api/mcp/tokens/${tokenId}/access`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    const call = async (name: string, args: Record<string, unknown>) =>
+      toolResult(
+        await mcpPost(app, secret, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })
+      );
+    type Summary = { board: { key: string; name: string }; statuses: { name: string; category: string }[]; groups: { name: string }[] };
+
+    const created = await call('create_ticket_board', { name: 'Operations', key: 'ops' });
+    expect(created.success).toBe(true);
+    expect((created.data as Summary).board.key).toBe('OPS');
+    expect((created.data as Summary).statuses.map((status) => status.name)).toEqual(['To do', 'In progress', 'Blocked', 'Done']);
+
+    const renamed = await call('update_ticket_board', { board: 'OPS', name: 'Ops', description: 'Run the place' });
+    expect((renamed.data as Summary).board.name).toBe('Ops');
+
+    // A new status lands where asked; an existing one is updated in place.
+    const review = await call('save_ticket_status', { board: 'OPS', name: 'Review', category: 'doing', color: 'purple', position: 2 });
+    expect((review.data as Summary).statuses.map((status) => status.name)).toEqual([
+      'To do',
+      'In progress',
+      'Review',
+      'Blocked',
+      'Done',
+    ]);
+    const shipped = await call('save_ticket_status', { board: 'OPS', name: 'done', rename: 'Shipped' });
+    const statuses = (shipped.data as Summary).statuses;
+    expect(statuses.at(-1)).toMatchObject({ name: 'Shipped', category: 'done' });
+
+    const groups = await call('save_ticket_group', { board: 'OPS', name: 'Later', position: 0 });
+    expect((groups.data as Summary).groups[0].name).toBe('Later');
+
+    for (const title of ['One', 'Two', 'Three']) await call('create_ticket', { board: 'OPS', title });
+    const moved = await call('move_ticket', { key: 'OPS-3', status: 'Review', statusPosition: 0, group: 'Later' });
+    expect(moved.success).toBe(true);
+    expect(moved.data).toMatchObject({ key: 'OPS-3', status: 'Review', group: 'Later' });
+    const reordered = await call('move_ticket', { key: 'OPS-2', statusPosition: 0 });
+    expect(reordered.success).toBe(true);
+    const board = await call('read_ticket_board', { board: 'OPS' });
+    expect((board.data as { tickets: { key: string }[] }).tickets.map((row) => row.key)).toEqual(
+      expect.arrayContaining(['OPS-1', 'OPS-2', 'OPS-3'])
+    );
+    const noMove = await call('move_ticket', { key: 'OPS-1' });
+    expect(noMove.error).toBe('INVALID_MOVE');
+
+    // A status with tickets needs somewhere to send them.
+    const needsTarget = await call('delete_ticket_status', { board: 'OPS', name: 'Review' });
+    expect(needsTarget.error).toBe('MOVE_TARGET_REQUIRED');
+    const dropped = await call('delete_ticket_status', { board: 'OPS', name: 'Review', moveTo: 'Blocked' });
+    expect((dropped.data as Summary).statuses.map((status) => status.name)).not.toContain('Review');
+    expect((await call('read_ticket', { key: 'OPS-3' })).data).toMatchObject({ status: 'Blocked' });
+    const groupGone = await call('delete_ticket_group', { board: 'OPS', name: 'Later' });
+    expect((groupGone.data as Summary).groups.map((group) => group.name)).not.toContain('Later');
+
+    // Comments carry ids, and an id can't reach across tickets.
+    await call('comment_ticket', { key: 'OPS-1', body: 'First draft' });
+    const withComment = (await call('read_ticket', { key: 'OPS-1' })).data as { comments: { id: string; body: string }[] };
+    const commentId = withComment.comments[0].id;
+    const edited = await call('edit_ticket_comment', { key: 'OPS-1', commentId, body: 'Final' });
+    expect((edited.data as { comment: { body: string } }).comment.body).toBe('Final');
+    const crossTicket = await call('delete_ticket_comment', { key: 'OPS-2', commentId });
+    expect(crossTicket.error).toBe('COMMENT_NOT_FOUND');
+    expect((await call('delete_ticket_comment', { key: 'OPS-1', commentId })).success).toBe(true);
+    expect(((await call('read_ticket', { key: 'OPS-1' })).data as { comments: unknown[] }).comments).toEqual([]);
+
+    expect((await call('delete_ticket', { key: 'OPS-2' })).data).toEqual({ deleted: 'OPS-2' });
+    expect((await call('read_ticket', { key: 'OPS-2' })).success).toBe(false);
+    expect((await call('delete_ticket_board', { board: 'OPS' })).success).toBe(true);
+    expect((await call('list_ticket_boards', {})).data).toEqual([]);
+
+    // Audit rows now say which workspace the ticket tool touched.
+    const audited = await pool.query(
+      `select distinct workspace_id from mcp_audit where token_id = $1 and tool like '%ticket%'`,
+      [tokenId]
+    );
+    expect(audited.rows.map((row: { workspace_id: string | null }) => row.workspace_id)).toEqual([workspaceId]);
+  });
 });

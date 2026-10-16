@@ -171,6 +171,8 @@ export interface TicketSearchFilter {
   boardId?: string;
   /** A status category, or "open" for anything not done. */
   state?: TicketStatusCategory | 'open';
+  /** A status name, case-insensitive. Filtered in SQL so the limit applies after it. */
+  statusName?: string;
   limit?: number;
 }
 
@@ -815,6 +817,7 @@ export class TicketService {
     if (filter.boardId) conditions.push(eq(tickets.boardId, filter.boardId));
     if (filter.state === 'open') conditions.push(ne(ticketStatuses.category, 'done'));
     else if (filter.state) conditions.push(eq(ticketStatuses.category, filter.state));
+    if (filter.statusName) conditions.push(sql`lower(${ticketStatuses.name}) = ${filter.statusName.trim().toLowerCase()}`);
     if (filter.assigneeId) {
       conditions.push(
         sql`exists (select 1 from ticket_assignees ta where ta.ticket_id = ${tickets.id} and ta.user_id = ${filter.assigneeId})`
@@ -892,7 +895,7 @@ export class TicketService {
   async removeComment(userId: string, commentId: string): Promise<void> {
     const comment = await this.requireComment(userId, commentId);
     if (comment.authorId !== userId && !canAdminMembers(comment.workspace.role)) {
-      throw new HttpError('Only the author or a workspace owner can delete this comment', 403, 'FORBIDDEN');
+      throw new HttpError('Only the author or a workspace owner or admin can delete this comment', 403, 'FORBIDDEN');
     }
     await this.database
       .update(ticketComments)
