@@ -4,6 +4,7 @@ import {
   type PublicTicket,
   type PublicTicketGroup,
   type PublicTicketStatus,
+  type TicketBoardView,
   type TicketPriority,
   type TicketService,
   type TicketStatusCategory,
@@ -26,7 +27,7 @@ export interface TicketRow {
 export interface TicketReadResult extends TicketRow {
   board: { key: string; name: string };
   description: string;
-  comments: { author: string | null; body: string; createdAt: Date }[];
+  comments: { id: string; author: string | null; body: string; createdAt: Date }[];
   activity: { actor: string | null; type: string; data: Record<string, unknown>; createdAt: Date }[];
   createdAt: Date;
   updatedAt: Date;
@@ -37,6 +38,25 @@ export type TicketSearchRow = Omit<TicketRow, 'group'> & { board: string };
 interface Scope {
   workspaceRef?: string;
   defaultWorkspaceId?: string | null;
+  /** Told the resolved workspace, so the tool's audit row can record it. */
+  onWorkspace?: (workspaceId: string) => void;
+}
+
+export interface StatusInput extends Scope {
+  board: string;
+  name: string;
+  rename?: string;
+  color?: string;
+  category?: TicketStatusCategory;
+  position?: number;
+}
+
+export interface GroupInput extends Scope {
+  board: string;
+  name: string;
+  rename?: string;
+  color?: string;
+  position?: number;
 }
 
 export interface TicketWriteInput extends Scope {
@@ -118,17 +138,14 @@ export class TicketsMcpService {
         ? userId
         : this.memberIds(members, [input.assignee])[0]
       : undefined;
-    let results = await this.tickets.search(userId, workspaceId, {
+    const results = await this.tickets.search(userId, workspaceId, {
       q: input.q,
       boardId,
       assigneeId,
       state: input.state,
+      statusName: input.status,
       limit: input.limit,
     });
-    if (input.status) {
-      const wanted = input.status.trim().toLowerCase();
-      results = results.filter((ticket) => ticket.statusName.toLowerCase() === wanted);
-    }
     return results.map((ticket) => ({
       key: ticket.key,
       title: ticket.title,
@@ -202,6 +219,204 @@ export class TicketsMcpService {
     };
   }
 
+  // ---------- boards ----------
+
+  async createBoard(
+    userId: string,
+    tokenId: string | null,
+    input: Scope & { name: string; key?: string; description?: string | null }
+  ) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const view = await this.tickets.createBoard(userId, workspaceId, {
+      name: input.name,
+      key: input.key,
+      description: input.description,
+    });
+    return this.boardSummary(view);
+  }
+
+  async updateBoard(
+    userId: string,
+    tokenId: string | null,
+    input: Scope & { board: string; name?: string; key?: string; description?: string | null }
+  ) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const view = await this.tickets.findBoardByKey(userId, workspaceId, input.board);
+    await this.tickets.patchBoard(userId, view.board.id, {
+      name: input.name,
+      key: input.key,
+      description: input.description,
+    });
+    return this.boardSummary(await this.tickets.getBoard(userId, view.board.id));
+  }
+
+  async deleteBoard(userId: string, tokenId: string | null, input: Scope & { board: string }) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const view = await this.tickets.findBoardByKey(userId, workspaceId, input.board);
+    await this.tickets.removeBoard(userId, view.board.id);
+    return { deleted: view.board.key, tickets: view.tickets.length };
+  }
+
+  // ---------- statuses & groups ----------
+
+  /** Create the status if the name is new, else update it. `position` is its 0-based place in the list. */
+  async saveStatus(userId: string, tokenId: string | null, input: StatusInput) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const view = await this.tickets.findBoardByKey(userId, workspaceId, input.board);
+    const existing = this.find(view.statuses, input.name);
+    const status = existing
+      ? await this.tickets.patchStatus(userId, existing.id, {
+          name: input.rename,
+          color: input.color,
+          category: input.category,
+        })
+      : await this.tickets.createStatus(userId, view.board.id, {
+          name: input.rename ?? input.name,
+          color: input.color,
+          category: input.category,
+        });
+    if (input.position !== undefined) {
+      const ids = this.placed((await this.tickets.getBoard(userId, view.board.id)).statuses, status.id, input.position);
+      await this.tickets.orderStatuses(userId, view.board.id, ids);
+    }
+    return this.boardSummary(await this.tickets.getBoard(userId, view.board.id));
+  }
+
+  async deleteStatus(
+    userId: string,
+    tokenId: string | null,
+    input: Scope & { board: string; name: string; moveTo?: string }
+  ) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const view = await this.tickets.findBoardByKey(userId, workspaceId, input.board);
+    const status = this.pick(view.statuses, input.name, 'status');
+    const moveTo = input.moveTo ? this.pick(view.statuses, input.moveTo, 'status').id : undefined;
+    return this.boardSummary(await this.tickets.removeStatus(userId, status.id, moveTo));
+  }
+
+  /** Create the group if the name is new, else update it. `position` is its 0-based place in the list. */
+  async saveGroup(userId: string, tokenId: string | null, input: GroupInput) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const view = await this.tickets.findBoardByKey(userId, workspaceId, input.board);
+    const existing = this.find(view.groups, input.name);
+    const group = existing
+      ? await this.tickets.patchGroup(userId, existing.id, { name: input.rename, color: input.color })
+      : await this.tickets.createGroup(userId, view.board.id, { name: input.rename ?? input.name, color: input.color });
+    if (input.position !== undefined) {
+      const ids = this.placed((await this.tickets.getBoard(userId, view.board.id)).groups, group.id, input.position);
+      await this.tickets.orderGroups(userId, view.board.id, ids);
+    }
+    return this.boardSummary(await this.tickets.getBoard(userId, view.board.id));
+  }
+
+  async deleteGroup(
+    userId: string,
+    tokenId: string | null,
+    input: Scope & { board: string; name: string; moveTo?: string }
+  ) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const view = await this.tickets.findBoardByKey(userId, workspaceId, input.board);
+    const group = this.pick(view.groups, input.name, 'group');
+    const moveTo = input.moveTo ? this.pick(view.groups, input.moveTo, 'group').id : undefined;
+    return this.boardSummary(await this.tickets.removeGroup(userId, group.id, moveTo));
+  }
+
+  // ---------- tickets ----------
+
+  /**
+   * Reorder a ticket. `status` + `statusPosition` place it in the kanban view;
+   * `group` + `groupPosition` place it in the table view. Positions are 0-based
+   * indexes in the destination list; omit one to append.
+   */
+  async moveTicket(
+    userId: string,
+    tokenId: string | null,
+    input: Scope & { key: string; status?: string; statusPosition?: number; group?: string; groupPosition?: number }
+  ): Promise<TicketReadResult> {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const detail = await this.tickets.getTicketByKey(userId, workspaceId, input.key);
+    const view = await this.tickets.getBoard(userId, detail.board.id);
+    const statusId = input.status !== undefined ? this.pick(view.statuses, input.status, 'status').id : undefined;
+    const groupId = input.group !== undefined ? this.pick(view.groups, input.group, 'group').id : undefined;
+    const inStatuses = statusId !== undefined || input.statusPosition !== undefined;
+    const inGroups = groupId !== undefined || input.groupPosition !== undefined;
+    if (!inStatuses && !inGroups) {
+      throw new HttpError('Pass status/statusPosition or group/groupPosition', 400, 'INVALID_MOVE');
+    }
+    await this.tickets.moveTicket(userId, detail.ticket.id, {
+      ...(inStatuses ? { statusId, statusPosition: input.statusPosition } : {}),
+      ...(inGroups ? { groupId, position: input.groupPosition } : {}),
+    });
+    return this.read(userId, workspaceId, detail.ticket.key);
+  }
+
+  async deleteTicket(userId: string, tokenId: string | null, input: Scope & { key: string }) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const detail = await this.tickets.getTicketByKey(userId, workspaceId, input.key);
+    await this.tickets.removeTicket(userId, detail.ticket.id);
+    return { deleted: detail.ticket.key };
+  }
+
+  // ---------- comments ----------
+
+  async editComment(
+    userId: string,
+    tokenId: string | null,
+    input: Scope & { key: string; commentId: string; body: string }
+  ) {
+    const { workspaceId, detail } = await this.commentOnTicket(userId, tokenId, input);
+    const comment = await this.tickets.patchComment(userId, input.commentId, input.body);
+    return {
+      key: detail.ticket.key,
+      comment: { id: comment.id, body: comment.body, updatedAt: comment.updatedAt },
+      url: this.ticketUrl(workspaceId, detail.board.id, detail.ticket.key),
+    };
+  }
+
+  async deleteComment(userId: string, tokenId: string | null, input: Scope & { key: string; commentId: string }) {
+    const { detail } = await this.commentOnTicket(userId, tokenId, input);
+    await this.tickets.removeComment(userId, input.commentId);
+    return { key: detail.ticket.key, deleted: input.commentId };
+  }
+
+  /** The comment must belong to the ticket named by key, so ids can't reach across tickets. */
+  private async commentOnTicket(userId: string, tokenId: string | null, input: Scope & { key: string; commentId: string }) {
+    const workspaceId = await this.workspace(userId, tokenId, input, true);
+    const detail = await this.tickets.getTicketByKey(userId, workspaceId, input.key);
+    if (!detail.comments.some((comment) => comment.id === input.commentId)) {
+      throw new HttpError(`Comment ${input.commentId} is not on ${detail.ticket.key}`, 404, 'COMMENT_NOT_FOUND');
+    }
+    return { workspaceId, detail };
+  }
+
+  private boardSummary(view: TicketBoardView) {
+    return {
+      board: {
+        key: view.board.key,
+        name: view.board.name,
+        description: view.board.description,
+        ticketCount: view.board.ticketCount,
+        openCount: view.board.openCount,
+      },
+      statuses: [...view.statuses]
+        .sort((a, b) => a.position - b.position)
+        .map((status) => ({ name: status.name, category: status.category, color: status.color })),
+      groups: [...view.groups].sort((a, b) => a.position - b.position).map((group) => ({ name: group.name, color: group.color })),
+    };
+  }
+
+  private find<T extends { id: string; name: string }>(items: T[], ref: string): T | undefined {
+    const wanted = ref.trim().toLowerCase();
+    return items.find((item) => item.id === ref.trim()) ?? items.find((item) => item.name.toLowerCase() === wanted);
+  }
+
+  /** Ids in current order with `id` moved to `position` (clamped). */
+  private placed(items: { id: string; position: number }[], id: string, position: number): string[] {
+    const ids = [...items].sort((a, b) => a.position - b.position).map((item) => item.id).filter((item) => item !== id);
+    ids.splice(Math.max(0, Math.min(position, ids.length)), 0, id);
+    return ids;
+  }
+
   private async read(userId: string, workspaceId: string, key: string): Promise<TicketReadResult> {
     const detail = await this.tickets.getTicketByKey(userId, workspaceId, key);
     const members = await this.tickets.members(userId, workspaceId);
@@ -210,6 +425,7 @@ export class TicketsMcpService {
       board: { key: detail.board.key, name: detail.board.name },
       description: detail.ticket.description,
       comments: detail.comments.map((comment) => ({
+        id: comment.id,
         author: comment.authorName,
         body: comment.body,
         createdAt: comment.createdAt,
@@ -232,14 +448,14 @@ export class TicketsMcpService {
     if (!workspace) {
       throw new HttpError('workspace or workspaceId is required', 400, 'WORKSPACE_REQUIRED');
     }
+    scope.onWorkspace?.(workspace.workspaceId);
     await this.docs.requireWorkspaceAccess(userId, tokenId, workspace.workspaceId, write);
     return workspace.workspaceId;
   }
 
   /** Match by id or case-insensitive name; a miss lists the valid names. */
   private pick<T extends { id: string; name: string }>(items: T[], ref: string, label: 'status' | 'group'): T {
-    const wanted = ref.trim().toLowerCase();
-    const hit = items.find((item) => item.id === ref.trim()) ?? items.find((item) => item.name.toLowerCase() === wanted);
+    const hit = this.find(items, ref);
     if (!hit) {
       throw new HttpError(
         `Unknown ${label} "${ref}". Use one of: ${items.map((item) => item.name).join(', ')}`,
