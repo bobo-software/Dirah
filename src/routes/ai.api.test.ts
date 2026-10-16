@@ -104,7 +104,7 @@ describe('AI copilot API', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ prompt: 'Summarize', context: '' });
     expect(fromBody.status).toBe(200);
-    expect(fromBody.body.data.reply).toBe('echo:Summarize:Filled from');
+    expect(fromBody.body.data.reply).toBe('echo:Summarize:Filled from ');
 
     const stranger = await request(appWithAi)
       .post(`/api/ai/pages/${pageId}`)
@@ -117,6 +117,10 @@ describe('AI copilot API', () => {
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ email: otherEmail, role: 'viewer' });
     expect(invited.status).toBe(201);
+    const inviteToken = String(invited.body.data.invite.inviteUrl).split('/invite/')[1];
+    expect(
+      (await request(app).post(`/api/invites/${inviteToken}/accept`).set('Authorization', `Bearer ${otherToken}`).send({})).status
+    ).toBe(201);
 
     const viewerAsk = await request(appWithAi)
       .post(`/api/ai/pages/${pageId}`)
