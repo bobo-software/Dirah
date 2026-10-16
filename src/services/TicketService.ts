@@ -9,8 +9,12 @@ import {
   tickets,
   users,
   workspaceMembers,
+  workspaces,
 } from '../db/schemas';
 import { canAdminMembers } from '../authz/roles';
+import { env } from '../config/env';
+import { sendTicketEmail } from '../mail/inviteMailer';
+import type { TicketEmailKind } from '../mail/templates/ticketEmail';
 import { HttpError } from '../utils/HttpError';
 import { normalizeDocsSearchQuery } from '../utils/slugify';
 import { type AuthService, type Database, type PublicWorkspace } from './AuthService';
@@ -35,6 +39,11 @@ export const MAX_TICKET_LABELS = 20;
 export const MAX_TICKET_LABEL = 40;
 export const MAX_COMMENT_BODY = 10_000;
 const MAX_SEARCH_RESULTS = 200;
+
+/** Into or out of `done`; todo <-> doing moves are too noisy to email. */
+function crossesDone(from: { category: string }, to: { category: string }): boolean {
+  return (from.category === 'done') !== (to.category === 'done');
+}
 
 const DEFAULT_STATUSES: { name: string; color: TicketColor; category: TicketStatusCategory }[] = [
   { name: 'To do', color: 'gray', category: 'todo' },
@@ -120,7 +129,7 @@ export interface PublicTicketComment {
   body: string;
   /** Only the author may edit. */
   editable: boolean;
-  /** The author or a workspace owner may delete. */
+  /** The author or a workspace owner or admin may delete. */
   deletable: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -584,6 +593,7 @@ export class TicketService {
       await tx.insert(ticketActivity).values({ ticketId: row.id, actorId: userId, type: 'created', data: {} });
       return row.id;
     });
+    await this.notify('assigned', userId, id, board, assigneeIds);
     return this.publicTicket(id, board);
   }
 
@@ -606,6 +616,7 @@ export class TicketService {
     const { ticket, board } = await this.requireTicket(userId, ticketId, true);
     const changes: Partial<typeof tickets.$inferInsert> = { updatedAt: new Date() };
     const activity: { type: string; data: Record<string, unknown> }[] = [];
+    let doneChange: StatusRow | null = null;
 
     if (input.title !== undefined) {
       const title = cleanTitle(input.title);
@@ -638,6 +649,7 @@ export class TicketService {
       changes.statusId = to.id;
       changes.statusPosition = await this.nextPosition(tickets.statusPosition, eq(tickets.statusId, to.id));
       activity.push({ type: 'status', data: { from: from.name, to: to.name } });
+      if (crossesDone(from, to)) doneChange = to;
     }
     if (input.groupId !== undefined && input.groupId !== ticket.groupId) {
       const [from, to] = await Promise.all([
@@ -680,6 +692,19 @@ export class TicketService {
         await tx.insert(ticketActivity).values(activity.map((entry) => ({ ...entry, ticketId, actorId: userId })));
       }
     });
+    const added = assigneeDelta?.added ?? [];
+    await this.notify('assigned', userId, ticketId, board, added);
+    if (doneChange) {
+      const assignees = (await this.assigneesFor([ticketId])).get(ticketId) ?? [];
+      await this.notify(
+        'status',
+        userId,
+        ticketId,
+        board,
+        assignees.filter((id) => !added.includes(id)),
+        { statusName: doneChange.name }
+      );
+    }
     return this.publicTicket(ticketId, board);
   }
 
@@ -706,9 +731,11 @@ export class TicketService {
       const from = await this.groupOnBoard(board.id, ticket.groupId);
       activity.push({ type: 'group', data: { from: from.name, to: targetGroup.name } });
     }
+    let doneChange: StatusRow | null = null;
     if (targetStatus && targetStatus.id !== ticket.statusId) {
       const from = await this.statusOnBoard(board.id, ticket.statusId);
       activity.push({ type: 'status', data: { from: from.name, to: targetStatus.name } });
+      if (crossesDone(from, targetStatus)) doneChange = targetStatus;
     }
 
     const live = await this.database
@@ -762,6 +789,10 @@ export class TicketService {
         await tx.insert(ticketActivity).values(activity.map((entry) => ({ ...entry, ticketId, actorId: userId })));
       }
     });
+    if (doneChange) {
+      const assignees = (await this.assigneesFor([ticketId])).get(ticketId) ?? [];
+      await this.notify('status', userId, ticketId, board, assignees, { statusName: doneChange.name });
+    }
     return this.boardView(board);
   }
 
@@ -840,6 +871,9 @@ export class TicketService {
       .values({ ticketId: ticket.id, authorId: userId, body: text })
       .returning({ id: ticketComments.id });
     await this.database.update(tickets).set({ updatedAt: new Date() }).where(eq(tickets.id, ticket.id));
+    const assignees = (await this.assigneesFor([ticket.id])).get(ticket.id) ?? [];
+    const watchers = ticket.createdBy ? [...assignees, ticket.createdBy] : assignees;
+    await this.notify('comment', userId, ticket.id, board, watchers, { comment: text });
     return this.commentById(row.id, userId, await this.auth.requireMember(userId, board.workspaceId));
   }
 
@@ -969,6 +1003,64 @@ export class TicketService {
     const [row] = await this.database.select().from(tickets).where(eq(tickets.id, ticketId)).limit(1);
     const assignees = await this.assigneesFor([ticketId]);
     return this.toTicket(row, board.key, assignees.get(ticketId));
+  }
+
+  /**
+   * Email people about a committed change. Never the actor, only current
+   * members, and a delivery failure never fails the write.
+   */
+  private async notify(
+    kind: TicketEmailKind,
+    actorId: string,
+    ticketId: string,
+    board: BoardRow,
+    recipientIds: string[],
+    extra: { comment?: string; statusName?: string } = {}
+  ): Promise<void> {
+    const ids = [...new Set(recipientIds)].filter((id) => id !== actorId);
+    if (ids.length === 0) return;
+    try {
+      const [[ticket], [workspace], people] = await Promise.all([
+        this.database
+          .select({ number: tickets.number, title: tickets.title })
+          .from(tickets)
+          .where(eq(tickets.id, ticketId))
+          .limit(1),
+        this.database
+          .select({ name: workspaces.name })
+          .from(workspaces)
+          .where(eq(workspaces.id, board.workspaceId))
+          .limit(1),
+        this.database
+          .select({ id: users.id, email: users.email, name: users.name, member: workspaceMembers.userId })
+          .from(users)
+          .leftJoin(
+            workspaceMembers,
+            and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, board.workspaceId))
+          )
+          .where(inArray(users.id, [...ids, actorId])),
+      ]);
+      if (!ticket || !workspace) return;
+      const actor = people.find((person) => person.id === actorId);
+      const actorName = actor?.name?.trim() || actor?.email || 'Someone';
+      const ticketKey = `${board.key}-${ticket.number}`;
+      const ticketUrl = `${env.appPublicUrl}/w/${board.workspaceId}/tickets/${board.id}?ticket=${encodeURIComponent(ticketKey)}`;
+      for (const person of people) {
+        if (person.id === actorId || !person.member || !ids.includes(person.id)) continue;
+        await sendTicketEmail({
+          to: person.email,
+          kind,
+          actorName,
+          workspaceName: workspace.name,
+          ticketKey,
+          ticketTitle: ticket.title,
+          ticketUrl,
+          ...extra,
+        });
+      }
+    } catch (error) {
+      console.warn(`Ticket ${kind} email failed:`, error);
+    }
   }
 
   private async requireBoard(userId: string, boardId: string, write: boolean): Promise<BoardRow> {
