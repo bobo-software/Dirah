@@ -4,7 +4,7 @@ import { and, count, eq, isNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { users, workspaceInvites, workspaceMemberKeys, workspaceMembers, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
-import { isMemberRole, isWorkspaceRole } from '../authz/roles';
+import { isMemberRole, isOwner, isWorkspaceRole } from '../authz/roles';
 import { env } from '../config/env';
 import { sendInviteEmail } from '../mail/inviteMailer';
 import { type AuthService, type AuthTokens, type Database, type PublicUser, type PublicWorkspace } from './AuthService';
@@ -108,9 +108,9 @@ export class MemberService {
     emailRaw: string,
     roleRaw: string
   ): Promise<InviteOutcome> {
-    const workspace = await this.auth.requireWorkspaceOwner(userId, workspaceId);
+    const workspace = await this.auth.requireMemberAdmin(userId, workspaceId);
     if (!isMemberRole(roleRaw)) {
-      throw new HttpError('Role must be editor or viewer', 400, 'INVALID_ROLE');
+      throw new HttpError('Role must be admin, editor, or viewer', 400, 'INVALID_ROLE');
     }
     const email = normalizeEmail(emailRaw);
     if (!email || !email.includes('@')) {
@@ -204,7 +204,7 @@ export class MemberService {
   }
 
   async revokeInvite(actorId: string, workspaceId: string, inviteId: string): Promise<void> {
-    await this.auth.requireWorkspaceOwner(actorId, workspaceId);
+    await this.auth.requireMemberAdmin(actorId, workspaceId);
     const deleted = await this.database
       .delete(workspaceInvites)
       .where(
@@ -442,11 +442,14 @@ export class MemberService {
     targetUserId: string,
     roleRaw: string
   ): Promise<PublicMember> {
-    await this.auth.requireWorkspaceOwner(actorId, workspaceId);
+    const actor = await this.auth.requireMemberAdmin(actorId, workspaceId);
     if (!isWorkspaceRole(roleRaw)) {
-      throw new HttpError('Role must be owner, editor, or viewer', 400, 'INVALID_ROLE');
+      throw new HttpError('Role must be owner, admin, editor, or viewer', 400, 'INVALID_ROLE');
     }
     const member = await this.requireMemberRow(workspaceId, targetUserId);
+    if (!isOwner(actor.role) && (isOwner(member.role) || isOwner(roleRaw))) {
+      throw new HttpError('Only an owner can change owner roles', 403, 'OWNER_ONLY');
+    }
     if (member.role === 'owner' && roleRaw !== 'owner') {
       await this.assertNotLastOwner(workspaceId);
     }
@@ -472,8 +475,11 @@ export class MemberService {
   }
 
   async remove(actorId: string, workspaceId: string, targetUserId: string): Promise<void> {
-    await this.auth.requireWorkspaceOwner(actorId, workspaceId);
+    const actor = await this.auth.requireMemberAdmin(actorId, workspaceId);
     const member = await this.requireMemberRow(workspaceId, targetUserId);
+    if (!isOwner(actor.role) && isOwner(member.role)) {
+      throw new HttpError('Only an owner can remove an owner', 403, 'OWNER_ONLY');
+    }
     if (member.role === 'owner') {
       await this.assertNotLastOwner(workspaceId);
     }
