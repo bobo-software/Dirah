@@ -101,6 +101,8 @@ describe('tickets API', () => {
       dbReady = true;
     } catch (error) {
       console.warn('Skipping tickets API tests: database unavailable', error);
+      // Set ALLOW_DB_SKIP=1 to run without Postgres; otherwise a missing database must fail, not pass.
+      if (process.env.ALLOW_DB_SKIP !== '1') throw error;
       return;
     }
     process.env.MCP_API_KEY ??= 'test-mcp-api-key';
