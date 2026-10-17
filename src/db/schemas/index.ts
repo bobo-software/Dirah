@@ -5,7 +5,7 @@ export { userCrypto, workspaceMemberKeys } from './crypto';
 export { pages } from './pages';
 export { markdownBodies } from './markdown';
 export { pageFavorites } from './pageFavorites';
-export { notes, noteTags, noteTagLinks, kanbanColumns, kanbanCards, noteLinks } from './notes';
+export { notes, noteTags, noteTagLinks, kanbanColumns, kanbanCards, noteLinks, noteBlobs } from './notes';
 export { taskLists, taskListItems } from './tasks';
 export {
   ticketBoards,

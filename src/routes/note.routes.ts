@@ -1,11 +1,14 @@
-import { Router } from 'express';
+import { Router, raw } from 'express';
 import { createNoteController } from '../controllers/note.controller';
+import { createNoteAttachmentController } from '../controllers/noteAttachment.controller';
+import type { BlobService } from '../services/BlobService';
 import type { NoteService } from '../services/NoteService';
 import { requireAuth } from '../middlewares/auth';
 
-export function createNoteRouter(noteService: NoteService): Router {
+export function createNoteRouter(noteService: NoteService, blobService: BlobService): Router {
   const router = Router();
   const controller = createNoteController(noteService);
+  const attachments = createNoteAttachmentController(noteService, blobService);
 
   router.use(requireAuth);
   router.get('/:id/board', controller.getBoard);
@@ -17,6 +20,7 @@ export function createNoteRouter(noteService: NoteService): Router {
   router.patch('/:id', controller.patch);
   router.put('/:id/content', controller.putContent);
   router.put('/:id/tags', controller.putTags);
+  router.post('/:id/attachments', raw({ type: '*/*', limit: '12mb' }), attachments.upload);
   router.post('/:id/restore', controller.restore);
   router.delete('/:id/permanent', controller.removePermanent);
   router.delete('/:id', controller.remove);
