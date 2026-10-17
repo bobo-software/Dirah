@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Editor } from '@tiptap/core';
 import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import { EditorContent, useEditor } from '@tiptap/react';
@@ -7,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { MAX_BLOB_BYTES, uploadBlob } from '../../api/blobs';
 import { useAuthStore } from '../../stores/StoresIndex';
 import { BlobImageNode } from './blobImageNode';
+import { insertAttachment } from './insertAttachment';
 import { EmojiPicker } from './EmojiPicker';
 import { Button } from '../buttons/Button';
 
@@ -186,29 +186,6 @@ export function RichMarkdownInput({
       ) : null}
     </div>
   );
-}
-
-/** Images go in their own paragraph with an empty one after, so typing continues below. */
-function insertAttachment(editor: Editor, attachment: { name: string; url: string; image: boolean }) {
-  if (attachment.image) {
-    editor
-      .chain()
-      .focus()
-      .insertContent([
-        { type: 'paragraph', content: [{ type: 'blobImage', attrs: { src: attachment.url, alt: attachment.name } }] },
-        { type: 'paragraph' },
-      ])
-      .run();
-    return;
-  }
-  editor
-    .chain()
-    .focus()
-    .insertContent([
-      { type: 'text', text: `📎 ${attachment.name}`, marks: [{ type: 'link', attrs: { href: attachment.url } }] },
-      { type: 'text', text: ' ' },
-    ])
-    .run();
 }
 
 function SmileIcon() {

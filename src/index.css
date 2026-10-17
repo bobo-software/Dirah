@@ -4122,6 +4122,60 @@ button.linkish.danger {
   color: var(--danger);
 }
 
+/* The Image button while an upload runs. */
+.note-tool-spinner {
+  width: 13px;
+  height: 13px;
+  border: 1.8px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: note-tool-spin 0.7s linear infinite;
+}
+
+@keyframes note-tool-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-tool-spinner {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* An image still uploading: the local preview, faded, with a spinner. */
+.rich-image.is-uploading .rich-image-img {
+  opacity: 0.55;
+}
+
+.rich-image-progress {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid var(--text);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: note-tool-spin 0.7s linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rich-image-progress {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* Images in a note can be taller than in a ticket comment. */
+.note-prose .rich-image-img {
+  max-height: 28rem;
+}
+
 .note-editor {
   position: relative;
 }

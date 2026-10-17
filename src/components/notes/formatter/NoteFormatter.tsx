@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { useEditorState, type Editor } from '@tiptap/react';
+import { NOTE_IMAGE_TYPES } from '../../../api/blobs';
 import { Button } from '../../buttons/Button';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -77,6 +78,13 @@ const icons = {
       <path d="M3.5 12h17M7 7.5h10M7 16.5h10" opacity="0.9" />
     </Svg>
   ),
+  image: (
+    <Svg>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="M20.5 16l-4.5-4.5-8.5 8" />
+    </Svg>
+  ),
   table: (
     <Svg>
       <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
@@ -133,7 +141,18 @@ function Divider() {
   return <span className="note-toolbar-divider" aria-hidden="true" />;
 }
 
-export function NoteFormatter({ editor }: { editor: Editor }) {
+export function NoteFormatter({
+  editor,
+  uploading = 0,
+  onAttachImages,
+}: {
+  editor: Editor;
+  /** Images still uploading, shown on the Image button. */
+  uploading?: number;
+  /** Shows the Image button; gets the picked files. */
+  onAttachImages?: (files: File[]) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => ({
@@ -224,6 +243,25 @@ export function NoteFormatter({ editor }: { editor: Editor }) {
         <ToolButton label="Divider" onClick={() => chain().setHorizontalRule().run()}>
           {icons.divider}
         </ToolButton>
+        {onAttachImages ? (
+          <>
+            <ToolButton label={uploading > 0 ? 'Uploading image…' : 'Image'} onClick={() => fileRef.current?.click()}>
+              {uploading > 0 ? <span className="note-tool-spinner" aria-hidden="true" /> : icons.image}
+            </ToolButton>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={NOTE_IMAGE_TYPES.join(',')}
+              multiple
+              hidden
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = '';
+                if (files.length > 0) onAttachImages(files);
+              }}
+            />
+          </>
+        ) : null}
         <ToolButton
           label="Table"
           active={state.table}

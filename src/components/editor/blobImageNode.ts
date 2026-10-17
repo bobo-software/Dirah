@@ -5,6 +5,8 @@ import { BlobImageView } from './BlobImageView';
 /**
  * An inline image stored in markdown as `![alt](src)`. Workspace files
  * (`/api/blobs/:id`) need the bearer token, so the view loads them through fetch.
+ * While `uploadId` is set the image is a local preview still uploading: it shows,
+ * but isn't written to markdown, so a `blob:` URL is never saved.
  */
 export const BlobImageNode = Node.create({
   name: 'blobImage',
@@ -18,6 +20,7 @@ export const BlobImageNode = Node.create({
     return {
       src: { default: '' },
       alt: { default: '' },
+      uploadId: { default: null, rendered: false },
     };
   },
 
@@ -44,6 +47,7 @@ export const BlobImageNode = Node.create({
   },
 
   renderMarkdown(node) {
+    if (node.attrs?.uploadId) return '';
     const alt = String(node.attrs?.alt ?? '').replace(/[[\]]/g, '');
     return `![${alt}](${String(node.attrs?.src ?? '')})`;
   },

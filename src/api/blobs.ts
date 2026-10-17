@@ -15,6 +15,23 @@ export async function uploadBlob(accessToken: string, workspaceId: string, file:
   return data.blob;
 }
 
+/** Image types a note accepts; the API checks the file's bytes too. */
+export const NOTE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/heic'];
+
+/**
+ * Attaches an image to a note (author only). Only people who can see the note
+ * can read the returned url.
+ */
+export async function uploadNoteImage(accessToken: string, noteId: string, file: File): Promise<UploadedBlob> {
+  const data = await apiRequest<{ blob: UploadedBlob }>(`/api/notes/${noteId}/attachments`, {
+    method: 'POST',
+    accessToken,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  return data.blob;
+}
+
 async function fetchBlobWith(accessToken: string, path: string): Promise<Response> {
   return fetch(`${API_URL}${path}`, {
     credentials: 'include',

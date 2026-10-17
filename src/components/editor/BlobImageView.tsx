@@ -7,10 +7,16 @@ import { Button } from '../buttons/Button';
 export function BlobImageView({ node, selected, editor, deleteNode }: ReactNodeViewProps) {
   const src = String(node.attrs.src ?? '');
   const alt = String(node.attrs.alt ?? '');
+  const uploading = Boolean(node.attrs.uploadId);
   const [viewing, setViewing] = useState(false);
   const viewer = { viewerOpen: viewing, onViewerClose: () => setViewing(false) };
   return (
-    <NodeViewWrapper as="span" className={`rich-image${selected ? ' is-selected' : ''}`} data-drag-handle="">
+    <NodeViewWrapper
+      as="span"
+      className={`rich-image${selected ? ' is-selected' : ''}${uploading ? ' is-uploading' : ''}`}
+      data-drag-handle=""
+      aria-busy={uploading || undefined}
+    >
       <span onDoubleClick={() => setViewing(true)}>
         {isBlobPath(src) ? (
           <BlobImage src={src} alt={alt} className="rich-image-img" {...viewer} />
@@ -18,6 +24,7 @@ export function BlobImageView({ node, selected, editor, deleteNode }: ReactNodeV
           <ViewableImage src={src} alt={alt} className="rich-image-img" {...viewer} />
         )}
       </span>
+      {uploading ? <span className="rich-image-progress" role="status" aria-label={`Uploading ${alt || 'image'}`} /> : null}
       <span className="rich-image-actions" contentEditable={false}>
         <Button variant="plain"
           type="button"
