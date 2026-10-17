@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { and, eq, notExists } from 'drizzle-orm';
 import { blobs, noteBlobs, notes } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
+import { isValidBlobId } from '../utils/blobRefs';
 import { sniffImageMime } from '../utils/imageType';
 import { type AuthService, type Database } from './AuthService';
 import type { BlobStore } from '../blobs/blobStore';
@@ -155,7 +156,7 @@ export class BlobService {
     noteId?: string;
   }): Promise<PublicBlob> {
     const blobId = input.id?.trim() || crypto.randomUUID();
-    if (!/^[A-Za-z0-9._~+=-]{1,128}$/.test(blobId)) {
+    if (!isValidBlobId(blobId)) {
       throw new HttpError('Invalid blob id', 400, 'INVALID_BLOB_ID');
     }
     let storageKey: string;

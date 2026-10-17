@@ -7,6 +7,7 @@ import {
   markdownSearchText,
   normalizeDocsSearchQuery,
 } from '../utils/slugify';
+import { blobIdsInMarkdown } from '../utils/blobRefs';
 import { extractNoteLinks, noteLinkContext, noteLinksToLabels } from '../utils/noteLinks';
 import { type AuthService, type Database } from './AuthService';
 import { diffPreview, EMPTY_MARKDOWN_HASH, MAX_MARKDOWN_BYTES } from './PageService';
@@ -159,9 +160,6 @@ function cleanTagName(raw: string): string {
  * shares its parent's visibility and author, so a shared tree never hides a
  * private branch and a private tree never exposes a shared one.
  */
-/** A blob reference in markdown, e.g. `![alt](/api/blobs/:id)`. */
-const BLOB_URL = /\/api\/blobs\/([A-Za-z0-9._~+=-]{1,128})/g;
-
 export class NoteService {
   constructor(
     private readonly database: Database,
@@ -307,6 +305,14 @@ export class NoteService {
     const pinnedAt =
       input.pinned === undefined ? note.pinnedAt : input.pinned ? (note.pinnedAt ?? new Date()) : null;
     const now = new Date();
+    // "Last modified" means the note changed: rearranging it among its siblings or
+    // pinning it doesn't count, so the lists' modified dates don't all jump on a drag.
+    const modified =
+      title !== note.title ||
+      (input.icon !== undefined && input.icon !== note.icon) ||
+      (input.cover !== undefined && input.cover !== note.cover) ||
+      parentChanged ||
+      visibility !== note.visibility;
 
     const updated = await this.database.transaction(async (tx) => {
       const [row] = await tx
@@ -319,7 +325,7 @@ export class NoteService {
           position,
           visibility,
           pinnedAt,
-          updatedAt: now,
+          ...(modified ? { updatedAt: now } : {}),
         })
         .where(eq(notes.id, noteId))
         .returning(noteColumns);
@@ -766,7 +772,7 @@ export class NoteService {
    * Links are never removed here; an image taken out of the body stays attached.
    */
   private async linkBlobs(tx: Tx, note: PublicNote, content: string): Promise<void> {
-    const ids = [...new Set([...content.matchAll(BLOB_URL)].map((match) => match[1]))];
+    const ids = blobIdsInMarkdown(content);
     if (ids.length === 0) return;
     const owned = await tx
       .selectDistinct({ blobId: noteBlobs.blobId })
