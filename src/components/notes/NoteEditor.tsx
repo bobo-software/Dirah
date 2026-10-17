@@ -7,18 +7,17 @@ import { TableKit } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import { ColumnTypeMarkdown, TypedTable, TypedTableHeader } from './table/typedTable';
-import { MAX_BLOB_BYTES, NOTE_IMAGE_TYPES, uploadNoteImage } from '../../api/blobs';
 import { ApiError, type PublicNote } from '../../api/client';
 import type { NoteBody } from '../../api/notes';
-import { EMPTY_NOTES, useAuthStore, useNoteStore } from '../../stores/StoresIndex';
+import { EMPTY_NOTES, useNoteStore } from '../../stores/StoresIndex';
 import { BlobImageNode } from '../editor/blobImageNode';
-import { insertAttachment, settleUpload } from '../editor/insertAttachment';
 import { NoteGlyph } from './NoteTree';
 import { breadcrumbs } from './noteTreeModel';
 import { NoteLink } from './links/noteLink';
 import { NoteSelectionMenu } from './links/NoteSelectionMenu';
 import { NoteBacklinks } from './links/NoteBacklinks';
 import { NoteFormatter } from './formatter/NoteFormatter';
+import { imageFiles, useNoteImageUploads } from './useNoteImageUploads';
 import { TasksIcon } from '../layout/SectionIcons';
 import { useSendNoteToTasks } from '../tasks/useSendNoteToTasks';
 import { Button } from '../buttons/Button';
@@ -32,11 +31,6 @@ function saveLabel(state: SaveState): string {
   if (state === 'dirty') return 'Unsaved changes';
   if (state === 'error') return 'Not saved';
   return 'Saved';
-}
-
-/** Image files from a paste or drop, or none (then the editor handles the event as usual). */
-function imageFiles(list: FileList | undefined | null): File[] {
-  return Array.from(list ?? []).filter((file) => file.type.startsWith('image/'));
 }
 
 export function NoteEditor({
@@ -69,8 +63,6 @@ export function NoteEditor({
   const [title, setTitle] = useState('');
   // Stored markdown the editor couldn't render; editing would overwrite it.
   const [unsupported, setUnsupported] = useState(false);
-  // Images still uploading; each lands at the caret when it's done.
-  const [uploading, setUploading] = useState(0);
 
   // Save bookkeeping lives in refs so the editor callback never sees stale state.
   const hashRef = useRef<string | undefined>(undefined);
@@ -88,46 +80,9 @@ export function NoteEditor({
   const createSubnoteRef = useRef(createSubnote);
   createSubnoteRef.current = createSubnote;
 
-  /**
-   * Puts each image on its own line at the caret straight away, as a local
-   * preview, then uploads it to this note; the preview becomes the stored image
-   * when its upload finishes, or goes away (with a message) if it fails.
-   */
-  async function attachImages(files: File[]) {
-    const accessToken = useAuthStore.getState().accessToken;
-    if (!accessToken || !editor.isEditable) return;
-    const uploads: { file: File; name: string; uploadId: string; preview: string }[] = [];
-    for (const file of files) {
-      const name = file.name || 'pasted image';
-      if (!NOTE_IMAGE_TYPES.includes(file.type)) {
-        setMessage(`${name} isn't an image this note can hold (PNG, JPEG, GIF, WebP or HEIC)`);
-        continue;
-      }
-      if (file.size > MAX_BLOB_BYTES) {
-        setMessage(`${name} is larger than 12 MB`);
-        continue;
-      }
-      const upload = { file, name, uploadId: crypto.randomUUID(), preview: URL.createObjectURL(file) };
-      insertAttachment(editor, { name, url: upload.preview, image: true, uploadId: upload.uploadId });
-      uploads.push(upload);
-    }
-    await Promise.all(
-      uploads.map(async ({ file, name, uploadId, preview }) => {
-        setUploading((count) => count + 1);
-        try {
-          const blob = await uploadNoteImage(accessToken, noteId, file);
-          settleUpload(editor, uploadId, blob.url);
-        } catch (error) {
-          settleUpload(editor, uploadId, null);
-          setMessage(`Couldn’t upload ${name}${error instanceof Error ? `: ${error.message}` : ''}`);
-        } finally {
-          setUploading((count) => count - 1);
-          // After the stored image has replaced the preview, so it never shows a broken image.
-          window.setTimeout(() => URL.revokeObjectURL(preview), 30_000);
-        }
-      })
-    );
-  }
+  const images = useNoteImageUploads(noteId, setMessage);
+  // Paste and drop are wired when the editor is created, so they go through a ref to the latest.
+  const attachImages = (files: File[]) => void images.attach(editor, files);
   const attachImagesRef = useRef(attachImages);
   attachImagesRef.current = attachImages;
 
@@ -192,14 +147,14 @@ export function NoteEditor({
         const files = imageFiles(event.clipboardData?.files);
         if (files.length === 0 || !view.editable) return false;
         event.preventDefault();
-        void attachImagesRef.current(files);
+        attachImagesRef.current(files);
         return true;
       },
       handleDrop: (view, event) => {
         const files = imageFiles((event as DragEvent).dataTransfer?.files);
         if (files.length === 0 || !view.editable) return false;
         event.preventDefault();
-        void attachImagesRef.current(files);
+        attachImagesRef.current(files);
         return true;
       },
     },
@@ -402,7 +357,7 @@ export function NoteEditor({
       </header>
       {!ready && !message ? <p className="muted">Loading note…</p> : null}
       {ready && editable && !unsupported ? (
-        <NoteFormatter editor={editor} uploading={uploading} onAttachImages={(files) => void attachImages(files)} />
+        <NoteFormatter editor={editor} uploading={images.uploading} onAttachImages={attachImages} />
       ) : null}
       {ready && editable && !unsupported ? (
         <NoteSelectionMenu
