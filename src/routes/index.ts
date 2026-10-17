@@ -57,7 +57,7 @@ export function createApiRouter(
   router.use('/auth', createAuthRouter(authService, cryptoService, oauthService));
   router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, noteService, taskListService, ticketService, mcpTokenService));
   router.use('/pages', createPageRouter(pageService, shareService));
-  router.use('/notes', createNoteRouter(noteService));
+  router.use('/notes', createNoteRouter(noteService, blobService));
   router.use('/kanban-columns', createKanbanColumnRouter(noteService));
   router.use('/kanban-cards', createKanbanCardRouter(noteService));
   router.use('/note-tags', createNoteTagRouter(noteService));

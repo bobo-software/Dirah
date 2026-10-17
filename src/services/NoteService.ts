@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
-import { kanbanCards, kanbanColumns, noteLinks, notes, noteTagLinks, noteTags } from '../db/schemas';
+import { kanbanCards, kanbanColumns, noteBlobs, noteLinks, notes, noteTagLinks, noteTags } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import {
   excerptFromSearchText,
@@ -159,6 +159,9 @@ function cleanTagName(raw: string): string {
  * shares its parent's visibility and author, so a shared tree never hides a
  * private branch and a private tree never exposes a shared one.
  */
+/** A blob reference in markdown, e.g. `![alt](/api/blobs/:id)`. */
+const BLOB_URL = /\/api\/blobs\/([A-Za-z0-9._~+=-]{1,128})/g;
+
 export class NoteService {
   constructor(
     private readonly database: Database,
@@ -377,6 +380,7 @@ export class NoteService {
         .where(eq(notes.id, noteId))
         .returning(noteColumns);
       await this.syncLinks(tx, userId, note, content);
+      await this.linkBlobs(tx, note, content);
       return row;
     });
     return {
@@ -683,6 +687,14 @@ export class NoteService {
     return this.toPublic(row, userId, tagIds.get(row.id) ?? []);
   }
 
+  /** The note, when `userId` may attach images to it: its author, outside encrypted workspaces. */
+  async requireAttachableNote(userId: string, noteId: string): Promise<PublicNote> {
+    const note = await this.requireAuthorNote(userId, noteId);
+    const workspace = await this.auth.requireMember(userId, note.workspaceId);
+    this.assertNotEncrypted(workspace.encrypted);
+    return note;
+  }
+
   async requireAuthorNote(
     userId: string,
     noteId: string,
@@ -744,6 +756,34 @@ export class NoteService {
         }))
       );
     }
+  }
+
+  /**
+   * Links images in `content` that the author already attached to another of
+   * their notes in this workspace (an image moved or copied between notes), so
+   * people who can see this note can read them. Other blobs are left alone: a
+   * ticket or page image pasted here must stay readable by the whole workspace.
+   * Links are never removed here; an image taken out of the body stays attached.
+   */
+  private async linkBlobs(tx: Tx, note: PublicNote, content: string): Promise<void> {
+    const ids = [...new Set([...content.matchAll(BLOB_URL)].map((match) => match[1]))];
+    if (ids.length === 0) return;
+    const owned = await tx
+      .selectDistinct({ blobId: noteBlobs.blobId })
+      .from(noteBlobs)
+      .innerJoin(notes, eq(notes.id, noteBlobs.noteId))
+      .where(
+        and(
+          inArray(noteBlobs.blobId, ids),
+          eq(notes.authorId, note.authorId),
+          eq(notes.workspaceId, note.workspaceId)
+        )
+      );
+    if (owned.length === 0) return;
+    await tx
+      .insert(noteBlobs)
+      .values(owned.map(({ blobId }) => ({ noteId: note.id, blobId })))
+      .onConflictDoNothing();
   }
 
   private visibleFilter(userId: string) {

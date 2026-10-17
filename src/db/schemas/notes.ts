@@ -1,4 +1,5 @@
-import { type AnyPgColumn, integer, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, index, integer, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { blobs } from './docs';
 import { users } from './users';
 import { workspaces } from './workspaces';
 
@@ -94,5 +95,26 @@ export const noteLinks = pgTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.sourceId, table.targetId] }),
+  })
+);
+
+/**
+ * Images attached to notes. A blob with any row here is readable only by people
+ * who can see one of its notes (see BlobService.get), not by every member.
+ */
+export const noteBlobs = pgTable(
+  'note_blobs',
+  {
+    noteId: uuid('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    blobId: text('blob_id')
+      .notNull()
+      .references(() => blobs.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.noteId, table.blobId] }),
+    blobIdx: index('note_blobs_blob_idx').on(table.blobId),
   })
 );
