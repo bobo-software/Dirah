@@ -389,6 +389,23 @@ describe('notes API', () => {
     expect(await backlinkIds(owner, target.id)).toEqual([source.id]);
   });
 
+  it('keeps a note’s modified time when it is only rearranged or pinned', async () => {
+    if (!dbReady) return;
+    const api = as(owner);
+    const note = await createNote(owner, { title: 'Keeps its date' });
+    const updatedAt = async () => (await api.get(`/api/notes/${note.id}`)).body.data.note.updatedAt as string;
+    const before = await updatedAt();
+
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect((await api.patch(`/api/notes/${note.id}`, { position: 7 })).status).toBe(200);
+    expect((await api.patch(`/api/notes/${note.id}`, { pinned: true })).status).toBe(200);
+    expect((await api.patch(`/api/notes/${note.id}`, { title: 'Keeps its date' })).status).toBe(200);
+    expect(await updatedAt()).toBe(before);
+
+    expect((await api.patch(`/api/notes/${note.id}`, { title: 'Renamed' })).status).toBe(200);
+    expect(await updatedAt()).not.toBe(before);
+  });
+
   it('refuses note writes in encrypted workspaces until Phase 5', async () => {
     if (!dbReady) return;
     const created = await as(outsider).post('/api/workspaces', { name: `Sealed ${stamp}` });
