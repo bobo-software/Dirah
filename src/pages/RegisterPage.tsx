@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
 import { readReturnTo } from '../utils/returnTo';
 import { BrandLink, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
+import { Button } from '../components/buttons/Button';
 
 export function RegisterPage() {
   const user = useAuthStore((state) => state.user);
@@ -66,9 +67,9 @@ export function RegisterPage() {
           />
         </label>
         {message ? <p className="error">{message}</p> : null}
-        <button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? 'Creating…' : 'Register'}
-        </button>
+        </Button>
       </form>
       <p>
         Already have an account? <Link to="/login">Sign in</Link>

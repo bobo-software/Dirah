@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { PublicMember } from '../../api/members';
 import { placeFloatingMenu } from '../notes/table/placeFloatingMenu';
 import { initials, memberLabel } from './ticketMeta';
+import { Button } from '../buttons/Button';
 
 /** Closes a floating menu on outside pointer-down or Escape, like the typed-table menus. */
 function useDismiss(menuRef: React.RefObject<HTMLElement | null>, anchor: HTMLElement, onClose: () => void) {
@@ -57,7 +58,7 @@ export function OptionMenu({
       {options.map((option) => {
         const selected = option.id === value;
         return (
-          <button
+          <Button variant="plain"
             key={option.id}
             type="button"
             role="menuitemradio"
@@ -69,7 +70,7 @@ export function OptionMenu({
             }}
           >
             <span className={`ticket-pill note-type-${option.color}`}>{option.label}</span>
-          </button>
+          </Button>
         );
       })}
     </div>,
@@ -158,7 +159,7 @@ export function MenuTrigger({
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
     <>
-      <button
+      <Button variant="plain"
         type="button"
         className={className}
         aria-label={label}
@@ -171,7 +172,7 @@ export function MenuTrigger({
         }}
       >
         {children}
-      </button>
+      </Button>
       {anchor ? menu(anchor, () => setAnchor(null)) : null}
     </>
   );

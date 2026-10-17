@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { AdminMcpAuditRow } from '../../api/admin';
+import { Button } from '../buttons/Button';
 
 type Props = {
   row: AdminMcpAuditRow;
@@ -33,9 +34,9 @@ export function McpAuditDetailModal({ row, onClose }: Props) {
             </h2>
             <p className="request-log-modal-id">{row.id}</p>
           </div>
-          <button type="button" className="request-log-modal-close" onClick={onClose} aria-label="Close">
+          <Button variant="plain" type="button" className="request-log-modal-close" onClick={onClose} aria-label="Close">
             ×
-          </button>
+          </Button>
         </header>
         <div className="request-log-modal-body">
           <div className="request-log-meta">

@@ -4,6 +4,7 @@ import { EMPTY_PAGES, usePageStore } from '../../stores/StoresIndex';
 import type { PublicPage } from '../../api/client';
 import { pageStatusLabel, parsePageStatus } from './pageStatus';
 import { categoryHue } from './categoryColor';
+import { Button } from '../buttons/Button';
 
 export function DocsBrowser({ workspaceId, title }: { workspaceId: string; title?: ReactNode }) {
   const pages = usePageStore((state) => state.byWorkspace[workspaceId] ?? EMPTY_PAGES);
@@ -90,14 +91,14 @@ function DocCard({
       </Link>
       <div className="doc-card-foot">
         {status ? <span className="doc-card-status">{pageStatusLabel(status)}</span> : <span />}
-        <button
+        <Button variant="plain"
           type="button"
           className={page.favorited ? 'linkish star on' : 'linkish star'}
           aria-label={page.favorited ? 'Remove favorite' : 'Favorite'}
           onClick={onFavorite}
         >
           {page.favorited ? '★' : '☆'}
-        </button>
+        </Button>
       </div>
     </div>
   );

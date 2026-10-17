@@ -6,6 +6,7 @@ import { TaskProgress } from '../../components/tasks/TaskProgress';
 import { taskMode } from '../../components/tasks/runner/modes';
 import { confirmDelete } from '../../components/layout/deleteDialogue';
 import { canEdit, type WorkspaceOutlet } from '../workspaceContext';
+import { Button } from '../../components/buttons/Button';
 
 function message(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -164,14 +165,14 @@ export function TaskListPage() {
           </Link>
         ) : null}
         {list.checkedCount > 0 ? (
-          <button type="button" className="linkish" onClick={() => run(() => resetList(listId), 'Could not reset the list')}>
+          <Button variant="link" type="button" onClick={() => run(() => resetList(listId), 'Could not reset the list')}>
             Uncheck all
-          </button>
+          </Button>
         ) : null}
         {list.editable ? (
-          <button type="button" className="linkish danger" onClick={onDelete}>
+          <Button variant="link" type="button" className="danger" onClick={onDelete}>
             Delete list
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -207,15 +208,15 @@ export function TaskListPage() {
                   }}
                 />
               ) : canEditItems ? (
-                <button type="button" className="task-plain task-item-text" onClick={() => startEdit(item)} title="Edit">
+                <Button variant="plain" type="button" className="task-plain task-item-text" onClick={() => startEdit(item)} title="Edit">
                   {item.text}
-                </button>
+                </Button>
               ) : (
                 <span className="task-item-text">{item.text}</span>
               )}
               {canEditItems ? (
                 <span className="task-item-tools">
-                  <button
+                  <Button variant="plain"
                     type="button"
                     className="task-plain task-item-tool"
                     aria-label={`Move “${item.text}” up`}
@@ -223,8 +224,8 @@ export function TaskListPage() {
                     onClick={() => run(() => moveItem(listId, item.id, -1), 'Could not reorder')}
                   >
                     ↑
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain"
                     type="button"
                     className="task-plain task-item-tool"
                     aria-label={`Move “${item.text}” down`}
@@ -232,8 +233,8 @@ export function TaskListPage() {
                     onClick={() => run(() => moveItem(listId, item.id, 1), 'Could not reorder')}
                   >
                     ↓
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain"
                     type="button"
                     className="task-plain task-item-tool danger"
                     aria-label={`Delete “${item.text}”`}
@@ -248,7 +249,7 @@ export function TaskListPage() {
                     }}
                   >
                     ×
-                  </button>
+                  </Button>
                 </span>
               ) : null}
             </li>
@@ -269,9 +270,9 @@ export function TaskListPage() {
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={onDraftKey}
           />
-          <button type="submit" disabled={adding || !draft.trim()}>
+          <Button type="submit" disabled={adding || !draft.trim()}>
             {adding ? 'Adding…' : 'Add'}
-          </button>
+          </Button>
         </form>
       ) : null}
     </div>

@@ -17,6 +17,7 @@ import {
 } from '../components/ComponentsIndex';
 import { confirmDelete } from '../components/layout/deleteDialogue';
 import { canEdit, workspaceSection } from './workspaceContext';
+import { Button } from '../components/buttons/Button';
 
 export function WorkspaceShellPage() {
   const { workspaceId, pageId, noteId } = useParams();
@@ -251,22 +252,20 @@ export function WorkspaceShellPage() {
               <p className="sidebar-label">Pages</p>
               {editable ? (
                 <span className="header-creates">
-                  <button
+                  <Button variant="link"
                     type="button"
-                    className="linkish"
                     onClick={() => void onCreateNode('markdown')}
                     disabled={busy}
                   >
                     MD
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="link"
                     type="button"
-                    className="linkish"
                     onClick={() => void onCreateNode('folder')}
                     disabled={busy}
                   >
                     Folder
-                  </button>
+                  </Button>
                 </span>
               ) : null}
             </div>
@@ -285,7 +284,7 @@ export function WorkspaceShellPage() {
       </Sidebar>
       <section className="editor-pane">
         <div className="mobile-chrome">
-          <button
+          <Button variant="plain"
             type="button"
             className="sidebar-toggle"
             aria-controls="workspace-sidebar"
@@ -298,7 +297,7 @@ export function WorkspaceShellPage() {
               <line x1="3.5" y1="17.5" x2="20.5" y2="17.5" />
             </svg>
             {section === 'notes' ? 'Notes' : section === 'tasks' ? 'Tasks' : section === 'tickets' ? 'Tickets' : 'Pages'}
-          </button>
+          </Button>
           {currentTitle ? (
             <span className="mobile-title">{currentTitle}</span>
           ) : isNotesHome || isDocsHome ? (

@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { PublicNote } from '../../api/client';
 import type { DropZone, NoteNode } from './noteTreeModel';
+import { Button } from '../buttons/Button';
 
 function ChevronIcon() {
   return (
@@ -189,7 +190,7 @@ function NoteTreeItem({
       >
         <span className="row-toggle">
           {hasChildren ? (
-            <button
+            <Button variant="plain"
               type="button"
               className={expanded ? 'row-toggle-btn' : 'row-toggle-btn collapsed'}
               aria-label={expanded ? 'Collapse sub-notes' : 'Expand sub-notes'}
@@ -197,7 +198,7 @@ function NoteTreeItem({
               onClick={() => onToggleExpand(note.id)}
             >
               <ChevronIcon />
-            </button>
+            </Button>
           ) : null}
         </span>
         <NoteGlyph note={note} />
@@ -206,20 +207,19 @@ function NoteTreeItem({
         </NavLink>
         {note.editable ? (
           <span className={menuOpen ? 'page-row-menu open' : 'page-row-menu'} ref={menuRef}>
-            <button
+            <Button variant="link"
               type="button"
               ref={menuTriggerRef}
-              className="linkish icon-btn"
               aria-label="More actions"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((value) => !value)}
             >
               <KebabIcon />
-            </button>
+            </Button>
             {menuOpen ? (
               <div className="page-row-dropdown" role="menu">
-                <button
+                <Button variant="plain"
                   type="button"
                   role="menuitem"
                   className="page-row-dropdown-item"
@@ -229,8 +229,8 @@ function NoteTreeItem({
                   }}
                 >
                   Add sub-note
-                </button>
-                <button
+                </Button>
+                <Button variant="plain"
                   type="button"
                   role="menuitem"
                   className="page-row-dropdown-item"
@@ -240,9 +240,9 @@ function NoteTreeItem({
                   }}
                 >
                   Add kanban
-                </button>
+                </Button>
                 {note.kind === 'note' ? (
-                  <button
+                  <Button variant="plain"
                     type="button"
                     role="menuitem"
                     className="page-row-dropdown-item"
@@ -252,9 +252,9 @@ function NoteTreeItem({
                     }}
                   >
                     Send to Tasks
-                  </button>
+                  </Button>
                 ) : null}
-                <button
+                <Button variant="plain"
                   type="button"
                   role="menuitem"
                   className="page-row-dropdown-item danger"
@@ -264,7 +264,7 @@ function NoteTreeItem({
                   }}
                 >
                   Move to trash
-                </button>
+                </Button>
               </div>
             ) : null}
           </span>

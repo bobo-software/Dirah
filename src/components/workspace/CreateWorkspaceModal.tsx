@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { useWorkspaceStore } from '../../stores/StoresIndex';
 import type { PublicWorkspace } from '../../api/client';
+import { Button } from '../buttons/Button';
 
 export default function CreateWorkspaceModal({
   open,
@@ -77,12 +78,12 @@ export default function CreateWorkspaceModal({
             </p>
           ) : null}
           <div className="modal-actions">
-            <button type="button" className="linkish" onClick={onClose} disabled={busy}>
+            <Button variant="link" type="button" onClick={onClose} disabled={busy}>
               Cancel
-            </button>
-            <button type="submit" disabled={busy}>
+            </Button>
+            <Button type="submit" disabled={busy}>
               {busy ? 'Creating…' : 'Create'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

@@ -1,3 +1,4 @@
+import { Button } from '../buttons/Button';
 export type TokenAccessFieldsWorkspace = {
   id: string;
   name: string;
@@ -83,7 +84,7 @@ export default function TokenAccessFields({
                   {LEVELS.map((lvl) => {
                     const disabled = lvl.key === 'write' && !canWriteForRole(workspace.role);
                     return (
-                      <button
+                      <Button variant="plain"
                         key={lvl.key}
                         type="button"
                         className={`access-segment${level === lvl.key ? ' on' : ''}${lvl.key === 'write' ? ' write' : ''}`}
@@ -97,7 +98,7 @@ export default function TokenAccessFields({
                         }}
                       >
                         {lvl.label}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button } from '../buttons/Button';
 
 export default function CopyTokenOnce({
   secret,
@@ -30,9 +31,9 @@ export default function CopyTokenOnce({
       <p className="muted" role="status">
         {notice}
       </p>
-      <button type="button" onClick={() => void copy()} disabled={busy}>
+      <Button type="button" onClick={() => void copy()} disabled={busy}>
         {busy ? 'Copying…' : 'Copy token'}
-      </button>
+      </Button>
       {failed ? (
         <p className="error" role="alert">
           Could not copy. Allow clipboard access and try once more.

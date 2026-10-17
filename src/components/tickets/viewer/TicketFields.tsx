@@ -7,6 +7,7 @@ import { MenuTrigger, OptionMenu } from '../TicketMenus';
 import { TicketMarkdown } from '../TicketMarkdown';
 import { memberLabel, timeAgo } from '../ticketMeta';
 import { CalendarIcon, GroupIcon, PeopleIcon, PriorityIcon, StatusIcon, TagIcon } from './ViewerIcons';
+import { Button } from '../../buttons/Button';
 
 export function TicketTitle({ title, editable, onSave }: { title: string; editable: boolean; onSave: (title: string) => void }) {
   const [draft, setDraft] = useState(title);
@@ -174,9 +175,9 @@ function TicketLabels({
         <span key={label} className="ticket-label">
           {label}
           {editable ? (
-            <button type="button" aria-label={`Remove label ${label}`} onClick={() => onChange(labels.filter((item) => item !== label))}>
+            <Button type="button" aria-label={`Remove label ${label}`} onClick={() => onChange(labels.filter((item) => item !== label))}>
               ×
-            </button>
+            </Button>
           ) : null}
         </span>
       ))}
@@ -250,12 +251,12 @@ export function TicketDescription({
             onError={setError}
             actions={({ uploading }) => (
               <>
-                <button type="button" className="linkish rich-input-hint" onClick={() => setEditing(false)}>
+                <Button variant="link" type="button" className="rich-input-hint" onClick={() => setEditing(false)}>
                   Cancel
-                </button>
-                <button type="button" onClick={() => void save()} disabled={busy || uploading}>
+                </Button>
+                <Button type="button" onClick={() => void save()} disabled={busy || uploading}>
                   Save
-                </button>
+                </Button>
               </>
             )}
           />

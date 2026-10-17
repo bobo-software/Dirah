@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuthStore, useWorkspaceStore } from '../stores/StoresIndex';
 import { answerOAuthRequest, getOAuthClient, type OAuthClientInfo } from '../api/mcp';
 import { TokenAccessFields, type TokenAccessValue } from '../components/ComponentsIndex';
+import { Button } from '../components/buttons/Button';
 
 export function McpOAuthConsentPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -137,17 +138,17 @@ export function McpOAuthConsentPage() {
       </p>
 
       <div className="mcp-consent-actions">
-        <button
+        <Button variant="plain"
           type="button"
           className="mcp-create-submit"
           onClick={() => void respond(false)}
           disabled={busy || chosen.length === 0}
         >
           {busy ? 'Connecting…' : 'Allow access'}
-        </button>
-        <button type="button" className="linkish" onClick={() => void respond(true)} disabled={busy}>
+        </Button>
+        <Button variant="link" type="button" onClick={() => void respond(true)} disabled={busy}>
           Cancel
-        </button>
+        </Button>
       </div>
     </section>
   );

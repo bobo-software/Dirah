@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWorkspaceStore } from '../../stores/StoresIndex';
+import { Button } from '../buttons/Button';
 
 const MAX_LENGTH = 500;
 
@@ -75,12 +76,12 @@ export function WorkspaceDescriptionEditor({
           </p>
         ) : null}
         <div className="folder-actions">
-          <button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending}>
             {pending ? 'Saving…' : 'Save'}
-          </button>
-          <button type="button" className="linkish" disabled={pending} onClick={() => setEditing(false)}>
+          </Button>
+          <Button variant="link" type="button" disabled={pending} onClick={() => setEditing(false)}>
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     );
@@ -89,9 +90,9 @@ export function WorkspaceDescriptionEditor({
   if (!description) {
     if (!editable) return null;
     return (
-      <button type="button" className="linkish home-landing-description-empty" onClick={startEditing}>
+      <Button variant="link" type="button" className="home-landing-description-empty" onClick={startEditing}>
         Add a description…
-      </button>
+      </Button>
     );
   }
 
@@ -99,15 +100,14 @@ export function WorkspaceDescriptionEditor({
     <p className="home-landing-description">
       {description}
       {editable ? (
-        <button
+        <Button variant="link"
           type="button"
-          className="linkish icon-btn"
           aria-label="Edit description"
           title="Edit description"
           onClick={startEditing}
         >
           <EditIcon />
-        </button>
+        </Button>
       ) : null}
     </p>
   );

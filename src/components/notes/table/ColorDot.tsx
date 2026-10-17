@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SELECT_COLORS, type SelectColor } from './columnTypes';
 import { placeFloatingMenu } from './placeFloatingMenu';
+import { Button } from '../../buttons/Button';
 
 function colorLabel(color: SelectColor) {
   return color.charAt(0).toUpperCase() + color.slice(1);
@@ -56,7 +57,7 @@ export function ColorDot({
 
   return (
     <>
-      <button
+      <Button variant="plain"
         ref={buttonRef}
         type="button"
         className={`note-type-dot note-type-${color}`}
@@ -73,7 +74,7 @@ export function ColorDot({
         ? createPortal(
             <div ref={paletteRef} className="note-color-palette" role="dialog" aria-label={`Color for ${name}`}>
               {SELECT_COLORS.map((item) => (
-                <button
+                <Button variant="plain"
                   key={item}
                   type="button"
                   className={`note-type-dot note-type-${item}`}

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import { ColorDot } from './ColorDot';
 import { COLUMN_TYPE_LABEL, COLUMN_TYPES, nextSelectColor, type ColumnType, type SelectOption } from './columnTypes';
 import { placeFloatingMenu } from './placeFloatingMenu';
+import { Button } from '../../buttons/Button';
 
 const ICON_PATHS: Record<ColumnType, string> = {
   text: '<path d="M5 6h14M5 12h14M5 18h9"/>',
@@ -41,7 +42,7 @@ export function ColumnTypeButton({
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <button
+    <Button variant="plain"
       ref={buttonRef}
       type="button"
       className="note-col-type"
@@ -56,7 +57,7 @@ export function ColumnTypeButton({
       }}
     >
       <ColumnTypeIcon type={type} />
-    </button>
+    </Button>
   );
 }
 
@@ -100,14 +101,14 @@ function ChoiceEditor({
               />
               <span>{option.n}</span>
               {editable ? (
-                <button
+                <Button variant="plain"
                   type="button"
                   className="note-col-choice-remove"
                   aria-label={`Remove ${option.n}`}
                   onClick={() => onOptionsChange(options.filter((entry) => entry.n !== option.n))}
                 >
                   ×
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -122,7 +123,7 @@ function ChoiceEditor({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
           />
-          <button type="submit">Add</button>
+          <Button type="submit">Add</Button>
         </form>
       ) : null}
     </div>
@@ -184,7 +185,7 @@ export function ColumnTypeSelector({
   return (
     <div ref={menuRef} className="note-col-menu" role="menu" tabIndex={-1}>
       {COLUMN_TYPES.map((item) => (
-        <button
+        <Button variant="plain"
           key={item}
           type="button"
           className={item === type ? 'note-col-option on' : 'note-col-option'}
@@ -198,7 +199,7 @@ export function ColumnTypeSelector({
         >
           <ColumnTypeIcon type={item} />
           {COLUMN_TYPE_LABEL[item]}
-        </button>
+        </Button>
       ))}
       {type === 'select' ? (
         <ChoiceEditor options={options} editable={editable} onOptionsChange={onOptionsChange} />

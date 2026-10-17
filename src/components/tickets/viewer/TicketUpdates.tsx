@@ -13,6 +13,7 @@ import { confirmDelete } from '../../layout/deleteDialogue';
 import { Avatar } from '../TicketMenus';
 import { TicketMarkdown } from '../TicketMarkdown';
 import { describeActivity, memberLabel, timeAgo } from '../ticketMeta';
+import { Button } from '../../buttons/Button';
 
 type Tab = 'all' | 'comments' | 'history';
 
@@ -68,7 +69,7 @@ export function TicketUpdates({
         <h3 className="ticket-viewer-heading">Updates</h3>
         <div className="ticket-feed-tabs" role="tablist" aria-label="Show">
           {tabs.map((item) => (
-            <button
+            <Button variant="plain"
               key={item.id}
               type="button"
               role="tab"
@@ -78,7 +79,7 @@ export function TicketUpdates({
             >
               {item.label}
               {loaded ? <span className="ticket-feed-count">{item.count}</span> : null}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -189,21 +190,20 @@ function CommentItem({
         {!editing ? (
           <span className="ticket-comment-actions">
             {comment.editable ? (
-              <button
+              <Button variant="link"
                 type="button"
-                className="linkish"
                 onClick={() => {
                   setDraft(comment.body);
                   setEditing(true);
                 }}
               >
                 Edit
-              </button>
+              </Button>
             ) : null}
             {comment.deletable ? (
-              <button type="button" className="linkish danger" onClick={() => void remove()}>
+              <Button variant="link" type="button" className="danger" onClick={() => void remove()}>
                 Delete
-              </button>
+              </Button>
             ) : null}
           </span>
         ) : null}
@@ -219,12 +219,12 @@ function CommentItem({
           onError={onError}
           actions={({ uploading }) => (
             <>
-              <button type="button" className="linkish rich-input-hint" onClick={() => setEditing(false)}>
+              <Button variant="link" type="button" className="rich-input-hint" onClick={() => setEditing(false)}>
                 Cancel
-              </button>
-              <button type="button" onClick={() => void save()} disabled={uploading || !draft.trim()}>
+              </Button>
+              <Button type="button" onClick={() => void save()} disabled={uploading || !draft.trim()}>
                 Save
-              </button>
+              </Button>
             </>
           )}
         />
@@ -278,9 +278,9 @@ function CommentComposer({
         actions={({ uploading }) => (
           <>
             <span className="muted rich-input-hint">⌘/Ctrl + Enter</span>
-            <button type="submit" disabled={busy || uploading || !body.trim()}>
+            <Button type="submit" disabled={busy || uploading || !body.trim()}>
               {busy ? 'Posting…' : 'Comment'}
-            </button>
+            </Button>
           </>
         )}
       />

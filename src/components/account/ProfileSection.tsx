@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useAuthStore, useWorkspaceStore } from '../../stores/StoresIndex';
+import { Button } from '../buttons/Button';
 
 const ROLE_SUGGESTIONS = ['Founder', 'Engineer', 'Designer', 'Product', 'Writer', 'Researcher', 'Operations'];
 
@@ -148,9 +149,9 @@ export function ProfileSection() {
               {message}
             </p>
           ) : null}
-          <button type="submit" disabled={!ready || busy || !dirty || !email.trim()}>
+          <Button type="submit" disabled={!ready || busy || !dirty || !email.trim()}>
             {busy ? 'Saving…' : 'Save profile'}
-          </button>
+          </Button>
         </form>
       </div>
 

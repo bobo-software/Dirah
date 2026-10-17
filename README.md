@@ -95,7 +95,7 @@ src/
   billing/        plan catalogue shown on the home page
 ```
 
-`apiRequest` in `src/api/client.ts` sends `credentials: 'include'` and an optional Bearer access token. The API keeps the refresh token in an httpOnly cookie. `useAuthStore.initAuth()` runs once on startup and refreshes the session.
+`apiRequest` in `src/api/client.ts` sends `credentials: 'include'` and an optional Bearer access token. The API keeps the refresh token in an httpOnly cookie. `useAuthStore.initAuth()` refreshes the session on startup. While the tab stays open, the client refreshes again about a minute before the access token expires, and retries a `401` once after `POST /api/auth/refresh`.
 
 Page nodes are `folder` or `markdown`. Folders hold children. Markdown opens in CodeMirror with a preview. Ask (the copilot panel) calls `POST /api/ai/pages/:id` when the API has `AI_API_KEY` set. The editor works when Ask is off.
 

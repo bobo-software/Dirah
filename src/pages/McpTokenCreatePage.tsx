@@ -3,6 +3,7 @@ import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { useMcpStore, useWorkspaceStore } from '../stores/StoresIndex';
 import { BackIcon, KeyIcon, TokenAccessFields, type TokenAccessValue } from '../components/ComponentsIndex';
 import type { WorkspaceOutlet } from './workspaceContext';
+import { Button } from '../components/buttons/Button';
 
 export function McpTokenCreatePage() {
   const outlet = useOutletContext<WorkspaceOutlet | null>();
@@ -110,10 +111,10 @@ export function McpTokenCreatePage() {
           ) : null}
         </div>
 
-        <button type="submit" className="mcp-create-submit" disabled={busy || !name.trim()}>
+        <Button variant="plain" type="submit" className="mcp-create-submit" disabled={busy || !name.trim()}>
           <KeyIcon />
           {busy ? 'Creating…' : 'Create token'}
-        </button>
+        </Button>
       </form>
     </section>
   );

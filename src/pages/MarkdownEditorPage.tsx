@@ -29,6 +29,7 @@ import {
   useMarkdownContentStore,
   usePageStore,
 } from '../stores/StoresIndex';
+import { Button } from '../components/buttons/Button';
 
 export function MarkdownEditorPage() {
   const { workspaceId, pageId } = useParams();
@@ -171,9 +172,9 @@ export function MarkdownEditorPage() {
             {message}
           </p>
         ) : null}
-        <button type="submit" disabled={unlocking}>
+        <Button type="submit" disabled={unlocking}>
           {unlocking ? 'Unlocking…' : 'Unlock'}
-        </button>
+        </Button>
       </form>
     );
   }
@@ -187,7 +188,7 @@ export function MarkdownEditorPage() {
             <FileIcon />
             Markdown
           </span>
-          <button
+          <Button variant="plain"
             type="button"
             className={`editor-tool-btn${showSource ? ' on' : ''}`}
             onClick={toggleShowSource}
@@ -196,13 +197,13 @@ export function MarkdownEditorPage() {
           >
             <CodeIcon />
             {showSource ? 'Hide source' : 'Show source'}
-          </button>
-          <button type="button" className="editor-tool-btn" onClick={onDownload} title="Download as .md">
+          </Button>
+          <Button variant="plain" type="button" className="editor-tool-btn" onClick={onDownload} title="Download as .md">
             <DownloadIcon />
             Download .md
-          </button>
+          </Button>
           {accessToken && aiEnabled && !encrypted ? (
-            <button
+            <Button variant="plain"
               type="button"
               className={`editor-tool-btn${askOpen ? ' on' : ''}`}
               onClick={() => setAskOpen((open) => !open)}
@@ -210,10 +211,10 @@ export function MarkdownEditorPage() {
             >
               <SparkleIcon />
               Ask
-            </button>
+            </Button>
           ) : null}
           {editable ? (
-            <button
+            <Button variant="plain"
               type="button"
               className="editor-tool-btn save-btn"
               onClick={() => void save()}
@@ -221,7 +222,7 @@ export function MarkdownEditorPage() {
             >
               {dirty || saving ? <SaveIcon /> : <CheckIcon />}
               {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
-            </button>
+            </Button>
           ) : (
             <span className="editor-meta">
               <LockIcon />

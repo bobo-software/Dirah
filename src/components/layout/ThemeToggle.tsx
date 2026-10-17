@@ -1,4 +1,5 @@
 import { useTheme, type ThemePreference } from '../../theme/ThemeContext';
+import { Button } from '../buttons/Button';
 
 const LABELS: Record<ThemePreference, string> = {
   system: 'Matching device theme',
@@ -50,15 +51,15 @@ export function ThemeToggle() {
   const next = NEXT[preference];
 
   return (
-    <button
+    <Button variant="icon"
       type="button"
-      className="icon-btn theme-toggle"
+      className="theme-toggle"
       onClick={cycle}
       aria-label={`Theme: ${LABELS[preference]}. Click to switch to ${LABELS[next].toLowerCase()}.`}
       title={LABELS[preference]}
     >
       <Icon />
-    </button>
+    </Button>
   );
 }
 

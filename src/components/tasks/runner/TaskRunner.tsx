@@ -13,6 +13,7 @@ import {
 import type { TaskItem } from '../../../api/tasks';
 import { useTaskStore } from '../../../stores/StoresIndex';
 import { taskMode, type TaskModeConfig } from './modes';
+import { Button } from '../../buttons/Button';
 
 type Phase = 'start' | 'run' | 'done';
 type Answer = { itemId: string; checked: boolean; previous: boolean };
@@ -137,11 +138,11 @@ export function TaskRunner({ listId, onExit }: { listId: string; onExit: () => v
     <MotionConfig reducedMotion="user">
       <div className="task-runner" role="dialog" aria-modal="true" aria-label={`${mode.runLabel}: ${view.list.title}`}>
         <header className="task-run-head">
-          <button type="button" className="task-plain task-run-icon" onClick={onExit} aria-label="Close">
+          <Button variant="plain" type="button" className="task-plain task-run-icon" onClick={onExit} aria-label="Close">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6 6 18" />
             </svg>
-          </button>
+          </Button>
           {phase === 'run' ? (
             <>
               <div
@@ -160,7 +161,7 @@ export function TaskRunner({ listId, onExit }: { listId: string; onExit: () => v
           ) : (
             <p className="task-run-title">{view.list.title}</p>
           )}
-          <button
+          <Button variant="plain"
             type="button"
             className="task-plain task-run-icon"
             onClick={undo}
@@ -172,7 +173,7 @@ export function TaskRunner({ listId, onExit }: { listId: string; onExit: () => v
               <path d="M9 14 4 9l5-5" />
               <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
             </svg>
-          </button>
+          </Button>
         </header>
 
         <AnimatePresence mode="wait" initial={false}>
@@ -426,9 +427,9 @@ function StartScreen({
         <>
           <p className="task-run-sub">Nothing to run yet. Add a few items first.</p>
           <div className="task-run-buttons">
-            <button type="button" onClick={onExit}>
+            <Button type="button" onClick={onExit}>
               Back to list
-            </button>
+            </Button>
           </div>
         </>
       ) : (
@@ -439,16 +440,16 @@ function StartScreen({
           </p>
           <div className="task-run-buttons">
             {remaining > 0 ? (
-              <button type="button" onClick={onRemaining} disabled={busy} autoFocus>
+              <Button type="button" onClick={onRemaining} disabled={busy} autoFocus>
                 {checkedCount > 0 ? `Check the ${remaining} left` : 'Start'}
-              </button>
+              </Button>
             ) : (
               <p className="task-run-sub">Everything is already checked.</p>
             )}
             {checkedCount > 0 ? (
-              <button type="button" className="task-plain task-run-secondary" onClick={onFresh} disabled={busy}>
+              <Button variant="plain" type="button" className="task-plain task-run-secondary" onClick={onFresh} disabled={busy}>
                 {busy ? 'Resetting…' : `Start fresh with all ${total}`}
-              </button>
+              </Button>
             ) : null}
           </div>
         </>
@@ -507,18 +508,18 @@ function DoneScreen({
       ) : null}
       <div className="task-run-buttons">
         {missed.length > 0 ? (
-          <button type="button" onClick={() => onAgain(missed)} autoFocus>
+          <Button type="button" onClick={() => onAgain(missed)} autoFocus>
             Go through the {missed.length} again
-          </button>
+          </Button>
         ) : null}
-        <button
+        <Button variant="plain"
           type="button"
           className={missed.length > 0 ? 'task-plain task-run-secondary' : undefined}
           onClick={onExit}
           autoFocus={missed.length === 0}
         >
           Back to list
-        </button>
+        </Button>
       </div>
     </motion.main>
   );

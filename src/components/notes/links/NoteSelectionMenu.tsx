@@ -8,6 +8,7 @@ import { NoteLinkPicker, type NoteLinkPickerHandle } from './NoteLinkPicker';
 import { noteLinkContent } from './noteLink';
 import { cleanLinkLabel, noteLinkItems, type NoteLinkItem } from './noteLinkItems';
 import { extractSelectionToSubnote, selectedText } from './extractToSubnote';
+import { Button } from '../../buttons/Button';
 
 const BLOCKED_PARENTS = new Set(['codeBlock', 'table']);
 
@@ -97,7 +98,7 @@ export function NoteSelectionMenu({
     >
       {mode === 'actions' ? (
         <div className="note-bubble-actions" role="toolbar" aria-label="Selection">
-          <button
+          <Button
             type="button"
             disabled={busy}
             onMouseDown={(event) => event.preventDefault()}
@@ -105,8 +106,8 @@ export function NoteSelectionMenu({
             title="Move the selection into a new sub-note and link to it"
           >
             {busy ? 'Creating…' : 'Turn into sub-note'}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={busy}
             onMouseDown={(event) => event.preventDefault()}
@@ -114,7 +115,7 @@ export function NoteSelectionMenu({
             title="Link the selection to another note"
           >
             Link to note
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="note-bubble-link">

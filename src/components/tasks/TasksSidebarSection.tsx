@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { EMPTY_TASK_LISTS, useTaskStore } from '../../stores/StoresIndex';
 import { HomeIcon, TasksIcon } from '../layout/SectionIcons';
+import { Button } from '../buttons/Button';
 
 export function TasksSidebarSection({ workspaceId }: { workspaceId: string }) {
   const navigate = useNavigate();
@@ -40,9 +41,9 @@ export function TasksSidebarSection({ workspaceId }: { workspaceId: string }) {
       <div className="sidebar-pages-header">
         <p className="sidebar-label">Lists</p>
         <span className="header-creates">
-          <button type="button" className="linkish" onClick={() => void onCreate()} disabled={busy}>
+          <Button variant="link" type="button" onClick={() => void onCreate()} disabled={busy}>
             New
-          </button>
+          </Button>
         </span>
       </div>
       {!loaded ? (

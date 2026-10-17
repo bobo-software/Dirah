@@ -18,6 +18,7 @@ import { NoteBacklinks } from './links/NoteBacklinks';
 import { NoteFormatter } from './formatter/NoteFormatter';
 import { TasksIcon } from '../layout/SectionIcons';
 import { useSendNoteToTasks } from '../tasks/useSendNoteToTasks';
+import { Button } from '../buttons/Button';
 
 const SAVE_DELAY_MS = 800;
 
@@ -279,16 +280,16 @@ export function NoteEditor({
           <span className="note-crumbs-actions">
             {saveIndicator}
             {ready && note && !unsupported ? (
-              <button
+              <Button variant="link"
                 type="button"
-                className="linkish note-send-tasks"
+                className="note-send-tasks"
                 onClick={() => void sendToTasks.send(noteId, settleSaves)}
                 disabled={sendToTasks.sending}
                 title="Copy this note’s list items into a new checklist"
               >
                 <TasksIcon />
                 {sendToTasks.sending ? 'Sending…' : 'Send to Tasks'}
-              </button>
+              </Button>
             ) : null}
           </span>
         </nav>
@@ -296,12 +297,12 @@ export function NoteEditor({
       {conflict ? (
         <div className="note-banner warning" role="alert">
           <span>This note changed somewhere else since you opened it.</span>
-          <button type="button" onClick={() => void onReloadLatest()}>
+          <Button type="button" onClick={() => void onReloadLatest()}>
             Reload latest
-          </button>
-          <button type="button" className="linkish" onClick={() => void onKeepMine()}>
+          </Button>
+          <Button variant="link" type="button" onClick={() => void onKeepMine()}>
             Overwrite with mine
-          </button>
+          </Button>
         </div>
       ) : null}
       {ready && note && !editable ? <p className="note-banner">Shared by another member. View only.</p> : null}

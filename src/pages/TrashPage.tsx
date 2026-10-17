@@ -4,6 +4,7 @@ import { EMPTY_PAGES, usePageStore } from '../stores/StoresIndex';
 import type { PublicPage } from '../api/client';
 import { confirmDelete } from '../components/layout/deleteDialogue';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
+import { Button } from '../components/buttons/Button';
 
 export function TrashPage() {
   const { workspaceId } = useParams();
@@ -68,16 +69,16 @@ export function TrashPage() {
               <span>{page.title}</span>
               {editable ? (
                 <span className="page-actions">
-                  <button type="button" className="linkish" onClick={() => void onRestore(page)}>
+                  <Button variant="link" type="button" onClick={() => void onRestore(page)}>
                     Restore
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="link"
                     type="button"
-                    className="linkish danger"
+                    className="danger"
                     onClick={() => void onPermanent(page)}
                   >
                     Delete forever
-                  </button>
+                  </Button>
                 </span>
               ) : (
                 <span className="muted">View only</span>

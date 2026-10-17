@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEditorState, type Editor } from '@tiptap/react';
+import { Button } from '../../buttons/Button';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 const mod = isMac ? '⌘' : 'Ctrl';
@@ -112,7 +113,7 @@ function ToolButton({
   children: ReactNode;
 }) {
   return (
-    <button
+    <Button variant="plain"
       type="button"
       className={active ? 'editor-tool-btn note-tool on' : 'editor-tool-btn note-tool'}
       aria-label={label}
@@ -124,7 +125,7 @@ function ToolButton({
       onClick={onClick}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

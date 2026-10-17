@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Ticket, TicketBoardView } from '../../../api/tickets';
 import { placeFloatingMenu } from '../../notes/table/placeFloatingMenu';
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon, CollapseIcon, ExpandIcon, LinkIcon, MoreIcon } from './ViewerIcons';
+import { Button } from '../../buttons/Button';
 
 export function TicketViewerHeader({
   view,
@@ -70,14 +71,14 @@ export function TicketViewerHeader({
         <span className="ticket-viewer-crumb-sep" aria-hidden="true">
           /
         </span>
-        <button
+        <Button variant="plain"
           type="button"
           className="ticket-viewer-key"
           title="Copy ticket key"
           onClick={() => void copy(ticket.key, `Copied ${ticket.key}`)}
         >
           {ticket.key}
-        </button>
+        </Button>
       </nav>
       <div className="ticket-viewer-tools">
         {notice ? (
@@ -87,7 +88,7 @@ export function TicketViewerHeader({
         ) : null}
         {onNavigate ? (
           <>
-            <button
+            <Button variant="plain"
               type="button"
               className="ticket-viewer-tool"
               aria-label="Previous ticket"
@@ -96,8 +97,8 @@ export function TicketViewerHeader({
               onClick={() => previous && onNavigate(previous)}
             >
               <ChevronUpIcon />
-            </button>
-            <button
+            </Button>
+            <Button variant="plain"
               type="button"
               className="ticket-viewer-tool"
               aria-label="Next ticket"
@@ -106,11 +107,11 @@ export function TicketViewerHeader({
               onClick={() => next && onNavigate(next)}
             >
               <ChevronDownIcon />
-            </button>
+            </Button>
             <span className="ticket-viewer-divider" aria-hidden="true" />
           </>
         ) : null}
-        <button
+        <Button variant="plain"
           type="button"
           className="ticket-viewer-tool"
           aria-label="Copy link"
@@ -118,9 +119,9 @@ export function TicketViewerHeader({
           onClick={() => void copy(link, 'Link copied')}
         >
           <LinkIcon />
-        </button>
+        </Button>
         {onToggleWide ? (
-          <button
+          <Button variant="plain"
             type="button"
             className="ticket-viewer-tool"
             aria-label={wide ? 'Narrow view' : 'Wide view'}
@@ -128,9 +129,9 @@ export function TicketViewerHeader({
             onClick={onToggleWide}
           >
             {wide ? <CollapseIcon /> : <ExpandIcon />}
-          </button>
+          </Button>
         ) : null}
-        <button
+        <Button variant="plain"
           type="button"
           className="ticket-viewer-tool"
           aria-label="More actions"
@@ -139,11 +140,11 @@ export function TicketViewerHeader({
           onClick={(event) => setMenuAnchor(menuAnchor ? null : event.currentTarget)}
         >
           <MoreIcon />
-        </button>
+        </Button>
         {onClose ? (
-          <button type="button" className="ticket-viewer-tool" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+          <Button variant="plain" type="button" className="ticket-viewer-tool" aria-label="Close" title="Close (Esc)" onClick={onClose}>
             <CloseIcon />
-          </button>
+          </Button>
         ) : null}
       </div>
       {menuAnchor ? (
@@ -205,7 +206,7 @@ function MoreMenu({
   return createPortal(
     <div ref={menuRef} className="note-col-menu ticket-menu" role="menu">
       {items.map((item) => (
-        <button
+        <Button variant="plain"
           key={item.label}
           type="button"
           role="menuitem"
@@ -216,7 +217,7 @@ function MoreMenu({
           }}
         >
           {item.label}
-        </button>
+        </Button>
       ))}
     </div>,
     document.body

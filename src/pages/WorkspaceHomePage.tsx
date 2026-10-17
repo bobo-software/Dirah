@@ -2,6 +2,7 @@ import { useOutletContext, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore, useWorkspaceStore } from '../stores/StoresIndex';
 import { canAdmin, canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { DocsBrowser, WorkspaceDescriptionEditor } from '../components/ComponentsIndex';
+import { Button } from '../components/buttons/Button';
 
 export function WorkspaceHomePage() {
   const { workspaceId } = useParams();
@@ -24,12 +25,12 @@ export function WorkspaceHomePage() {
       />
       {pages.length === 0 && canEdit(role) ? (
         <div className="folder-actions">
-          <button type="button" onClick={() => onCreateNode('markdown')}>
+          <Button type="button" onClick={() => onCreateNode('markdown')}>
             Create your first document
-          </button>
-          <button type="button" onClick={() => onCreateNode('folder')}>
+          </Button>
+          <Button type="button" onClick={() => onCreateNode('folder')}>
             New folder
-          </button>
+          </Button>
         </div>
       ) : null}
       <DocsBrowser workspaceId={workspaceId} />

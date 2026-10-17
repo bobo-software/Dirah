@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuthStore } from '../../stores/StoresIndex';
 import { Logo, ThemeToggle } from '../../components/ComponentsIndex';
+import { Button } from '../../components/buttons/Button';
 
 export function AdminLoginPage() {
   const admin = useAdminAuthStore((state) => state.admin);
@@ -71,9 +72,9 @@ export function AdminLoginPage() {
           />
         </label>
         {message ? <p className="error">{message}</p> : null}
-        <button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
     </main>
   );

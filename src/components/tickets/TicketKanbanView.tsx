@@ -4,6 +4,7 @@ import type { Ticket, TicketBoardView } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
 import { Avatar } from './TicketMenus';
 import { dueTone, formatDue, matchesFilter, PRIORITY_META } from './ticketMeta';
+import { Button } from '../buttons/Button';
 
 const CARD_DRAG = 'text/ticket-card';
 
@@ -126,10 +127,10 @@ export function TicketKanbanView({
                       }
                     }}
                   >
-                    <button type="button" className="ticket-card-open" onClick={() => onOpen(ticket)}>
+                    <Button variant="plain" type="button" className="ticket-card-open" onClick={() => onOpen(ticket)}>
                       <span className="ticket-key">{ticket.key}</span>
                       <span className="ticket-card-title">{ticket.title}</span>
-                    </button>
+                    </Button>
                     {ticket.labels.length > 0 ? (
                       <div className="ticket-card-labels">
                         {ticket.labels.map((label) => (
@@ -157,9 +158,9 @@ export function TicketKanbanView({
               })}
             </div>
             {editable ? (
-              <button type="button" className="ticket-kanban-add" onClick={() => onAdd({ statusId: status.id })}>
+              <Button variant="plain" type="button" className="ticket-kanban-add" onClick={() => onAdd({ statusId: status.id })}>
                 + Add ticket
-              </button>
+              </Button>
             ) : null}
           </section>
         );

@@ -3,6 +3,7 @@ import type { PublicMember } from '../../api/members';
 import { TICKET_PRIORITIES, type TicketPriority, type TicketStatus } from '../../api/tickets';
 import { Avatar, MemberPicker, MenuTrigger, OptionMenu } from './TicketMenus';
 import { dueTone, formatDue, PRIORITY_META } from './ticketMeta';
+import { Button } from '../buttons/Button';
 
 const PRIORITY_OPTIONS = TICKET_PRIORITIES.map((priority) => ({
   id: priority,
@@ -140,7 +141,7 @@ export function DueCell({
   if (!editable) return <span className={`ticket-due ${tone}`}>{text}</span>;
   return (
     <span className={`ticket-due ticket-due-edit ${tone}`}>
-      <button
+      <Button variant="plain"
         type="button"
         className="ticket-cell-button"
         aria-label={dueDate ? `Due ${formatDue(dueDate)}. Change due date` : 'Set due date'}
@@ -153,9 +154,9 @@ export function DueCell({
         }}
       >
         {text}
-      </button>
+      </Button>
       {dueDate ? (
-        <button
+        <Button variant="plain"
           type="button"
           className="ticket-due-clear"
           aria-label="Clear due date"
@@ -165,7 +166,7 @@ export function DueCell({
           }}
         >
           ×
-        </button>
+        </Button>
       ) : null}
       <input
         ref={inputRef}

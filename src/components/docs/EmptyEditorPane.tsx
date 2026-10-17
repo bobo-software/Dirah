@@ -1,3 +1,4 @@
+import { Button } from '../buttons/Button';
 export function EmptyEditorPane({
   onCreate,
   busy,
@@ -15,12 +16,12 @@ export function EmptyEditorPane({
         <p className="muted">{hasPages ? 'Select a document or create another.' : 'No document selected.'}</p>
         {allowCreate ? (
           <div className="folder-actions">
-            <button type="button" onClick={() => onCreate('markdown')} disabled={busy}>
+            <Button type="button" onClick={() => onCreate('markdown')} disabled={busy}>
               {busy ? 'Creating…' : hasPages ? 'New markdown' : 'Create your first document'}
-            </button>
-            <button type="button" onClick={() => onCreate('folder')} disabled={busy}>
+            </Button>
+            <Button type="button" onClick={() => onCreate('folder')} disabled={busy}>
               New folder
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>

@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { EMPTY_TICKET_BOARDS, useTicketStore } from '../../stores/StoresIndex';
 import { HomeIcon, TicketsIcon } from '../layout/SectionIcons';
 import { CreateBoardModal } from './BoardModals';
+import { Button } from '../buttons/Button';
 
 export function TicketsSidebarSection({ workspaceId, editable }: { workspaceId: string; editable: boolean }) {
   const navigate = useNavigate();
@@ -29,9 +30,9 @@ export function TicketsSidebarSection({ workspaceId, editable }: { workspaceId: 
         <p className="sidebar-label">Boards</p>
         {editable ? (
           <span className="header-creates">
-            <button type="button" className="linkish" onClick={() => setCreating(true)}>
+            <Button variant="link" type="button" onClick={() => setCreating(true)}>
               New
-            </button>
+            </Button>
           </span>
         ) : null}
       </div>

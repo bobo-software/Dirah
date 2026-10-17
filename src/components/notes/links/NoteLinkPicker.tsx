@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { NoteGlyph } from '../NoteTree';
 import type { NoteLinkItem } from './noteLinkItems';
+import { Button } from '../../buttons/Button';
 
 export type NoteLinkPickerHandle = {
   /** Arrow keys and Enter drive the list; returns true when the key was used. */
@@ -58,7 +59,7 @@ export const NoteLinkPicker = forwardRef<NoteLinkPickerHandle, Props>(function N
     <div className="note-link-picker" role="listbox" aria-label="Link to note" ref={listRef}>
       {items.length === 0 ? <p className="note-link-picker-empty">{empty}</p> : null}
       {items.map((item, index) => (
-        <button
+        <Button variant="plain"
           key={item.kind === 'note' ? item.note.id : 'create'}
           type="button"
           role="option"
@@ -89,7 +90,7 @@ export const NoteLinkPicker = forwardRef<NoteLinkPickerHandle, Props>(function N
               </span>
             </>
           )}
-        </button>
+        </Button>
       ))}
     </div>
   );

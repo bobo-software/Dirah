@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 import { McpTokensSection, ProfileSection, SecuritySection } from '../components/ComponentsIndex';
+import { Button } from '../components/buttons/Button';
 
 type AccountTab = 'profile' | 'security' | 'mcp';
 
@@ -27,7 +28,7 @@ export function AccountSettingsPage() {
       <div className="settings-body">
         <nav className="settings-nav" aria-label="Settings sections">
           {TABS.map((tab) => (
-            <button
+            <Button variant="plain"
               key={tab.id}
               type="button"
               className={activeTab === tab.id ? 'settings-nav-item on' : 'settings-nav-item'}
@@ -35,7 +36,7 @@ export function AccountSettingsPage() {
               onClick={() => onSelectTab(tab.id)}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </nav>
         <div className="settings-content">

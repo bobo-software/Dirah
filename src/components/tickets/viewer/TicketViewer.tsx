@@ -7,6 +7,7 @@ import { TicketDescription, TicketProperties, TicketTitle } from './TicketFields
 import { TicketUpdates } from './TicketUpdates';
 import { TicketViewerHeader } from './TicketViewerHeader';
 import { useTicketDetail } from './useTicketDetail';
+import { Button } from '../../buttons/Button';
 
 /**
  * Everything about one ticket: header actions, title, properties, description
@@ -90,9 +91,9 @@ export function TicketViewer({
           {shownError ? (
             <p className="error ticket-viewer-error" role="alert">
               {shownError}{' '}
-              <button type="button" className="linkish" onClick={() => setError(null)}>
+              <Button variant="link" type="button" onClick={() => setError(null)}>
                 Dismiss
-              </button>
+              </Button>
             </p>
           ) : null}
         </div>

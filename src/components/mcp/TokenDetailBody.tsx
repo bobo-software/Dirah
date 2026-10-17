@@ -7,6 +7,7 @@ import { confirmDelete } from '../layout/deleteDialogue';
 import { BackIcon } from '../layout/SectionIcons';
 import CopyTokenOnce from './CopyTokenOnce';
 import TokenAccessFields, { type TokenAccessValue } from './TokenAccessFields';
+import { Button } from '../buttons/Button';
 
 function rowsToValue(rows: TokenAccessRow[]): Map<string, TokenAccessValue> {
   const map = new Map<string, TokenAccessValue>();
@@ -176,9 +177,9 @@ export function TokenDetailBody({
         <h2>Name</h2>
         <form className="inline-form" onSubmit={(event) => void onRename(event)}>
           <input value={name} onChange={(event) => setName(event.target.value)} aria-label="Token name" />
-          <button type="submit" disabled={!name.trim() || name === token.name}>
+          <Button type="submit" disabled={!name.trim() || name === token.name}>
             Save
-          </button>
+          </Button>
         </form>
       </div>
 
@@ -220,13 +221,13 @@ export function TokenDetailBody({
       <div className="settings-section">
         <h2>Danger zone</h2>
         {isOAuth ? null : (
-          <button type="button" onClick={() => void onRotate()}>
+          <Button type="button" onClick={() => void onRotate()}>
             Rotate token
-          </button>
+          </Button>
         )}
-        <button type="button" className="danger-btn" onClick={() => void onRevoke()}>
+        <Button variant="danger" type="button" onClick={() => void onRevoke()}>
           {isOAuth ? 'Disconnect app' : 'Revoke token'}
-        </button>
+        </Button>
       </div>
     </section>
   );

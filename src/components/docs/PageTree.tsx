@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMo
 import type { PageKind, PublicPage } from '../../api/client';
 import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
 import { categoryHue } from './categoryColor';
+import { Button } from '../buttons/Button';
 
 function ChevronIcon() {
   return (
@@ -251,7 +252,7 @@ function PageTreeItem({
         >
           <span className="row-toggle">
             {nestable && hasChildren ? (
-              <button
+              <Button variant="plain"
                 type="button"
                 className={collapsed ? 'row-toggle-btn collapsed' : 'row-toggle-btn'}
                 aria-label={collapsed ? 'Expand folder' : 'Collapse folder'}
@@ -262,7 +263,7 @@ function PageTreeItem({
                 }}
               >
                 <ChevronIcon />
-              </button>
+              </Button>
             ) : null}
           </span>
           {nestable ? (
@@ -284,42 +285,41 @@ function PageTreeItem({
             </NavLink>
           )}
           {nestable ? <span className="page-row-count">{node.children.length}</span> : null}
-          <button
+          <Button variant="plain"
             type="button"
             className={page.favorited ? 'linkish star on' : 'linkish star'}
             aria-label={page.favorited ? 'Remove favorite' : 'Favorite'}
             onClick={() => onFavorite(page)}
           >
             {page.favorited ? '★' : '☆'}
-          </button>
+          </Button>
           {editable && kind === 'markdown' ? (
             <span className="page-row-actions">
-              <button type="button" className="linkish icon-btn" aria-label="Rename" title="Rename" onClick={() => onStartRename(page)}>
+              <Button variant="link" type="button" aria-label="Rename" title="Rename" onClick={() => onStartRename(page)}>
                 <RenameIcon />
-              </button>
-              <button type="button" className="linkish icon-btn danger" aria-label="Trash" title="Trash" onClick={() => onTrash(page)}>
+              </Button>
+              <Button variant="link" type="button" className="danger" aria-label="Trash" title="Trash" onClick={() => onTrash(page)}>
                 <TrashIcon />
-              </button>
+              </Button>
             </span>
           ) : null}
           {editable && kind !== 'markdown' ? (
             <span className={menuOpen ? 'page-row-menu open' : 'page-row-menu'} ref={menuRef}>
-              <button
+              <Button variant="link"
                 type="button"
                 ref={menuTriggerRef}
-                className="linkish icon-btn"
                 aria-label="More actions"
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen((value) => !value)}
               >
                 <KebabIcon />
-              </button>
+              </Button>
               {menuOpen ? (
                 <div className="page-row-dropdown" role="menu">
                   {nestable ? (
                     <>
-                      <button
+                      <Button variant="plain"
                         type="button"
                         role="menuitem"
                         className="page-row-dropdown-item"
@@ -329,8 +329,8 @@ function PageTreeItem({
                         }}
                       >
                         New file
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="plain"
                         type="button"
                         role="menuitem"
                         className="page-row-dropdown-item"
@@ -340,10 +340,10 @@ function PageTreeItem({
                         }}
                       >
                         New subfolder
-                      </button>
+                      </Button>
                     </>
                   ) : null}
-                  <button
+                  <Button variant="plain"
                     type="button"
                     role="menuitem"
                     className="page-row-dropdown-item"
@@ -353,8 +353,8 @@ function PageTreeItem({
                     }}
                   >
                     Rename
-                  </button>
-                  <button
+                  </Button>
+                  <Button variant="plain"
                     type="button"
                     role="menuitem"
                     className="page-row-dropdown-item danger"
@@ -364,7 +364,7 @@ function PageTreeItem({
                     }}
                   >
                     Trash
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </span>

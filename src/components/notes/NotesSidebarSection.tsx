@@ -6,6 +6,7 @@ import { NoteTree } from './NoteTree';
 import { buildNoteTree } from './noteTreeModel';
 import { useNoteActions } from './useNoteActions';
 import { useSendNoteToTasks } from '../tasks/useSendNoteToTasks';
+import { Button } from '../buttons/Button';
 
 export function NotesSidebarSection({ workspaceId, noteId }: { workspaceId: string; noteId?: string }) {
   const loaded = useNoteStore((state) => state.loadedWorkspaces.has(workspaceId));
@@ -84,9 +85,9 @@ export function NotesSidebarSection({ workspaceId, noteId }: { workspaceId: stri
       <div className="sidebar-pages-header">
         <p className="sidebar-label">Notes</p>
         <span className="header-creates">
-          <button type="button" className="linkish" onClick={() => void create()} disabled={busy}>
+          <Button variant="link" type="button" onClick={() => void create()} disabled={busy}>
             New
-          </button>
+          </Button>
         </span>
       </div>
       {!loaded ? (

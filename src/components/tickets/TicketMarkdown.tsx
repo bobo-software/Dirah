@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { fetchBlob, isBlobPath } from '../../api/blobs';
 import { BlobImage, ViewableImage } from '../editor/BlobImage';
 import { useAuthStore } from '../../stores/StoresIndex';
+import { Button } from '../buttons/Button';
 
 function BlobLink({ href, children }: { href: string; children: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
@@ -22,9 +23,9 @@ function BlobLink({ href, children }: { href: string; children: React.ReactNode 
   }
 
   return (
-    <button type="button" className="ticket-attachment-link" onClick={() => void open()} disabled={busy}>
+    <Button variant="plain" type="button" className="ticket-attachment-link" onClick={() => void open()} disabled={busy}>
       {children}
-    </button>
+    </Button>
   );
 }
 

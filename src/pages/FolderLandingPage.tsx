@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react';
 import { EMPTY_PAGES, usePageStore, useMarkdownContentStore } from '../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { pageKind } from '../components/ComponentsIndex';
+import { Button } from '../components/buttons/Button';
 
 export function FolderLandingPage({
   onCreate,
@@ -44,12 +45,12 @@ export function FolderLandingPage({
       </p>
       {editable ? (
         <div className="folder-actions">
-          <button type="button" onClick={() => onCreate('markdown', pageId ?? null)}>
+          <Button type="button" onClick={() => onCreate('markdown', pageId ?? null)}>
             New markdown
-          </button>
-          <button type="button" onClick={() => onCreate('folder', pageId ?? null)}>
+          </Button>
+          <Button type="button" onClick={() => onCreate('folder', pageId ?? null)}>
             New folder
-          </button>
+          </Button>
           <label className="linkish import-md">
             Import .md
             <input type="file" accept=".md,text/markdown,text/plain" onChange={(e) => void onImport(e)} hidden />
@@ -60,13 +61,12 @@ export function FolderLandingPage({
         <ul className="folder-children">
           {children.map((child) => (
             <li key={child.id}>
-              <button
+              <Button variant="link"
                 type="button"
-                className="linkish"
                 onClick={() => navigate(`/w/${workspaceId}/p/${child.id}`)}
               >
                 {pageKind(child) === 'folder' ? '📁' : 'MD'} {child.title}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

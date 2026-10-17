@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAdminAuthStore } from '../../stores/StoresIndex';
 import { AnalyticsPanel, ApiRequestsPanel, McpRequestsPanel } from '../../components/ComponentsIndex';
+import { Button } from '../../components/buttons/Button';
 
 type Tab = 'analytics' | 'api' | 'mcp';
 
@@ -18,7 +19,7 @@ export function AdminRequestLogsPage() {
       </header>
 
       <div className="admin-tabs" role="tablist" aria-label="API logs">
-        <button
+        <Button variant="plain"
           type="button"
           role="tab"
           aria-selected={tab === 'analytics'}
@@ -26,8 +27,8 @@ export function AdminRequestLogsPage() {
           onClick={() => setTab('analytics')}
         >
           Analytics
-        </button>
-        <button
+        </Button>
+        <Button variant="plain"
           type="button"
           role="tab"
           aria-selected={tab === 'api'}
@@ -35,8 +36,8 @@ export function AdminRequestLogsPage() {
           onClick={() => setTab('api')}
         >
           API Requests
-        </button>
-        <button
+        </Button>
+        <Button variant="plain"
           type="button"
           role="tab"
           aria-selected={tab === 'mcp'}
@@ -44,7 +45,7 @@ export function AdminRequestLogsPage() {
           onClick={() => setTab('mcp')}
         >
           MCP Requests
-        </button>
+        </Button>
       </div>
 
       <div className="admin-tab-panel" role="tabpanel">

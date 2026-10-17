@@ -11,6 +11,7 @@ import { confirmDelete } from '../layout/deleteDialogue';
 import { ColorDot } from '../notes/table/ColorDot';
 import { SELECT_COLORS, type SelectColor } from '../notes/table/columnTypes';
 import { BOARD_KEY_RE, STATUS_CATEGORY_LABEL, suggestKey } from './ticketMeta';
+import { Button } from '../buttons/Button';
 
 function useEscape(onClose: () => void, disabled: boolean) {
   useEffect(() => {
@@ -93,12 +94,12 @@ export function CreateBoardModal({
             </p>
           ) : null}
           <div className="modal-actions">
-            <button type="button" className="linkish" onClick={onClose} disabled={busy}>
+            <Button variant="link" type="button" onClick={onClose} disabled={busy}>
               Cancel
-            </button>
-            <button type="submit" disabled={busy || !name.trim()}>
+            </Button>
+            <Button type="submit" disabled={busy || !name.trim()}>
               {busy ? 'Creating…' : 'Create board'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -198,9 +199,9 @@ export function BoardSettingsModal({
             <textarea rows={2} maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} />
           </label>
           <div className="modal-actions">
-            <button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               Save
-            </button>
+            </Button>
           </div>
         </form>
 
@@ -255,12 +256,12 @@ export function BoardSettingsModal({
         ) : null}
 
         <div className="modal-actions ticket-settings-foot">
-          <button type="button" className="linkish danger" onClick={() => void removeBoard()}>
+          <Button variant="link" type="button" className="danger" onClick={() => void removeBoard()}>
             Delete board
-          </button>
-          <button type="button" onClick={onClose}>
+          </Button>
+          <Button type="button" onClick={onClose}>
             Done
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -300,17 +301,17 @@ function OrderedList<T extends { id: string; name: string }>({
         {items.map((item, index) => (
           <li key={item.id} className="ticket-settings-row">
             <span className="ticket-settings-move">
-              <button type="button" aria-label={`Move ${item.name} up`} disabled={index === 0} onClick={() => move(index, -1)}>
+              <Button type="button" aria-label={`Move ${item.name} up`} disabled={index === 0} onClick={() => move(index, -1)}>
                 ↑
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 aria-label={`Move ${item.name} down`}
                 disabled={index === items.length - 1}
                 onClick={() => move(index, 1)}
               >
                 ↓
-              </button>
+              </Button>
             </span>
             {renderRow(item, index)}
           </li>
@@ -327,7 +328,7 @@ function OrderedList<T extends { id: string; name: string }>({
         }}
       >
         <input placeholder={`New ${title.toLowerCase().replace(/es$|s$/, '')}`} aria-label={`New ${title}`} value={draft} onChange={(event) => setDraft(event.target.value)} />
-        <button type="submit">Add</button>
+        <Button type="submit">Add</Button>
       </form>
     </section>
   );
@@ -371,9 +372,9 @@ function MoveTargetDelete({
   if (others.length === 0) return null;
   if (!picking) {
     return (
-      <button
+      <Button variant="link"
         type="button"
-        className="linkish danger"
+        className="danger"
         aria-label={`Delete ${label}`}
         onClick={async () => {
           if (count > 0) {
@@ -385,7 +386,7 @@ function MoveTargetDelete({
         }}
       >
         Delete
-      </button>
+      </Button>
     );
   }
   return (
@@ -400,12 +401,12 @@ function MoveTargetDelete({
           ))}
         </select>
       </label>
-      <button type="button" className="linkish danger" onClick={() => onDelete(target)}>
+      <Button variant="link" type="button" className="danger" onClick={() => onDelete(target)}>
         Delete
-      </button>
-      <button type="button" className="linkish" onClick={() => setPicking(false)}>
+      </Button>
+      <Button variant="link" type="button" onClick={() => setPicking(false)}>
         Cancel
-      </button>
+      </Button>
     </span>
   );
 }

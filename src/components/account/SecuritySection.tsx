@@ -8,6 +8,7 @@ import {
   useEncryptionStore,
 } from '../../crypto/workspaceCrypto';
 import { useAuthStore, useWorkspaceStore } from '../../stores/StoresIndex';
+import { Button } from '../buttons/Button';
 
 export function SecuritySection() {
   const user = useAuthStore((state) => state.user);
@@ -153,9 +154,9 @@ export function SecuritySection() {
               {passwordMessage}
             </p>
           ) : null}
-          <button type="submit" disabled={!ready || busy || newPassword.length < 8}>
+          <Button type="submit" disabled={!ready || busy || newPassword.length < 8}>
             {busy ? 'Saving…' : hasPassword ? 'Change password' : 'Set password'}
-          </button>
+          </Button>
         </form>
       </div>
 
@@ -198,9 +199,9 @@ export function SecuritySection() {
                   {workspace.encrypted ? (
                     <span className="kind-chip">Encrypted</span>
                   ) : owner ? (
-                    <button type="button" disabled={sealing} onClick={() => void onEncrypt(workspace.id)}>
+                    <Button type="button" disabled={sealing} onClick={() => void onEncrypt(workspace.id)}>
                       {sealing ? 'Encrypting…' : 'Encrypt pages'}
-                    </button>
+                    </Button>
                   ) : (
                     <span className="muted">Only the owner can encrypt</span>
                   )}

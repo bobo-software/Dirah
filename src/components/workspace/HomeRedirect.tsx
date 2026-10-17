@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useWorkspaceStore } from '../../stores/StoresIndex';
 import CreateWorkspaceModal from './CreateWorkspaceModal';
 import { pickDefaultWorkspaceId, setLastWorkspaceId } from './lastWorkspace';
+import { Button } from '../buttons/Button';
 
 export default function HomeRedirect() {
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -42,9 +43,9 @@ export default function HomeRedirect() {
           {message}
         </p>
       ) : null}
-      <button type="button" onClick={() => setModalOpen(true)}>
+      <Button type="button" onClick={() => setModalOpen(true)}>
         New workspace
-      </button>
+      </Button>
       <CreateWorkspaceModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

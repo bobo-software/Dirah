@@ -4,6 +4,7 @@ import { API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
 import { confirmDelete } from '../layout/deleteDialogue';
 import { useMcpStore } from '../../stores/StoresIndex';
+import { Button } from '../buttons/Button';
 
 function KebabIcon() {
   return (
@@ -143,20 +144,19 @@ function TokenRow({
       <td className="muted">{token.lastUsedAt ? formatDate(token.lastUsedAt) : 'Never'}</td>
       <td className="mcp-table-actions" onClick={(e) => e.stopPropagation()}>
         <span className={menuOpen ? 'page-row-menu open' : 'page-row-menu'} ref={menuRef}>
-          <button
+          <Button variant="link"
             type="button"
             ref={menuTriggerRef}
-            className="linkish icon-btn"
             aria-label="More actions"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((value) => !value)}
           >
             <KebabIcon />
-          </button>
+          </Button>
           {menuOpen ? (
             <div className="page-row-dropdown" role="menu">
-              <button
+              <Button variant="plain"
                 type="button"
                 role="menuitem"
                 className="page-row-dropdown-item danger"
@@ -166,7 +166,7 @@ function TokenRow({
                 }}
               >
                 Revoke
-              </button>
+              </Button>
             </div>
           ) : null}
         </span>
@@ -247,9 +247,9 @@ export function McpTokensSection({
             sign in. You don't need a token.
           </p>
         </div>
-        <button type="button" onClick={() => navigate(newTokenPath)}>
+        <Button type="button" onClick={() => navigate(newTokenPath)}>
           New token
-        </button>
+        </Button>
       </div>
       {message ? (
         <p className="error" role="status">

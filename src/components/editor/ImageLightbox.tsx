@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '../buttons/Button';
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 6;
@@ -166,22 +167,22 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
           {alt || 'Image'}
         </span>
         <div className="lightbox-tools" role="toolbar" aria-label="Image options">
-          <button type="button" className="lightbox-tool" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomTo(zoom / STEP)} disabled={zoom <= MIN_ZOOM}>
+          <Button variant="plain" type="button" className="lightbox-tool" aria-label="Zoom out" title="Zoom out (−)" onClick={() => zoomTo(zoom / STEP)} disabled={zoom <= MIN_ZOOM}>
             −
-          </button>
-          <button type="button" className="lightbox-tool lightbox-zoom" title="Reset (0)" onClick={reset}>
+          </Button>
+          <Button variant="plain" type="button" className="lightbox-tool lightbox-zoom" title="Reset (0)" onClick={reset}>
             {Math.round(zoom * 100)}%
-          </button>
-          <button type="button" className="lightbox-tool" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomTo(zoom * STEP)} disabled={zoom >= MAX_ZOOM}>
+          </Button>
+          <Button variant="plain" type="button" className="lightbox-tool" aria-label="Zoom in" title="Zoom in (+)" onClick={() => zoomTo(zoom * STEP)} disabled={zoom >= MAX_ZOOM}>
             +
-          </button>
+          </Button>
           <span className="lightbox-divider" aria-hidden="true" />
-          <button type="button" className="lightbox-tool" aria-label="Rotate" title="Rotate (R)" onClick={() => setRotation((value) => (value + 90) % 360)}>
+          <Button variant="plain" type="button" className="lightbox-tool" aria-label="Rotate" title="Rotate (R)" onClick={() => setRotation((value) => (value + 90) % 360)}>
             <RotateIcon />
-          </button>
-          <button type="button" className="lightbox-tool" aria-label="Copy image" title="Copy image" onClick={() => void copy()}>
+          </Button>
+          <Button variant="plain" type="button" className="lightbox-tool" aria-label="Copy image" title="Copy image" onClick={() => void copy()}>
             <CopyIcon />
-          </button>
+          </Button>
           <a className="lightbox-tool" href={src} download={downloadName(alt, mime)} aria-label="Download" title="Download">
             <DownloadIcon />
           </a>
@@ -189,9 +190,9 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
             <ExternalIcon />
           </a>
           <span className="lightbox-divider" aria-hidden="true" />
-          <button type="button" className="lightbox-tool" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+          <Button variant="plain" type="button" className="lightbox-tool" aria-label="Close" title="Close (Esc)" onClick={onClose}>
             ×
-          </button>
+          </Button>
         </div>
       </div>
       <div className="lightbox-stage" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>

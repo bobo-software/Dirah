@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchBlob } from '../../api/blobs';
 import { useAuthStore } from '../../stores/StoresIndex';
 import { ImageLightbox } from './ImageLightbox';
+import { Button } from '../buttons/Button';
 
 type ViewerProps = {
   /** Clicking the image opens the full-screen viewer. */
@@ -74,9 +75,9 @@ export function ViewableImage({
   return (
     <>
       {zoomable ? (
-        <button type="button" className="md-image-button" aria-label={`View ${alt || 'image'} larger`} onClick={() => setOpen(true)}>
+        <Button variant="plain" type="button" className="md-image-button" aria-label={`View ${alt || 'image'} larger`} onClick={() => setOpen(true)}>
           <img className={className} src={src} alt={alt} />
-        </button>
+        </Button>
       ) : (
         <img className={className} src={src} alt={alt} />
       )}

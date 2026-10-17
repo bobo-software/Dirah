@@ -8,6 +8,7 @@ import { MAX_BLOB_BYTES, uploadBlob } from '../../api/blobs';
 import { useAuthStore } from '../../stores/StoresIndex';
 import { BlobImageNode } from './blobImageNode';
 import { EmojiPicker } from './EmojiPicker';
+import { Button } from '../buttons/Button';
 
 /** Empty trailing paragraphs serialise as blank lines or `&nbsp;`; drop them. */
 function cleanMarkdown(markdown: string): string {
@@ -136,7 +137,7 @@ export function RichMarkdownInput({
         {uploading > 0 ? <p className="rich-input-uploading">Uploading {uploading > 1 ? `${uploading} files` : 'file'}…</p> : null}
       </div>
       <div className="rich-input-bar">
-        <button
+        <Button variant="plain"
           type="button"
           className="rich-input-tool"
           aria-label="Insert emoji"
@@ -146,10 +147,10 @@ export function RichMarkdownInput({
           onClick={(event) => setEmojiAnchor(emojiAnchor ? null : event.currentTarget)}
         >
           <SmileIcon />
-        </button>
+        </Button>
         {workspaceId ? (
           <>
-            <button
+            <Button variant="plain"
               type="button"
               className="rich-input-tool"
               aria-label="Attach files"
@@ -157,7 +158,7 @@ export function RichMarkdownInput({
               onClick={() => fileRef.current?.click()}
             >
               <PaperclipIcon />
-            </button>
+            </Button>
             <input
               ref={fileRef}
               type="file"

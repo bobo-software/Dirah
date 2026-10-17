@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '../buttons/Button';
 
 type PendingDelete = {
   title: string;
@@ -83,12 +84,12 @@ export function DeleteDialogue() {
         <h2 id={titleId}>{pending.title}</h2>
         <p id={messageId}>{pending.message}</p>
         <div className="modal-actions">
-          <button ref={cancelRef} type="button" className="linkish" onClick={() => close(false)}>
+          <Button variant="link" ref={cancelRef} type="button" onClick={() => close(false)}>
             Cancel
-          </button>
-          <button type="button" className="danger-btn" onClick={() => close(true)}>
+          </Button>
+          <Button variant="danger" type="button" onClick={() => close(true)}>
             {pending.confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

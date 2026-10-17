@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { confirmDelete } from '../layout/deleteDialogue';
 import { encryptWorkspace, isUnlocked, provisionAccount, syncMemberKeys, useEncryptionStore } from '../../crypto/workspaceCrypto';
 import { EMPTY_INVITES, EMPTY_MEMBERS, useAuthStore, useMarkdownContentStore, useMembersStore, useWorkspaceStore } from '../../stores/StoresIndex';
+import { Button } from '../buttons/Button';
 
 /** Owners and admins see this panel; `owner` unlocks encryption and owner rows. */
 export default function MembersPanel({ workspaceId, owner }: { workspaceId: string; owner: boolean }) {
@@ -120,9 +121,9 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
               required
             />
           ) : null}
-          <button type="submit" disabled={busy || locking}>
+          <Button type="submit" disabled={busy || locking}>
             {locking || busy ? 'Encrypting pages…' : encrypted ? 'Finish encrypting pages' : 'Encrypt pages'}
-          </button>
+          </Button>
           {sealError ? (
             <p className="error" role="alert">
               {sealError}
@@ -164,9 +165,9 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
                 </select>
               )}
               {locked ? null : (
-                <button
+                <Button variant="link"
                   type="button"
-                  className="linkish danger"
+                  className="danger"
                   onClick={() => {
                     const label = member.name?.trim() || member.email;
                     void confirmDelete({
@@ -182,7 +183,7 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
                   }}
                 >
                   Remove
-                </button>
+                </Button>
               )}
             </li>
           );
@@ -193,12 +194,12 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
             <span className="muted">
               {invite.role} · pending
             </span>
-            <button type="button" className="linkish" onClick={() => void copyUrl(invite.inviteUrl)}>
+            <Button variant="link" type="button" onClick={() => void copyUrl(invite.inviteUrl)}>
               Copy link
-            </button>
-            <button
+            </Button>
+            <Button variant="link"
               type="button"
-              className="linkish danger"
+              className="danger"
               onClick={() => {
                 void confirmDelete({
                   title: 'Revoke invite?',
@@ -213,7 +214,7 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
               }}
             >
               Revoke
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -231,9 +232,9 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
           <option value="editor">editor</option>
           <option value="viewer">viewer</option>
         </select>
-        <button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           Invite
-        </button>
+        </Button>
       </form>
       {copiedUrl ? (
         <input

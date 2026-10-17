@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import { ColorDot } from './ColorDot';
 import { type SelectColor, type SelectOption } from './columnTypes';
 import { placeFloatingMenu } from './placeFloatingMenu';
+import { Button } from '../../buttons/Button';
 
 export function SelectValueMenu({
   anchor,
@@ -67,9 +68,9 @@ export function SelectValueMenu({
       <div className="note-select-menu-head">
         <span className={current ? undefined : 'note-select-empty-label'}>{current || 'Empty'}</span>
         {editable && current ? (
-          <button type="button" className="note-select-clear" aria-label="Clear" onClick={onClear}>
+          <Button variant="plain" type="button" className="note-select-clear" aria-label="Clear" onClick={onClear}>
             ×
-          </button>
+          </Button>
         ) : null}
       </div>
       {options.map((option) => {
@@ -82,7 +83,7 @@ export function SelectValueMenu({
               disabled={!editable}
               onChange={(color) => onRecolor(option.n, color)}
             />
-            <button
+            <Button variant="plain"
               type="button"
               className="note-type-name"
               role="menuitemradio"
@@ -92,12 +93,12 @@ export function SelectValueMenu({
               onClick={() => onSelect(option.n)}
             >
               {option.n}
-            </button>
+            </Button>
           </div>
         );
       })}
       {current && !known ? (
-        <button
+        <Button variant="plain"
           type="button"
           className="note-col-option on"
           role="menuitemradio"
@@ -107,7 +108,7 @@ export function SelectValueMenu({
           onClick={() => onSelect(current)}
         >
           {current}
-        </button>
+        </Button>
       ) : null}
       {editable ? (
         <form className="note-type-create" onSubmit={onSubmit}>
@@ -118,7 +119,7 @@ export function SelectValueMenu({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
           />
-          <button type="submit">Add</button>
+          <Button type="submit">Add</Button>
         </form>
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { placeFloatingMenu } from './placeFloatingMenu';
+import { Button } from '../../buttons/Button';
 
 export type TableMenuAction = {
   id: string
@@ -107,7 +108,7 @@ export function TableOptionsMenu({
   return (
     <div ref={menuRef} className="note-col-menu note-table-menu" role="menu" aria-label="Table options">
       {actions.map((action) => (
-        <button
+        <Button variant="plain"
           key={action.id}
           type="button"
           className={action.danger ? 'note-col-option danger' : 'note-col-option'}
@@ -117,7 +118,7 @@ export function TableOptionsMenu({
         >
           {ICONS[action.id]}
           {action.label}
-        </button>
+        </Button>
       ))}
     </div>
   )

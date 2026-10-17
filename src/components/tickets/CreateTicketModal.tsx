@@ -5,6 +5,7 @@ import { useTicketStore } from '../../stores/StoresIndex';
 import { RichMarkdownInput } from '../editor/RichMarkdownInput';
 import { AssigneeCell } from './TicketCells';
 import { PRIORITY_META } from './ticketMeta';
+import { Button } from '../buttons/Button';
 
 export type NewTicketDefaults = { groupId?: string; statusId?: string };
 
@@ -173,12 +174,12 @@ export function CreateTicketModal({
             </p>
           ) : null}
           <div className="modal-actions">
-            <button type="button" className="linkish" onClick={onClose} disabled={busy}>
+            <Button variant="link" type="button" onClick={onClose} disabled={busy}>
               Cancel
-            </button>
-            <button type="submit" disabled={busy || !title.trim()}>
+            </Button>
+            <Button type="submit" disabled={busy || !title.trim()}>
               {busy ? 'Creating…' : 'Create ticket'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

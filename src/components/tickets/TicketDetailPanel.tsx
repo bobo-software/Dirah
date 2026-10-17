@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PublicMember } from '../../api/members';
 import type { Ticket, TicketBoardView } from '../../api/tickets';
 import { TicketViewer } from './viewer/TicketViewer';
+import { Button } from '../buttons/Button';
 
 const WIDE_KEY = 'dirah.ticketViewer.wide';
 
@@ -116,9 +117,9 @@ export function TicketDetailPanel({
           <div className="ticket-viewer-missing">
             <p className="ticket-viewer-heading">{ticketKey}</p>
             <p className="muted">This ticket isn’t on this board. It may have been deleted or moved.</p>
-            <button type="button" onClick={onClose}>
+            <Button type="button" onClick={onClose}>
               Back to the board
-            </button>
+            </Button>
           </div>
         )}
       </aside>

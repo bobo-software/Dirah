@@ -4,6 +4,7 @@ import { EMPTY_TASK_LISTS, useTaskStore, useWorkspaceStore } from '../../stores/
 import { TaskProgress } from '../../components/tasks/TaskProgress';
 import { taskMode } from '../../components/tasks/runner/modes';
 import { categoryHue } from '../../components/docs/categoryColor';
+import { Button } from '../../components/buttons/Button';
 
 export function TasksPage() {
   const { workspaceId = '' } = useParams();
@@ -37,9 +38,9 @@ export function TasksPage() {
       <section className="notes-home" aria-label="Task lists">
         <div className="notes-home-head">
           <p className="muted">Make a list, then run through it one item at a time.</p>
-          <button type="button" onClick={() => void onCreate()} disabled={busy}>
+          <Button type="button" onClick={() => void onCreate()} disabled={busy}>
             New list
-          </button>
+          </Button>
         </div>
         {error ? (
           <p className="error" role="alert">

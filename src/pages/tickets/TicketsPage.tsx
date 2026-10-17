@@ -7,6 +7,7 @@ import { dueTone, formatDue, PRIORITY_META, TICKET_POLL_MS } from '../../compone
 import { useVisiblePoll } from '../../hooks/useVisiblePoll';
 import { EMPTY_TICKET_BOARDS, useAuthStore, useTicketStore, useWorkspaceStore } from '../../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from '../workspaceContext';
+import { Button } from '../../components/buttons/Button';
 
 export function TicketsPage() {
   const { workspaceId = '' } = useParams();
@@ -96,9 +97,9 @@ export function TicketsPage() {
         <div className="notes-home-head">
           <h2 className="ticket-home-heading">Boards</h2>
           {editable ? (
-            <button type="button" onClick={() => setCreating(true)}>
+            <Button type="button" onClick={() => setCreating(true)}>
               New board
-            </button>
+            </Button>
           ) : null}
         </div>
         {!loaded ? (

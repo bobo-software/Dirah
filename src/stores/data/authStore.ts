@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import { apiRequest, type AuthTokens, type PublicUser, type PublicWorkspace } from '../../api/client';
+import {
+  accessTokenExpiresAt,
+  apiRequest,
+  refreshAccessToken,
+  type AuthTokens,
+  type PublicUser,
+  type PublicWorkspace,
+} from '../../api/client';
 import type { UserCryptoBundle } from '../../api/crypto';
 import { changePassword as changePasswordRequest, updateProfile as updateProfileRequest } from '../../api/profile';
 import { clearCryptoSession, provisionAccount } from '../../crypto/workspaceCrypto';
@@ -35,6 +42,34 @@ type AuthState = {
 };
 
 let initPromise: Promise<void> | null = null;
+let sessionEpoch = 0;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+const REFRESH_LEAD_MS = 60_000;
+
+export function sessionEpochNow(): number {
+  return sessionEpoch;
+}
+
+export function clearScheduledRefresh(): void {
+  sessionEpoch += 1;
+  if (refreshTimer !== null) clearTimeout(refreshTimer);
+  refreshTimer = null;
+}
+
+/** Refreshes the session shortly before the access token expires. */
+export function scheduleAccessRefresh(accessToken: string): void {
+  if (refreshTimer !== null) clearTimeout(refreshTimer);
+  const expiresAt = accessTokenExpiresAt(accessToken);
+  if (expiresAt === null) return;
+  const epoch = sessionEpoch;
+  const delay = Math.max(0, expiresAt - Date.now() - REFRESH_LEAD_MS);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    if (epoch !== sessionEpoch) return;
+    void refreshAccessToken().catch(() => undefined);
+  }, delay);
+}
 
 function takeLegacyRefresh(): string | null {
   const existing = localStorage.getItem(REFRESH_KEY);
@@ -52,6 +87,7 @@ async function unlockWithPassword(accessToken: string, password: string) {
 
 async function applyAccess(accessToken: string, set: (partial: Partial<AuthState>) => void) {
   set({ accessToken });
+  scheduleAccessRefresh(accessToken);
   const { user } = await apiRequest<{ user: PublicUser }>('/api/auth/me', { accessToken });
   set({ user });
 }
@@ -94,6 +130,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     );
     localStorage.removeItem(REFRESH_KEY);
     set({ accessToken: data.tokens.accessToken, user: data.user });
+    scheduleAccessRefresh(data.tokens.accessToken);
     await unlockWithPassword(data.tokens.accessToken, password);
     return data.workspace;
   },
@@ -106,6 +143,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     );
     localStorage.removeItem(REFRESH_KEY);
     set({ accessToken: data.tokens.accessToken, user: data.user });
+    scheduleAccessRefresh(data.tokens.accessToken);
     await unlockWithPassword(data.tokens.accessToken, password);
     return data.workspace;
   },
@@ -155,6 +193,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    clearScheduledRefresh();
     try {
       await apiRequest('/api/auth/logout', {
         method: 'POST',

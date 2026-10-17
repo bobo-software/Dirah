@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ClientIcon, type ClientIconName } from './ClientIcon';
 import { CopyField } from './CopyField';
 import { CLAUDE_CODE_COMMAND, CURSOR_CONFIG, CURSOR_INSTALL_URL, MCP_URL } from './mcpConnect';
+import { Button } from '../buttons/Button';
 
 const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -40,7 +41,7 @@ export function ClientSetup() {
         {CLIENTS.map((client) => {
           const selected = client.id === active;
           return (
-            <button
+            <Button variant="plain"
               key={client.id}
               ref={(element) => {
                 tabRefs.current[client.id] = element;
@@ -66,7 +67,7 @@ export function ClientSetup() {
                 <span className="home-client-name">{client.name}</span>
                 <span className="home-client-where">{client.where}</span>
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>

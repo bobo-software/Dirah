@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { askPage } from '../../api/ai';
+import { Button } from '../buttons/Button';
 
 export function AskPanel({
   pageId,
@@ -58,17 +59,17 @@ export function AskPanel({
           placeholder="Ask about this page or the current selection"
           required
         />
-        <button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? 'Asking…' : 'Ask'}
-        </button>
+        </Button>
       </form>
       {reply ? (
         <>
           <p className="ask-reply">{reply}</p>
           {editable ? (
-            <button type="button" className="linkish" onClick={insertReply}>
+            <Button variant="link" type="button" onClick={insertReply}>
               Insert
-            </button>
+            </Button>
           ) : null}
         </>
       ) : null}

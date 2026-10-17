@@ -19,6 +19,7 @@ import { confirmDelete } from '../../layout/deleteDialogue';
 import { EMPTY_NOTES, useAuthStore, useNoteStore } from '../../../stores/StoresIndex';
 import { NoteEditor } from '../NoteEditor';
 import { NoteGlyph } from '../NoteTree';
+import { Button } from '../../buttons/Button';
 
 const CARD_DRAG = 'text/kanban-card';
 const COLUMN_DRAG = 'text/kanban-column';
@@ -406,9 +407,9 @@ function CardPeek({ workspaceId, noteId, onClose }: { workspaceId: string; noteI
               <Link to={href} className="kanban-icon-btn" aria-label="Open as full page" title="Open as full page">
                 <ExpandIcon />
               </Link>
-              <button type="button" className="kanban-icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+              <Button variant="plain" type="button" className="kanban-icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}>
                 <CloseIcon />
-              </button>
+              </Button>
             </span>
           }
         />
@@ -435,10 +436,10 @@ function AddColumn({ onAdd }: { onAdd: (title: string) => void }) {
 
   if (!open) {
     return (
-      <button type="button" className="kanban-add-column" onClick={() => setOpen(true)}>
+      <Button variant="plain" type="button" className="kanban-add-column" onClick={() => setOpen(true)}>
         <PlusIcon />
         Add column
-      </button>
+      </Button>
     );
   }
 
@@ -455,10 +456,10 @@ function AddColumn({ onAdd }: { onAdd: (title: string) => void }) {
         }}
       />
       <span className="kanban-form-actions">
-        <button type="submit">Add column</button>
-        <button type="button" className="kanban-ghost" onClick={close}>
+        <Button type="submit">Add column</Button>
+        <Button variant="plain" type="button" className="kanban-ghost" onClick={close}>
           Cancel
-        </button>
+        </Button>
       </span>
     </form>
   );
@@ -590,7 +591,7 @@ function KanbanColumnView({
     >
       <header className="kanban-column-head">
         {editable ? (
-          <button
+          <Button variant="plain"
             type="button"
             className="kanban-grip"
             draggable
@@ -607,7 +608,7 @@ function KanbanColumnView({
             onDragEnd={onDragEnd}
           >
             <GripIcon />
-          </button>
+          </Button>
         ) : null}
         <form onSubmit={commitColumn}>
           <input
@@ -628,7 +629,7 @@ function KanbanColumnView({
           {column.cards.length}
         </span>
         {editable ? (
-          <button
+          <Button variant="plain"
             type="button"
             className="kanban-icon-btn danger"
             aria-label={`Delete column ${column.title}`}
@@ -636,7 +637,7 @@ function KanbanColumnView({
             onClick={onDeleteColumn}
           >
             <TrashIcon />
-          </button>
+          </Button>
         ) : null}
       </header>
       <div
@@ -693,18 +694,18 @@ function KanbanColumnView({
               }}
             />
             <span className="kanban-form-actions">
-              <button type="submit">Add card</button>
-              <button type="button" className="kanban-ghost" onMouseDown={(event) => event.preventDefault()} onClick={closeAdd}>
+              <Button type="submit">Add card</Button>
+              <Button variant="plain" type="button" className="kanban-ghost" onMouseDown={(event) => event.preventDefault()} onClick={closeAdd}>
                 Cancel
-              </button>
+              </Button>
             </span>
           </form>
         ) : (
           <footer className="kanban-column-foot">
-            <button type="button" className="kanban-add-card-btn" onClick={() => setAdding(true)}>
+            <Button variant="plain" type="button" className="kanban-add-card-btn" onClick={() => setAdding(true)}>
               <PlusIcon />
               Add card
-            </button>
+            </Button>
             <NotePicker
               open={picking}
               notes={notes}
@@ -848,7 +849,7 @@ function CardView({
       {!renaming && (card.note.editable || editable) ? (
         <div className="kanban-card-tools">
           {card.note.editable ? (
-            <button
+            <Button variant="plain"
               type="button"
               className="kanban-icon-btn"
               aria-label={`Rename ${card.note.title}`}
@@ -856,10 +857,10 @@ function CardView({
               onClick={() => setRenaming(true)}
             >
               <PencilIcon />
-            </button>
+            </Button>
           ) : null}
           {editable ? (
-            <button
+            <Button variant="plain"
               type="button"
               className="kanban-icon-btn danger"
               aria-label={`Remove ${card.note.title} from board`}
@@ -867,7 +868,7 @@ function CardView({
               onClick={() => onRemove(card)}
             >
               <CloseIcon />
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -908,7 +909,7 @@ function NotePicker({
 
   return (
     <div className="kanban-picker" ref={rootRef}>
-      <button
+      <Button variant="plain"
         type="button"
         className="kanban-icon-btn"
         aria-expanded={open}
@@ -920,7 +921,7 @@ function NotePicker({
         }}
       >
         <LinkNoteIcon />
-      </button>
+      </Button>
       {open ? (
         <div className="kanban-picker-panel" role="dialog" aria-label="Add an existing note">
           <input
@@ -946,13 +947,13 @@ function NotePicker({
                 const trail = noteTrail(notes, note);
                 return (
                   <li key={note.id}>
-                    <button type="button" className="kanban-picker-option" onClick={() => onPick(note.id)}>
+                    <Button variant="plain" type="button" className="kanban-picker-option" onClick={() => onPick(note.id)}>
                       <NoteGlyph note={note} />
                       <span className="kanban-picker-text">
                         <span>{note.title || 'Untitled'}</span>
                         {trail ? <span className="kanban-picker-trail">{trail}</span> : null}
                       </span>
-                    </button>
+                    </Button>
                   </li>
                 );
               })}

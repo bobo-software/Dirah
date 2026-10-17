@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { placeFloatingMenu } from '../notes/table/placeFloatingMenu';
+import { Button } from '../buttons/Button';
 
 const EMOJI = [
   '👍', '👎', '👏', '🙌', '🙏', '💪', '👀', '🤔',
@@ -48,7 +49,7 @@ export function EmojiPicker({
   return createPortal(
     <div ref={menuRef} className="note-col-menu emoji-menu" role="dialog" aria-label="Insert emoji">
       {EMOJI.map((emoji) => (
-        <button
+        <Button variant="plain"
           key={emoji}
           type="button"
           className="emoji-menu-item"
@@ -57,7 +58,7 @@ export function EmojiPicker({
           onClick={() => onPick(emoji)}
         >
           {emoji}
-        </button>
+        </Button>
       ))}
     </div>,
     document.body

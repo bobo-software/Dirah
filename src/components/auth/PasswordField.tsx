@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from 'react';
+import { Button } from '../buttons/Button';
 
 function EyeIcon() {
   return (
@@ -46,15 +47,15 @@ export function PasswordField({
           onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
           required={required}
         />
-        <button
+        <Button variant="icon"
           type="button"
-          className="icon-btn password-toggle"
+          className="password-toggle"
           aria-label={visible ? 'Hide password' : 'Show password'}
           aria-pressed={visible}
           onClick={() => setVisible((current) => !current)}
         >
           {visible ? <EyeOffIcon /> : <EyeIcon />}
-        </button>
+        </Button>
       </span>
     </label>
   );

@@ -5,6 +5,7 @@ import { workspaceSection } from '../../pages/workspaceContext';
 import { DocsIcon, NotesIcon, PlusIcon, TasksIcon, TicketsIcon } from './SectionIcons';
 import { clearLastWorkspaceId, setLastWorkspaceId } from '../workspace/lastWorkspace';
 import WorkspacesModal from '../workspace/WorkspacesModal';
+import { Button } from '../buttons/Button';
 
 export function TopbarWorkspaceSwitcher() {
   const { workspaceId } = useParams();
@@ -18,7 +19,7 @@ export function TopbarWorkspaceSwitcher() {
   return (
     <div className="topbar-workspace">
       {workspaces.length > 0 ? (
-        <button
+        <Button variant="plain"
           type="button"
           className="workspace-switcher"
           aria-haspopup="dialog"
@@ -32,12 +33,12 @@ export function TopbarWorkspaceSwitcher() {
           <span className="workspace-switcher-name">{workspace?.name ?? 'Workspaces'}</span>
           {workspace?.encrypted ? <span className="kind-chip">Encrypted</span> : null}
           <span className="workspace-switcher-caret" aria-hidden="true" />
-        </button>
+        </Button>
       ) : (
-        <button type="button" className="sidebar-empty-cta topbar-empty-cta" onClick={() => setOpen(true)}>
+        <Button variant="plain" type="button" className="sidebar-empty-cta topbar-empty-cta" onClick={() => setOpen(true)}>
           <PlusIcon />
           New workspace
-        </button>
+        </Button>
       )}
       <WorkspacesModal
         open={open}

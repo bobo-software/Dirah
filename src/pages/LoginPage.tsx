@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react
 import { useAuthStore } from '../stores/StoresIndex';
 import { readReturnTo } from '../utils/returnTo';
 import { BrandLink, OAuthButtons, PasswordField, ThemeToggle } from '../components/ComponentsIndex';
+import { Button } from '../components/buttons/Button';
 
 export function LoginPage() {
   const user = useAuthStore((state) => state.user);
@@ -72,9 +73,9 @@ export function LoginPage() {
           </label>
           <PasswordField value={password} onChange={setPassword} />
           {message ? <p className="error">{message}</p> : null}
-          <button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy}>
             {busy ? 'Signing in…' : 'Sign in'}
-          </button>
+          </Button>
         </form>
         <p className="auth-foot">
           No account? <Link to="/register">Create one</Link>

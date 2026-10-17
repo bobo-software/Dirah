@@ -100,11 +100,65 @@ async function parseJson(res: Response): Promise<ApiSuccess<unknown> | ApiFailur
   return (await res.json()) as ApiSuccess<unknown> | ApiFailure;
 }
 
-export async function apiRequest<T>(
-  path: string,
-  options: RequestInit & { accessToken?: string } = {}
-): Promise<T> {
-  const { accessToken, headers, ...rest } = options;
+type ApiRequestOptions = RequestInit & { accessToken?: string; skipAuthRetry?: boolean };
+
+/** Reads `exp` from the JWT payload. The server still verifies the signature. */
+export function accessTokenExpiresAt(token: string): number | null {
+  const segment = token.split('.')[1];
+  if (!segment) return null;
+  try {
+    const padded = segment.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (segment.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+let refreshInflight: Promise<string> | null = null;
+
+async function performRefresh(): Promise<string> {
+  const { clearScheduledRefresh, scheduleAccessRefresh, sessionEpochNow, useAuthStore } = await import(
+    '../stores/data/authStore'
+  );
+  const epoch = sessionEpochNow();
+  try {
+    const { tokens } = await apiRequest<{ tokens: AuthTokens }>('/api/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      skipAuthRetry: true,
+    });
+    if (sessionEpochNow() !== epoch) {
+      throw new ApiError('Unauthorized', 401);
+    }
+    useAuthStore.setState({ accessToken: tokens.accessToken });
+    scheduleAccessRefresh(tokens.accessToken);
+    return tokens.accessToken;
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      (error.status === 400 || error.status === 401) &&
+      sessionEpochNow() === epoch
+    ) {
+      clearScheduledRefresh();
+      useAuthStore.setState({ accessToken: null, user: null });
+    }
+    throw error;
+  }
+}
+
+/** One refresh for the tab. The cookie rotates, so a second call in parallel must wait. */
+export function refreshAccessToken(): Promise<string> {
+  if (refreshInflight) return refreshInflight;
+  const job = performRefresh();
+  refreshInflight = job;
+  return job.finally(() => {
+    if (refreshInflight === job) refreshInflight = null;
+  });
+}
+
+async function apiRequestOnce<T>(path: string, options: ApiRequestOptions): Promise<T> {
+  const { accessToken, headers, skipAuthRetry: _skip, ...rest } = options;
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
     credentials: 'include',
@@ -119,4 +173,20 @@ export async function apiRequest<T>(
     throw new ApiError(body.message, res.status, typeof body.error === 'string' ? body.error : undefined);
   }
   return body.data as T;
+}
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  try {
+    return await apiRequestOnce(path, options);
+  } catch (error) {
+    const expired =
+      !options.skipAuthRetry &&
+      Boolean(options.accessToken) &&
+      path !== '/api/auth/refresh' &&
+      error instanceof ApiError &&
+      error.status === 401;
+    if (!expired) throw error;
+    const accessToken = await refreshAccessToken();
+    return apiRequestOnce(path, { ...options, accessToken, skipAuthRetry: true });
+  }
 }

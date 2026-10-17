@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { confirmDelete } from '../layout/deleteDialogue';
 import { useWorkspaceStore } from '../../stores/StoresIndex';
 import type { PublicWorkspace } from '../../api/client';
+import { Button } from '../buttons/Button';
 
 function RenameIcon() {
   return (
@@ -158,24 +159,23 @@ export default function WorkspacesModal({
                       required
                       disabled={busy}
                     />
-                    <button type="submit" disabled={busy}>
+                    <Button type="submit" disabled={busy}>
                       Save
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="link"
                       type="button"
-                      className="linkish"
                       disabled={busy}
                       onClick={() => setRenamingId(null)}
                     >
                       Cancel
-                    </button>
+                    </Button>
                   </form>
                 </li>
               );
             }
             return (
               <li key={item.id} className={current ? 'current' : undefined}>
-                <button
+                <Button variant="plain"
                   type="button"
                   className="workspace-pick"
                   onClick={() => {
@@ -185,12 +185,11 @@ export default function WorkspacesModal({
                 >
                   <span className="workspace-pick-name">{item.name}</span>
                   <span className="role-badge">{item.role}</span>
-                </button>
+                </Button>
                 {owner ? (
                   <span className="workspace-pick-actions">
-                    <button
+                    <Button variant="link"
                       type="button"
-                      className="linkish icon-btn"
                       aria-label={`Rename ${item.name}`}
                       title="Rename"
                       disabled={busy}
@@ -200,10 +199,10 @@ export default function WorkspacesModal({
                       }}
                     >
                       <RenameIcon />
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="link"
                       type="button"
-                      className="linkish icon-btn danger"
+                      className="danger"
                       aria-label={`Delete ${item.name}`}
                       title="Delete"
                       disabled={busy}
@@ -213,7 +212,7 @@ export default function WorkspacesModal({
                       }}
                     >
                       <TrashIcon />
-                    </button>
+                    </Button>
                   </span>
                 ) : null}
               </li>
@@ -232,9 +231,9 @@ export default function WorkspacesModal({
               required
               disabled={busy}
             />
-            <button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {pending === 'create' ? 'Creating…' : 'Create'}
-            </button>
+            </Button>
           </div>
         </form>
         {message ? (

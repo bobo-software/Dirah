@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { AdminRequestLogRow } from '../../api/admin';
+import { Button } from '../buttons/Button';
 
 function formatJson(value: unknown): string {
   if (value === null || value === undefined) return '—';
@@ -47,9 +48,9 @@ export function RequestLogDetailModal({ log, onClose }: Props) {
             </h2>
             <p className="request-log-modal-id">{log.id}</p>
           </div>
-          <button type="button" className="request-log-modal-close" onClick={onClose} aria-label="Close">
+          <Button variant="plain" type="button" className="request-log-modal-close" onClick={onClose} aria-label="Close">
             ×
-          </button>
+          </Button>
         </header>
 
         <div className="request-log-modal-body">

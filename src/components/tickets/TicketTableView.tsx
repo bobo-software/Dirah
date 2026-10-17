@@ -7,6 +7,7 @@ import { ColorDot } from '../notes/table/ColorDot';
 import type { SelectColor } from '../notes/table/columnTypes';
 import { AssigneeCell, DueCell, PriorityCell, StatusCell } from './TicketCells';
 import { formatCreated, matchesFilter } from './ticketMeta';
+import { Button } from '../buttons/Button';
 
 const ROW_DRAG = 'text/ticket-row';
 
@@ -176,7 +177,7 @@ export function TicketTableView({
                           ) : null}
                         </td>
                         <td className="ticket-col-title">
-                          <button type="button" className="ticket-title-button" onClick={() => onOpen(ticket)}>
+                          <Button variant="plain" type="button" className="ticket-title-button" onClick={() => onOpen(ticket)}>
                             <span className="ticket-key">{ticket.key}</span>
                             <span className="ticket-title-text">{ticket.title}</span>
                             {ticket.labels.map((label) => (
@@ -184,7 +185,7 @@ export function TicketTableView({
                                 {label}
                               </span>
                             ))}
-                          </button>
+                          </Button>
                         </td>
                         <td className="ticket-col-status">
                           <StatusCell
@@ -238,9 +239,9 @@ export function TicketTableView({
                     <tr>
                       <td className="ticket-col-handle" />
                       <td colSpan={6}>
-                        <button type="button" className="ticket-add-row" onClick={() => onAdd({ groupId: group.id })}>
+                        <Button variant="plain" type="button" className="ticket-add-row" onClick={() => onAdd({ groupId: group.id })}>
                           + Add ticket
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   </tfoot>
@@ -251,7 +252,7 @@ export function TicketTableView({
         );
       })}
       {editable ? (
-        <button
+        <Button variant="plain"
           type="button"
           className="ticket-add-group"
           onClick={() =>
@@ -259,7 +260,7 @@ export function TicketTableView({
           }
         >
           + Add group
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -320,7 +321,7 @@ function GroupHeader({
 
   return (
     <header className="ticket-group-head">
-      <button
+      <Button variant="plain"
         type="button"
         className={collapsed ? 'ticket-group-caret collapsed' : 'ticket-group-caret'}
         aria-label={collapsed ? `Expand ${group.name}` : `Collapse ${group.name}`}
@@ -328,7 +329,7 @@ function GroupHeader({
         onClick={onToggle}
       >
         ▾
-      </button>
+      </Button>
       {editable ? (
         <ColorDot
           color={group.color as SelectColor}
@@ -365,13 +366,13 @@ function GroupHeader({
       </span>
       {editable ? (
         <span className="ticket-group-actions">
-          <button type="button" className="linkish" onClick={() => setEditing(true)}>
+          <Button variant="link" type="button" onClick={() => setEditing(true)}>
             Rename
-          </button>
+          </Button>
           {canDelete ? (
-            <button type="button" className="linkish danger" onClick={() => void remove()}>
+            <Button variant="link" type="button" className="danger" onClick={() => void remove()}>
               Delete
-            </button>
+            </Button>
           ) : null}
         </span>
       ) : null}

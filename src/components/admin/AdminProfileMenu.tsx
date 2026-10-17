@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuthStore } from '../../stores/StoresIndex';
 import { THEME_OPTIONS, useTheme } from '../../theme/ThemeContext';
+import { Button } from '../buttons/Button';
 
 function UserIcon() {
   return (
@@ -49,7 +50,7 @@ export function AdminProfileMenu() {
 
   return (
     <div className="profile-menu" ref={containerRef}>
-      <button
+      <Button variant="plain"
         type="button"
         ref={triggerRef}
         className="profile-trigger"
@@ -59,7 +60,7 @@ export function AdminProfileMenu() {
         aria-label="Account menu"
       >
         {initial !== '?' ? initial : <UserIcon />}
-      </button>
+      </Button>
       {open ? (
         <div className="profile-dropdown" role="menu">
           <p className="profile-dropdown-email">{admin?.email}</p>
@@ -67,7 +68,7 @@ export function AdminProfileMenu() {
             <span className="sidebar-label">Theme</span>
             <div className="theme-segmented" role="group" aria-label="Theme">
               {THEME_OPTIONS.map((option) => (
-                <button
+                <Button variant="plain"
                   key={option.value}
                   type="button"
                   className={preference === option.value ? 'theme-option on' : 'theme-option'}
@@ -75,11 +76,11 @@ export function AdminProfileMenu() {
                   aria-pressed={preference === option.value}
                 >
                   {option.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
-          <button
+          <Button variant="plain"
             type="button"
             role="menuitem"
             className="profile-menu-item"
@@ -89,7 +90,7 @@ export function AdminProfileMenu() {
             }}
           >
             Log out
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>

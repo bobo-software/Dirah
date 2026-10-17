@@ -1,4 +1,4 @@
-import { API_URL, apiRequest } from './client';
+import { API_URL, apiRequest, refreshAccessToken } from './client';
 
 export const MAX_BLOB_BYTES = 12 * 1024 * 1024;
 
@@ -15,12 +15,19 @@ export async function uploadBlob(accessToken: string, workspaceId: string, file:
   return data.blob;
 }
 
-/** Fetches a blob path such as `/api/blobs/:id` with the bearer token, for use as an object URL. */
-export async function fetchBlob(accessToken: string, path: string): Promise<Blob> {
-  const res = await fetch(`${API_URL}${path}`, {
+async function fetchBlobWith(accessToken: string, path: string): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
     credentials: 'include',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+}
+
+/** Fetches a blob path such as `/api/blobs/:id` with the bearer token, for use as an object URL. */
+export async function fetchBlob(accessToken: string, path: string): Promise<Blob> {
+  let res = await fetchBlobWith(accessToken, path);
+  if (res.status === 401) {
+    res = await fetchBlobWith(await refreshAccessToken(), path);
+  }
   if (!res.ok) throw new Error('Could not load the attachment');
   return res.blob();
 }

@@ -4,6 +4,7 @@ import { useAuthStore, useInviteStore, useWorkspaceStore } from '../stores/Store
 import { Logo } from '../components/ComponentsIndex';
 import type { InvitePreview } from '../api/members';
 import { clearReturnTo, rememberReturnTo } from '../utils/returnTo';
+import { Button } from '../components/buttons/Button';
 
 /**
  * Landing page for an invite link. Shows which workspace it is for, then:
@@ -105,9 +106,9 @@ export function InvitePage() {
         <>
           <p className="muted">You are signed in as {user.email}.</p>
           {message ? <p className="error">{message}</p> : null}
-          <button type="button" disabled={busy} onClick={() => void join(() => acceptInviteAsSession(inviteToken))}>
+          <Button type="button" disabled={busy} onClick={() => void join(() => acceptInviteAsSession(inviteToken))}>
             {busy ? 'Joining…' : `Join ${preview.workspaceName}`}
-          </button>
+          </Button>
         </>
       ) : null}
 
@@ -117,9 +118,9 @@ export function InvitePage() {
             You are signed in as {user.email}, but this invite is for {preview.email}. Sign out, then open the link
             again with that account.
           </p>
-          <button type="button" disabled={busy} onClick={() => void logout()}>
+          <Button type="button" disabled={busy} onClick={() => void logout()}>
             Sign out
-          </button>
+          </Button>
         </>
       ) : null}
 
@@ -128,9 +129,9 @@ export function InvitePage() {
           <p className="muted">
             {preview.email} already has a Dirah account. Log in and you will be taken straight to the workspace.
           </p>
-          <button type="button" className="invite-primary" onClick={goToLogin}>
+          <Button variant="plain" type="button" className="invite-primary" onClick={goToLogin}>
             Log in to join
-          </button>
+          </Button>
         </>
       ) : null}
 
@@ -161,9 +162,9 @@ export function InvitePage() {
               />
             </label>
             {message ? <p className="error">{message}</p> : null}
-            <button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {busy ? 'Creating account…' : 'Create account & join'}
-            </button>
+            </Button>
           </form>
         </>
       ) : null}

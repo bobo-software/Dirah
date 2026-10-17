@@ -1,3 +1,4 @@
+import { Button } from '../buttons/Button';
 type Props = {
   page: number;
   pageSize: number;
@@ -11,15 +12,15 @@ export function AdminPagination({ page, pageSize, total, onChange }: Props) {
 
   return (
     <div className="admin-pagination">
-      <button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)}>
+      <Button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)}>
         Previous
-      </button>
+      </Button>
       <span className="muted">
         Page {page} of {pageCount}
       </span>
-      <button type="button" disabled={page >= pageCount} onClick={() => onChange(page + 1)}>
+      <Button type="button" disabled={page >= pageCount} onClick={() => onChange(page + 1)}>
         Next
-      </button>
+      </Button>
     </div>
   );
 }

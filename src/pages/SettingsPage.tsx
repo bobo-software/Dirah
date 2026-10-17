@@ -1,6 +1,7 @@
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { AppearanceSection, McpTokensSection, MembersPanel, PreferencesSection } from '../components/ComponentsIndex';
 import { canAdmin, canManageMembers, type WorkspaceOutlet } from './workspaceContext';
+import { Button } from '../components/buttons/Button';
 
 type SettingsTab = 'appearance' | 'members' | 'preferences' | 'mcp';
 
@@ -34,7 +35,7 @@ export function SettingsPage() {
       <div className="settings-body">
         <nav className="settings-nav" aria-label="Settings sections">
           {tabs.map((tab) => (
-            <button
+            <Button variant="plain"
               key={tab.id}
               type="button"
               className={activeTab === tab.id ? 'settings-nav-item on' : 'settings-nav-item'}
@@ -42,7 +43,7 @@ export function SettingsPage() {
               onClick={() => onSelectTab(tab.id)}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </nav>
         <div className="settings-content">
@@ -57,7 +58,7 @@ export function SettingsPage() {
               workspaceId={workspaceId}
               newTokenPath={`/w/${workspaceId}/settings/mcp/new`}
               tokenPath={(tokenId) => `/w/${workspaceId}/settings/mcp/${tokenId}`}
-              description="Tokens granted to this workspace. Every token on your account is in Settings from the profile menu."
+              description="Tokens granted to this workspace. Every token on your account is in Account from the profile menu."
               emptyMessage="No tokens granted to this workspace."
             />
           ) : null}

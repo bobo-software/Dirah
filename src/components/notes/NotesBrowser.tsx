@@ -1,17 +1,17 @@
-import { type CSSProperties, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { PublicNote } from '../../api/client';
 import { useNoteStore } from '../../stores/StoresIndex';
-import { categoryHue } from '../docs/categoryColor';
 import { NoteGlyph } from './NoteTree';
 import { buildNoteTree, type NoteNode } from './noteTreeModel';
 import { useNoteActions } from './useNoteActions';
+import { Button } from '../buttons/Button';
 
 export function NotesBrowser({ workspaceId }: { workspaceId: string }) {
   const loaded = useNoteStore((state) => state.loadedWorkspaces.has(workspaceId));
   const { notes, busy, message, create } = useNoteActions(workspaceId);
 
-  // Cards show the top-level notes only, in tree order with pinned first; sub-notes live in the sidebar tree.
+  // The index lists top-level notes only, pinned first; sub-notes live in the sidebar tree.
   const roots = useMemo(
     () =>
       buildNoteTree(notes).sort(
@@ -24,9 +24,9 @@ export function NotesBrowser({ workspaceId }: { workspaceId: string }) {
     <section className="notes-home" aria-label="Notes">
       <div className="notes-home-head">
         <p className="muted">Your notes are private unless you share them.</p>
-        <button type="button" onClick={() => void create()} disabled={busy}>
+        <Button type="button" onClick={() => void create()} disabled={busy}>
           New note
-        </button>
+        </Button>
       </div>
       {message ? (
         <p className="error" role="alert">
@@ -38,11 +38,11 @@ export function NotesBrowser({ workspaceId }: { workspaceId: string }) {
       ) : roots.length === 0 ? (
         <p className="muted home-empty-state">No notes yet.</p>
       ) : (
-        <div className="docs-grid">
+        <ul className="notes-index">
           {roots.map((node) => (
-            <NoteCard key={node.note.id} node={node} workspaceId={workspaceId} />
+            <NoteRow key={node.note.id} node={node} workspaceId={workspaceId} />
           ))}
-        </div>
+        </ul>
       )}
     </section>
   );
@@ -52,37 +52,51 @@ function countDescendants(node: NoteNode): number {
   return node.children.reduce((total, child) => total + 1 + countDescendants(child), 0);
 }
 
-function NoteCard({ node, workspaceId }: { node: NoteNode; workspaceId: string }) {
+function formatNoteDate(iso: string): string {
+  const date = new Date(iso);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+}
+
+function NoteRow({ node, workspaceId }: { node: NoteNode; workspaceId: string }) {
   const note: PublicNote = node.note;
   const subNotes = countDescendants(node);
-  const updated = new Date(note.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  const cardStyle = { '--card-hue': categoryHue(note.id) } as CSSProperties;
+  const pinned = Boolean(note.pinnedAt);
 
   return (
-    <div className="doc-card" style={cardStyle}>
-      <Link to={`/w/${workspaceId}/n/${note.id}`} className="doc-card-link">
-        <div className="doc-card-meta">
-          <span>{updated}</span>
-          {subNotes > 0 ? (
-            <span className="doc-card-location">
-              {subNotes} sub-note{subNotes === 1 ? '' : 's'}
+    <li>
+      <Link
+        to={`/w/${workspaceId}/n/${note.id}`}
+        className={pinned ? 'note-slip is-pinned' : 'note-slip'}
+      >
+        <span className="note-slip-mark" aria-hidden="true" />
+        <span className="note-slip-body">
+          <h3 className="note-slip-title">
+            <NoteGlyph note={note} />
+            <span className="note-slip-name">{note.title || 'Untitled'}</span>
+            {pinned ? <span className="visually-hidden">Pinned</span> : null}
+          </h3>
+          {note.excerpt ? <span className="note-slip-excerpt">{note.excerpt}</span> : null}
+          {note.kind === 'kanban' || subNotes > 0 ? (
+            <span className="note-slip-detail">
+              {note.kind === 'kanban' ? <span>Board</span> : null}
+              {subNotes > 0 ? (
+                <span>
+                  {subNotes} sub-note{subNotes === 1 ? '' : 's'}
+                </span>
+              ) : null}
             </span>
           ) : null}
-        </div>
-        <h3 className="doc-card-title note-card-title">
-          <NoteGlyph note={note} />
-          {note.title}
-        </h3>
-        {note.excerpt ? <p className="doc-card-excerpt">{note.excerpt}</p> : null}
+        </span>
+        <span className="note-slip-meta">
+          <time dateTime={note.updatedAt}>{formatNoteDate(note.updatedAt)}</time>
+          <span>{note.visibility === 'workspace' ? 'Workspace' : 'Private'}</span>
+        </span>
       </Link>
-      <div className="doc-card-foot">
-        <span className="doc-card-status">{note.visibility === 'workspace' ? 'Workspace' : 'Private'}</span>
-        {note.pinnedAt ? (
-          <span className="note-card-pin" aria-label="Pinned" title="Pinned">
-            ★
-          </span>
-        ) : null}
-      </div>
-    </div>
+    </li>
   );
 }
