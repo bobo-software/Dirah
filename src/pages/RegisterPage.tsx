@@ -2,7 +2,8 @@ import { type FormEvent, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/StoresIndex';
 import { readReturnTo } from '../utils/returnTo';
-import { BrandLink, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
+import { BrandLink, NewAccountFields, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
+import { emptyNewAccount, fullName, newAccountProblem, passwordsDiffer } from '../utils/newAccount';
 import { Button } from '../components/buttons/Button';
 
 export function RegisterPage() {
@@ -10,7 +11,7 @@ export function RegisterPage() {
   const ready = useAuthStore((state) => state.ready);
   const register = useAuthStore((state) => state.register);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [account, setAccount] = useState(emptyNewAccount);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [nextPath, setNextPath] = useState<string | null>(null);
@@ -21,10 +22,15 @@ export function RegisterPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    const problem = newAccountProblem(account);
+    if (problem) {
+      setMessage(problem);
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
-      const workspace = await register(email, password);
+      const workspace = await register(email, account.password, fullName(account));
       setNextPath(readReturnTo() ?? `/w/${workspace.id}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not register');
@@ -55,19 +61,9 @@ export function RegisterPage() {
             required
           />
         </label>
-        <label>
-          Password
-          <input
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </label>
+        <NewAccountFields values={account} onChange={setAccount} />
         {message ? <p className="error">{message}</p> : null}
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || passwordsDiffer(account)}>
           {busy ? 'Creating…' : 'Register'}
         </Button>
       </form>

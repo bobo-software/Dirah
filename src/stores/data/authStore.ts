@@ -25,8 +25,8 @@ type AuthState = {
   ready: boolean;
   error: string | null;
   initAuth: () => Promise<void>;
-  register: (email: string, password: string) => Promise<PublicWorkspace>;
-  acceptInvite: (token: string, password: string) => Promise<PublicWorkspace>;
+  register: (email: string, password: string, name?: string) => Promise<PublicWorkspace>;
+  acceptInvite: (token: string, password: string, name?: string) => Promise<PublicWorkspace>;
   acceptInviteAsSession: (token: string) => Promise<PublicWorkspace>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -122,11 +122,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return initPromise;
   },
 
-  register: async (email, password) => {
+  register: async (email, password, name) => {
     set({ error: null });
     const data = await apiRequest<{ user: PublicUser; tokens: AuthTokens; workspace: PublicWorkspace }>(
       '/api/auth/register',
-      { method: 'POST', body: JSON.stringify({ email, password }) }
+      { method: 'POST', body: JSON.stringify({ email, password, name }) }
     );
     localStorage.removeItem(REFRESH_KEY);
     set({ accessToken: data.tokens.accessToken, user: data.user });
@@ -135,11 +135,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return data.workspace;
   },
 
-  acceptInvite: async (token, password) => {
+  acceptInvite: async (token, password, name) => {
     set({ error: null });
     const data = await apiRequest<{ user: PublicUser; tokens: AuthTokens; workspace: PublicWorkspace }>(
       `/api/invites/${token}/accept`,
-      { method: 'POST', body: JSON.stringify({ password }) }
+      { method: 'POST', body: JSON.stringify({ password, name }) }
     );
     localStorage.removeItem(REFRESH_KEY);
     set({ accessToken: data.tokens.accessToken, user: data.user });

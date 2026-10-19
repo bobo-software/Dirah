@@ -21,8 +21,10 @@ function GitHubIcon() {
   );
 }
 
-export function OAuthButtons() {
+/** `invite` joins that workspace during sign-in when the provider email matches it. */
+export function OAuthButtons({ invite, onStart }: { invite?: string; onStart?: () => void } = {}) {
   const [status, setStatus] = useState<OAuthStatus>({ google: false, github: false });
+  const query = invite ? `?invite=${encodeURIComponent(invite)}` : '';
 
   useEffect(() => {
     void getOAuthStatus()
@@ -35,13 +37,13 @@ export function OAuthButtons() {
   return (
     <div className="oauth-buttons">
       {status.google ? (
-        <a className="oauth-btn" href={`${API_URL}/api/auth/oauth/google/start`}>
+        <a className="oauth-btn" href={`${API_URL}/api/auth/oauth/google/start${query}`} onClick={onStart}>
           <GoogleIcon />
           Continue with Google
         </a>
       ) : null}
       {status.github ? (
-        <a className="oauth-btn" href={`${API_URL}/api/auth/oauth/github/start`}>
+        <a className="oauth-btn" href={`${API_URL}/api/auth/oauth/github/start${query}`} onClick={onStart}>
           <GitHubIcon />
           Continue with GitHub
         </a>

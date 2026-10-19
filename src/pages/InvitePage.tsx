@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore, useInviteStore, useWorkspaceStore } from '../stores/StoresIndex';
-import { Logo } from '../components/ComponentsIndex';
+import { Logo, NewAccountFields, OAuthButtons } from '../components/ComponentsIndex';
+import { emptyNewAccount, fullName, newAccountProblem, passwordsDiffer } from '../utils/newAccount';
 import type { InvitePreview } from '../api/members';
 import { clearReturnTo, rememberReturnTo } from '../utils/returnTo';
 import { Button } from '../components/buttons/Button';
@@ -23,7 +24,7 @@ export function InvitePage() {
   const fetchPreview = useInviteStore((state) => state.fetchPreview);
   const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
   const [preview, setPreview] = useState<InvitePreview | null>(null);
-  const [password, setPassword] = useState('');
+  const [account, setAccount] = useState(emptyNewAccount);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [nextPath, setNextPath] = useState<string | null>(null);
@@ -90,6 +91,11 @@ export function InvitePage() {
     navigate('/login', { state: { from: back, email: preview?.email } });
   }
 
+  // A matching provider email joins on the server; a different one lands back here to explain.
+  const oauthButtons = (
+    <OAuthButtons invite={inviteToken} onStart={() => rememberReturnTo(`/invite/${inviteToken}?accept=1`)} />
+  );
+
   return (
     <main className="auth-card invite-card">
       <div className="auth-brand">
@@ -129,6 +135,7 @@ export function InvitePage() {
           <p className="muted">
             {preview.email} already has a Dirah account. Log in and you will be taken straight to the workspace.
           </p>
+          {oauthButtons}
           <Button variant="plain" type="button" className="invite-primary" onClick={goToLogin}>
             Log in to join
           </Button>
@@ -141,28 +148,23 @@ export function InvitePage() {
             <strong>No account yet.</strong> {preview.email} isn’t on Dirah. Create an account below to join{' '}
             {preview.workspaceName}.
           </p>
+          {oauthButtons}
           <form onSubmit={(event) => {
             event.preventDefault();
-            void join(() => acceptInvite(inviteToken, password));
+            const problem = newAccountProblem(account);
+            if (problem) {
+              setMessage(problem);
+              return;
+            }
+            void join(() => acceptInvite(inviteToken, account.password, fullName(account)));
           }}>
             <label>
               Email
               <input type="email" value={preview.email} readOnly aria-readonly="true" />
             </label>
-            <label>
-              Choose a password
-              <input
-                type="password"
-                autoComplete="new-password"
-                minLength={8}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                aria-label="New password"
-              />
-            </label>
+            <NewAccountFields values={account} onChange={setAccount} />
             {message ? <p className="error">{message}</p> : null}
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || passwordsDiffer(account)}>
               {busy ? 'Creating account…' : 'Create account & join'}
             </Button>
           </form>

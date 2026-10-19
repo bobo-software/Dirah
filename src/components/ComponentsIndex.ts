@@ -14,6 +14,7 @@ export { Button } from './buttons/Button';
 export type { ButtonProps, ButtonVariant } from './buttons/Button';
 
 export { OAuthButtons } from './auth/OAuthButtons';
+export { NewAccountFields } from './auth/NewAccountFields';
 export { PasswordField } from './auth/PasswordField';
 export { ProfileMenu } from './auth/ProfileMenu';
 

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { REFRESH_KEY, useAuthStore } from '../stores/StoresIndex';
 import { Logo } from '../components/ComponentsIndex';
-import { readReturnTo } from '../utils/returnTo';
+import { clearReturnTo, readReturnTo } from '../utils/returnTo';
 
 export function OAuthCatchPage() {
   const navigate = useNavigate();
@@ -17,7 +17,13 @@ export function OAuthCatchPage() {
   }, []);
 
   useEffect(() => {
+    const joined = new URLSearchParams(window.location.search).get('workspace');
     void useAuthStore.getState().initAuth().finally(() => {
+      if (joined) {
+        clearReturnTo();
+        navigate(`/w/${encodeURIComponent(joined)}`, { replace: true });
+        return;
+      }
       navigate(readReturnTo() ?? '/', { replace: true });
     });
   }, [navigate]);

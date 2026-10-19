@@ -27,12 +27,14 @@ export function PasswordField({
   onChange,
   autoComplete = 'current-password',
   required = true,
+  minLength,
 }: {
   label?: string;
   value: string;
   onChange: (value: string) => void;
   autoComplete?: string;
   required?: boolean;
+  minLength?: number;
 }) {
   const [visible, setVisible] = useState(false);
 
@@ -46,6 +48,7 @@ export function PasswordField({
           value={value}
           onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
           required={required}
+          minLength={minLength}
         />
         <Button variant="icon"
           type="button"
