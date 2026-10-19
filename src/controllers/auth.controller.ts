@@ -18,6 +18,10 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+const registerSchema = credentialsSchema.extend({
+  name: z.string().max(80).optional(),
+});
+
 const updateProfileSchema = z
   .object({
     name: z.string().max(80).nullable().optional(),
@@ -70,11 +74,11 @@ function sendRateLimit(res: Response, error: unknown): boolean {
 export function createAuthController(authService: AuthService, passwordResets: PasswordResetService) {
   return {
     register: asyncHandler(async (req: Request, res: Response) => {
-      const parsed = credentialsSchema.safeParse(req.body);
+      const parsed = registerSchema.safeParse(req.body);
       if (!parsed.success) {
         return ResponseUtils.error(res, 'Email and password are required', parsed.error.flatten(), 400);
       }
-      const result = await authService.register(parsed.data.email, parsed.data.password);
+      const result = await authService.register(parsed.data.email, parsed.data.password, parsed.data.name);
       return ResponseUtils.success(
         res,
         'Registered',

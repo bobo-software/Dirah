@@ -13,6 +13,8 @@ import type { OAuthExchanger } from '../oauth/providers';
 const stamp = Date.now();
 const oauthEmail = `oauth-new-${stamp}@example.com`;
 const existingEmail = `oauth-existing-${stamp}@example.com`;
+const inviteeEmail = `oauth-invitee-${stamp}@example.com`;
+const existingInviteeEmail = `oauth-invitee-existing-${stamp}@example.com`;
 const password = 'password12';
 
 function refreshCookiePair(setCookie: string | string[] | undefined): string {
@@ -32,6 +34,12 @@ const exchanger: OAuthExchanger = async ({ code }) => {
   }
   if (code === 'existing') {
     return { email: existingEmail, providerUserId: `google-existing-${stamp}` };
+  }
+  if (code === 'invitee') {
+    return { email: inviteeEmail, providerUserId: `google-invitee-${stamp}` };
+  }
+  if (code === 'invitee-existing') {
+    return { email: existingInviteeEmail, providerUserId: `google-invitee-existing-${stamp}` };
   }
   return { email: oauthEmail, providerUserId: `google-new-${stamp}` };
 };
@@ -164,6 +172,68 @@ describe('oauth API', () => {
       .query({ code: 'unverified', state: state4 });
     expect(unverified.status).toBe(400);
     expect(unverified.body.message).toMatch(/not verified/i);
+  });
+
+  it('joins an invited workspace in the same sign-in when the email matches', async () => {
+    if (!dbReady) return;
+
+    const owner = await request(appOn)
+      .post('/api/auth/register')
+      .send({ email: `oauth-owner-${stamp}@example.com`, password });
+    expect(owner.status).toBe(201);
+    const ownerToken = owner.body.data.tokens.accessToken as string;
+    const workspaceId = owner.body.data.workspace.id as string;
+
+    async function invite(email: string): Promise<string> {
+      const res = await request(appOn)
+        .post(`/api/workspaces/${workspaceId}/members`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ email, role: 'editor' });
+      expect(res.status).toBe(201);
+      return String(res.body.data.invite.inviteUrl).split('/invite/')[1] ?? '';
+    }
+
+    async function signIn(code: string, inviteToken: string) {
+      const start = await request(appOn).get('/api/auth/oauth/google/start').query({ invite: inviteToken });
+      expect(start.status).toBe(302);
+      const state = new URL(start.headers.location ?? '').searchParams.get('state') ?? '';
+      const callback = await request(appOn).get('/api/auth/oauth/google/callback').query({ code, state });
+      expect(callback.status).toBe(302);
+      const session = await request(appOn)
+        .post('/api/auth/refresh')
+        .set('Cookie', refreshCookiePair(callback.headers['set-cookie']));
+      const access = session.body.data.tokens.accessToken as string;
+      const list = await request(appOn).get('/api/workspaces').set('Authorization', `Bearer ${access}`);
+      return {
+        location: new URL(callback.headers.location ?? ''),
+        workspaces: list.body.data.workspaces as { id: string; name: string; role: string }[],
+      };
+    }
+
+    const newToken = await invite(inviteeEmail);
+    const fresh = await signIn('invitee', newToken);
+    expect(fresh.location.pathname).toBe('/oauth');
+    expect(fresh.location.searchParams.get('workspace')).toBe(workspaceId);
+    expect(fresh.workspaces.map((w) => [w.id, w.role])).toEqual([[workspaceId, 'editor']]);
+    expect((await request(appOn).get(`/api/invites/${newToken}`)).status).toBe(404);
+
+    const registered = await request(appOn)
+      .post('/api/auth/register')
+      .send({ email: existingInviteeEmail, password });
+    expect(registered.status).toBe(201);
+    const existingToken = await invite(existingInviteeEmail);
+    const existing = await signIn('invitee-existing', existingToken);
+    expect(existing.location.searchParams.get('workspace')).toBe(workspaceId);
+    expect(existing.workspaces.find((w) => w.id === workspaceId)?.role).toBe('editor');
+
+    const otherToken = await invite(`oauth-invite-other-${stamp}@example.com`);
+    const mismatch = await signIn('new', otherToken);
+    expect(mismatch.location.searchParams.get('workspace')).toBeNull();
+    expect(mismatch.workspaces.some((w) => w.id === workspaceId)).toBe(false);
+    expect((await request(appOn).get(`/api/invites/${otherToken}`)).status).toBe(200);
+
+    const bad = await request(appOn).get('/api/auth/oauth/google/start').query({ invite: '../nope' });
+    expect(bad.status).toBe(400);
   });
 
   it('exchanges a one-time mobile code and rejects unknown returns, replays, and expiry', async () => {

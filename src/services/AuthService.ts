@@ -79,7 +79,7 @@ function isUniqueViolation(error: unknown): boolean {
 export class AuthService {
   constructor(private readonly database: Database) {}
 
-  async register(emailRaw: string, password: string): Promise<{
+  async register(emailRaw: string, password: string, nameRaw?: string): Promise<{
     user: PublicUser;
     tokens: AuthTokens;
     workspace: PublicWorkspace;
@@ -92,13 +92,14 @@ export class AuthService {
       throw new HttpError('Password must be at least 8 characters', 400, 'WEAK_PASSWORD');
     }
 
+    const name = nameRaw?.trim() || null;
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     try {
       const result = await this.database.transaction(async (tx) => {
         const [user] = await tx
           .insert(users)
-          .values({ email, passwordHash })
+          .values({ email, passwordHash, name })
           .returning({
             id: users.id,
             email: users.email,

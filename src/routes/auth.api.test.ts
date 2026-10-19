@@ -66,10 +66,15 @@ describe('auth and workspaces API', () => {
       return;
     }
 
-    const registered = await asBrowser(request(app).post('/api/auth/register')).send({ email, password });
+    const registered = await asBrowser(request(app).post('/api/auth/register')).send({
+      email,
+      password,
+      name: '  Ada Lovelace ',
+    });
 
     expect(registered.status).toBe(201);
     expect(registered.body.success).toBe(true);
+    expect(registered.body.data.user.name).toBe('Ada Lovelace');
     expect(registered.body.data.tokens).toEqual({ accessToken: expect.any(String) });
     expect(registered.body.data.tokens.refreshToken).toBeUndefined();
     const issued = refreshCookieLine(registered.headers['set-cookie']);

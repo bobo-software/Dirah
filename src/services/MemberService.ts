@@ -36,6 +36,19 @@ export interface InvitePreview {
   accountExists: boolean;
 }
 
+export interface OpenInvite {
+  id: string;
+  workspaceId: string;
+  workspaceName: string;
+  workspaceDescription: string | null;
+  encrypted: boolean;
+  mcpEnabled: boolean;
+  email: string;
+  role: string;
+  expiresAt: Date;
+  invitedByEmail: string;
+}
+
 export type InviteOutcome = { kind: 'pending'; invite: PublicInvite & { mailed: boolean } };
 
 function normalizeEmail(email: string): string {
@@ -239,7 +252,8 @@ export class MemberService {
 
   async accept(
     token: string,
-    password: string
+    password: string,
+    nameRaw?: string
   ): Promise<{ user: PublicUser; tokens: AuthTokens; workspace: PublicWorkspace }> {
     if (password.length < 8) {
       throw new HttpError('Password must be at least 8 characters', 400, 'WEAK_PASSWORD');
@@ -257,13 +271,14 @@ export class MemberService {
         'EMAIL_TAKEN'
       );
     }
+    const name = nameRaw?.trim() || null;
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     try {
       const result = await this.database.transaction(async (tx) => {
         const [user] = await tx
           .insert(users)
-          .values({ email: invite.email, passwordHash })
+          .values({ email: invite.email, passwordHash, name })
           .returning({
             id: users.id,
             email: users.email,
@@ -383,18 +398,17 @@ export class MemberService {
     };
   }
 
-  private async requireOpenInvite(token: string): Promise<{
-    id: string;
-    workspaceId: string;
-    workspaceName: string;
-    workspaceDescription: string | null;
-    encrypted: boolean;
-    mcpEnabled: boolean;
-    email: string;
-    role: string;
-    expiresAt: Date;
-    invitedByEmail: string;
-  }> {
+  /** The open invite for this token, or null when it is unknown, expired, or used. */
+  async findOpenInvite(token: string): Promise<OpenInvite | null> {
+    try {
+      return await this.requireOpenInvite(token);
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  private async requireOpenInvite(token: string): Promise<OpenInvite> {
     const trimmed = token.trim();
     if (!trimmed) {
       throw new HttpError('Invite not found', 404, 'INVITE_NOT_FOUND');
