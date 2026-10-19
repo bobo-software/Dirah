@@ -94,14 +94,83 @@ export function describeActivity(entry: TicketActivity, memberName: (id: string)
   }
 }
 
-export function matchesFilter(ticket: Ticket, filter: string): boolean {
-  const needle = filter.trim().toLowerCase();
-  if (!needle) return true;
+export const DUE_FILTERS = ['overdue', 'today', 'week', 'none'] as const;
+export type DueFilter = (typeof DUE_FILTERS)[number];
+
+export const DUE_FILTER_LABEL: Record<DueFilter, string> = {
+  overdue: 'Overdue',
+  today: 'Due today',
+  week: 'Due in 7 days',
+  none: 'No due date',
+};
+
+/** Stands in for "no assignee" in an assignee filter. */
+export const UNASSIGNED = 'none';
+
+/** Each list narrows the board when non-empty; values inside one list are OR'd. */
+export type TicketFilters = {
+  text: string;
+  statusIds: string[];
+  priorities: TicketPriority[];
+  assigneeIds: string[];
+  groupIds: string[];
+  due: DueFilter[];
+};
+
+export const NO_FILTERS: TicketFilters = { text: '', statusIds: [], priorities: [], assigneeIds: [], groupIds: [], due: [] };
+
+export function isFiltering(filters: TicketFilters): boolean {
   return (
-    ticket.title.toLowerCase().includes(needle) ||
-    ticket.key.toLowerCase().includes(needle) ||
-    ticket.labels.some((label) => label.toLowerCase().includes(needle))
+    filters.text.trim().length > 0 ||
+    filters.statusIds.length > 0 ||
+    filters.priorities.length > 0 ||
+    filters.assigneeIds.length > 0 ||
+    filters.groupIds.length > 0 ||
+    filters.due.length > 0
   );
+}
+
+function addDays(iso: string, days: number): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  const value = new Date(year, month - 1, day + days);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
+function matchesDue(ticket: Ticket, due: DueFilter, done: boolean, today: string): boolean {
+  const date = ticket.dueDate;
+  if (due === 'none') return !date;
+  if (!date || done) return false;
+  if (due === 'overdue') return date < today;
+  if (due === 'today') return date === today;
+  return date >= today && date <= addDays(today, 7);
+}
+
+/** `doneIds` are the board's done statuses: done tickets are never overdue or due soon. */
+export function matchesFilter(ticket: Ticket, filters: TicketFilters, doneIds: Set<string>): boolean {
+  const needle = filters.text.trim().toLowerCase();
+  if (
+    needle &&
+    !ticket.title.toLowerCase().includes(needle) &&
+    !ticket.key.toLowerCase().includes(needle) &&
+    !ticket.labels.some((label) => label.toLowerCase().includes(needle))
+  ) {
+    return false;
+  }
+  if (filters.statusIds.length && !filters.statusIds.includes(ticket.statusId)) return false;
+  if (filters.groupIds.length && !filters.groupIds.includes(ticket.groupId)) return false;
+  if (filters.priorities.length && !filters.priorities.includes(ticket.priority)) return false;
+  if (filters.assigneeIds.length) {
+    const assigned = filters.assigneeIds.some((id) =>
+      id === UNASSIGNED ? ticket.assigneeIds.length === 0 : ticket.assigneeIds.includes(id)
+    );
+    if (!assigned) return false;
+  }
+  if (filters.due.length) {
+    const done = doneIds.has(ticket.statusId);
+    const today = todayIso();
+    if (!filters.due.some((due) => matchesDue(ticket, due, done, today))) return false;
+  }
+  return true;
 }
 
 export const BOARD_KEY_RE = /^[A-Z][A-Z0-9]{1,9}$/;

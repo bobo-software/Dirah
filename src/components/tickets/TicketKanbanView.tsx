@@ -3,7 +3,7 @@ import type { PublicMember } from '../../api/members';
 import type { Ticket, TicketBoardView } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
 import { Avatar } from './TicketMenus';
-import { dueTone, formatDue, matchesFilter, PRIORITY_META } from './ticketMeta';
+import { dueTone, formatDue, isFiltering, matchesFilter, PRIORITY_META, type TicketFilters } from './ticketMeta';
 import { Button } from '../buttons/Button';
 
 const CARD_DRAG = 'text/ticket-card';
@@ -22,7 +22,7 @@ export function TicketKanbanView({
   view,
   members,
   editable,
-  filter,
+  filters,
   onOpen,
   onAdd,
   onError,
@@ -30,7 +30,7 @@ export function TicketKanbanView({
   view: TicketBoardView;
   members: PublicMember[];
   editable: boolean;
-  filter: string;
+  filters: TicketFilters;
   onOpen: (ticket: Ticket) => void;
   onAdd: (defaults: { statusId: string }) => void;
   onError: (message: string) => void;
@@ -43,8 +43,11 @@ export function TicketKanbanView({
 
   // A drag cut short by unmounting must not leave polling paused.
   useEffect(() => () => setDragging(boardId, false), [boardId, setDragging]);
-  const canDrag = editable && !filter.trim();
-  const statuses = [...view.statuses].sort((a, b) => a.position - b.position);
+  const canDrag = editable && !isFiltering(filters);
+  const statuses = [...view.statuses]
+    .filter((status) => !filters.statusIds.length || filters.statusIds.includes(status.id))
+    .sort((a, b) => a.position - b.position);
+  const doneIds = new Set(view.statuses.filter((status) => status.category === 'done').map((status) => status.id));
   const byId = new Map(members.map((member) => [member.userId, member]));
 
   function ticketsIn(statusId: string): Ticket[] {
@@ -73,7 +76,7 @@ export function TicketKanbanView({
     <div className={`kanban-board ticket-kanban${dragId ? ' is-dragging' : ''}`}>
       {statuses.map((status) => {
         const all = ticketsIn(status.id);
-        const cards = all.filter((ticket) => matchesFilter(ticket, filter));
+        const cards = all.filter((ticket) => matchesFilter(ticket, filters, doneIds));
         const columnDrop = drop?.statusId === status.id && drop.targetId === null;
         return (
           <section
@@ -128,7 +131,6 @@ export function TicketKanbanView({
                     }}
                   >
                     <Button variant="plain" type="button" className="ticket-card-open" onClick={() => onOpen(ticket)}>
-                      <span className="ticket-key">{ticket.key}</span>
                       <span className="ticket-card-title">{ticket.title}</span>
                     </Button>
                     {ticket.labels.length > 0 ? (

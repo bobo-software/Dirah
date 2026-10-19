@@ -6,7 +6,7 @@ import { confirmDelete } from '../layout/deleteDialogue';
 import { ColorDot } from '../notes/table/ColorDot';
 import type { SelectColor } from '../notes/table/columnTypes';
 import { AssigneeCell, DueCell, PriorityCell, StatusCell } from './TicketCells';
-import { formatCreated, matchesFilter } from './ticketMeta';
+import { formatCreated, isFiltering, matchesFilter, type TicketFilters } from './ticketMeta';
 import { Button } from '../buttons/Button';
 
 const ROW_DRAG = 'text/ticket-row';
@@ -25,7 +25,7 @@ export function TicketTableView({
   view,
   members,
   editable,
-  filter,
+  filters,
   onOpen,
   onAdd,
   onError,
@@ -33,7 +33,7 @@ export function TicketTableView({
   view: TicketBoardView;
   members: PublicMember[];
   editable: boolean;
-  filter: string;
+  filters: TicketFilters;
   onOpen: (ticket: Ticket) => void;
   onAdd: (defaults: { groupId: string }) => void;
   onError: (message: string) => void;
@@ -49,9 +49,11 @@ export function TicketTableView({
 
   // A drag cut short by unmounting must not leave polling paused.
   useEffect(() => () => setDragging(boardId, false), [boardId, setDragging]);
-  const filtering = filter.trim().length > 0;
+  const filtering = isFiltering(filters);
   const canDrag = editable && !filtering;
-  const groups = [...view.groups].sort((a, b) => a.position - b.position);
+  const groups = [...view.groups]
+    .filter((group) => !filters.groupIds.length || filters.groupIds.includes(group.id))
+    .sort((a, b) => a.position - b.position);
   const doneIds = new Set(view.statuses.filter((status) => status.category === 'done').map((status) => status.id));
   const statusById = new Map(view.statuses.map((status) => [status.id, status]));
 
@@ -96,7 +98,7 @@ export function TicketTableView({
     <div className={`ticket-table-wrap${dragId ? ' is-dragging' : ''}`}>
       {groups.map((group) => {
         const all = ticketsIn(group.id);
-        const rows = all.filter((ticket) => matchesFilter(ticket, filter));
+        const rows = all.filter((ticket) => matchesFilter(ticket, filters, doneIds));
         const isCollapsed = collapsed.has(group.id);
         return (
           <section
@@ -178,7 +180,6 @@ export function TicketTableView({
                         </td>
                         <td className="ticket-col-title">
                           <Button variant="plain" type="button" className="ticket-title-button" onClick={() => onOpen(ticket)}>
-                            <span className="ticket-key">{ticket.key}</span>
                             <span className="ticket-title-text">{ticket.title}</span>
                             {ticket.labels.map((label) => (
                               <span key={label} className="ticket-label">

@@ -13,7 +13,8 @@ type WorkspaceState = {
   createWorkspace: (name: string) => Promise<PublicWorkspace>;
   renameWorkspace: (id: string, name: string) => Promise<PublicWorkspace>;
   updateWorkspaceDescription: (id: string, description: string | null) => Promise<PublicWorkspace>;
-  deleteWorkspace: (id: string) => Promise<void>;
+  /** Soft-deletes; the server purges it for good at the returned `purgeAt`. */
+  deleteWorkspace: (id: string, confirmName: string) => Promise<{ purgeAt: string }>;
   reset: () => void;
 };
 
@@ -95,9 +96,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return data.workspace;
   },
 
-  deleteWorkspace: async (id) => {
-    await apiRequest(`/api/workspaces/${id}`, { method: 'DELETE', accessToken: token() });
+  deleteWorkspace: async (id, confirmName) => {
+    const data = await apiRequest<{ purgeAt: string }>(`/api/workspaces/${id}`, {
+      method: 'DELETE',
+      accessToken: token(),
+      body: JSON.stringify({ confirmName }),
+    });
     set((state) => ({ workspaces: state.workspaces.filter((item) => item.id !== id) }));
+    return data;
   },
 
   reset: () => set({ workspaces: [], activeWorkspaceId: null, loaded: false, loading: false, error: null }),
