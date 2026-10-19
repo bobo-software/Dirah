@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { and, eq, isNull, or, gt } from 'drizzle-orm';
-import { pages, shareLinks } from '../db/schemas';
+import { pages, shareLinks, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { excerptFromSearchText } from '../utils/slugify';
 import { type AuthService, type Database } from './AuthService';
@@ -165,7 +165,10 @@ export class ShareService {
         permission: shareLinks.permission,
       })
       .from(shareLinks)
-      .where(and(eq(shareLinks.token, token), isNull(shareLinks.revokedAt), this.notExpired()))
+      .innerJoin(workspaces, eq(workspaces.id, shareLinks.workspaceId))
+      .where(
+        and(eq(shareLinks.token, token), isNull(shareLinks.revokedAt), isNull(workspaces.deletedAt), this.notExpired())
+      )
       .limit(1);
     return row ?? null;
   }

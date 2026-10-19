@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gte, isNull, lte, sql, type SQL } from 'drizzle-orm';
 import { db } from '../db';
 import { emailLogs, mcpAudit, pages, requestLogs, users, workspaces } from '../db/schemas';
 
@@ -58,7 +58,7 @@ export class AdminService {
     const [[usersRow], [workspacesRow], [pagesRow], [logsRow], [emailsRow], [errorsRow]] =
       await Promise.all([
         this.database.select({ value: count() }).from(users),
-        this.database.select({ value: count() }).from(workspaces),
+        this.database.select({ value: count() }).from(workspaces).where(isNull(workspaces.deletedAt)),
         this.database.select({ value: count() }).from(pages),
         this.database
           .select({ value: count() })

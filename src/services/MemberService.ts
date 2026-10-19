@@ -431,7 +431,7 @@ export class MemberService {
       .from(workspaceInvites)
       .innerJoin(workspaces, eq(workspaces.id, workspaceInvites.workspaceId))
       .innerJoin(inviter, eq(inviter.id, workspaceInvites.invitedBy))
-      .where(eq(workspaceInvites.token, trimmed))
+      .where(and(eq(workspaceInvites.token, trimmed), isNull(workspaces.deletedAt)))
       .limit(1);
     if (!row || row.acceptedAt || row.expiresAt.getTime() <= Date.now()) {
       throw new HttpError('Invite not found', 404, 'INVITE_NOT_FOUND');

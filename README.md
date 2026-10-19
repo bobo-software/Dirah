@@ -121,7 +121,7 @@ Refresh cookies are httpOnly, `SameSite=Lax`, and `Secure` in production:
 | `GET /api/auth/oauth/status`, `/oauth/:provider/start`, `/oauth/:provider/callback` | Google or GitHub. `:provider` is `google` or `github`. |
 | `GET/PUT /api/auth/crypto` | User key material for encrypted workspaces |
 | `GET/POST /api/workspaces` | List and create |
-| `GET/PATCH/DELETE /api/workspaces/:id` | One workspace |
+| `GET/PATCH/DELETE /api/workspaces/:id` | One workspace. `DELETE` needs `{ confirmName }` (the exact name), hides it at once and purges it after 48 hours |
 | `GET/POST /api/workspaces/:id/pages` | Page tree |
 | `GET/POST /api/workspaces/:id/blobs` | List and upload (raw body, 12 MB) |
 | `GET/POST/PATCH/DELETE …/members` and `…/invites/:inviteId` | Members. Owners manage roles. |

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, ne } from 'drizzle-orm';
 import { db } from '../db';
 import { refreshTokens, userCrypto, users, workspaceMembers, workspaces } from '../db/schemas';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
@@ -9,6 +9,8 @@ import { canAdminMembers, canEdit, isOwner } from '../authz/roles';
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** A deleted workspace stays recoverable in the database this long before it is purged. */
+export const WORKSPACE_PURGE_AFTER_MS = 48 * 60 * 60 * 1000;
 
 export type Database = typeof db;
 
@@ -412,7 +414,7 @@ export class AuthService {
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
-      .where(eq(workspaceMembers.userId, userId));
+      .where(and(eq(workspaceMembers.userId, userId), isNull(workspaces.deletedAt)));
 
     return rows;
   }
@@ -457,14 +459,16 @@ export class AuthService {
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
-      .where(and(eq(workspaceMembers.userId, userId), eq(workspaces.id, workspaceId)))
+      .where(
+        and(eq(workspaceMembers.userId, userId), eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt))
+      )
       .limit(1);
 
     if (!row) {
       const [exists] = await this.database
         .select({ id: workspaces.id })
         .from(workspaces)
-        .where(eq(workspaces.id, workspaceId))
+        .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)))
         .limit(1);
       if (exists) {
         throw new HttpError('Forbidden', 403, 'FORBIDDEN');
@@ -529,9 +533,31 @@ export class AuthService {
     return this.getWorkspace(userId, workspaceId);
   }
 
-  async deleteWorkspace(userId: string, workspaceId: string): Promise<void> {
-    await this.requireWorkspaceOwner(userId, workspaceId);
-    await this.database.delete(workspaces).where(eq(workspaces.id, workspaceId));
+  /**
+   * Hides the workspace from everyone at once; purgeDeletedWorkspaces removes it for good
+   * after WORKSPACE_PURGE_AFTER_MS. The owner must type the workspace name to confirm.
+   */
+  async deleteWorkspace(userId: string, workspaceId: string, confirmName: string): Promise<{ purgeAt: Date }> {
+    const workspace = await this.requireWorkspaceOwner(userId, workspaceId);
+    if (confirmName.trim() !== workspace.name.trim()) {
+      throw new HttpError('Type the workspace name to confirm', 400, 'NAME_MISMATCH');
+    }
+    const deletedAt = new Date();
+    await this.database
+      .update(workspaces)
+      .set({ deletedAt, updatedAt: deletedAt })
+      .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)));
+    return { purgeAt: new Date(deletedAt.getTime() + WORKSPACE_PURGE_AFTER_MS) };
+  }
+
+  /** Permanently deletes workspaces deleted before the purge window; their content cascades. */
+  async purgeDeletedWorkspaces(now = new Date()): Promise<number> {
+    const cutoff = new Date(now.getTime() - WORKSPACE_PURGE_AFTER_MS);
+    const purged = await this.database
+      .delete(workspaces)
+      .where(and(isNotNull(workspaces.deletedAt), lt(workspaces.deletedAt, cutoff)))
+      .returning({ id: workspaces.id });
+    return purged.length;
   }
 
   async issueSession(userId: string): Promise<AuthTokens> {

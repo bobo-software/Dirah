@@ -1,10 +1,14 @@
 import http from 'node:http';
 import { createApp } from './app';
 import { env } from './config/env';
+import { db } from './db';
+import { schedulePurgeDeletedWorkspaces } from './jobs/purgeDeletedWorkspaces';
+import { AuthService } from './services/AuthService';
 
 async function main(): Promise<void> {
   const app = await createApp();
   const server = http.createServer(app);
+  schedulePurgeDeletedWorkspaces(new AuthService(db));
 
   server.listen(env.port, () => {
     console.log(`Dirah API listening on http://localhost:${env.port}`);
