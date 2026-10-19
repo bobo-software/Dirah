@@ -16,6 +16,7 @@ const roleSchema = z.object({
 
 const acceptSchema = z.object({
   password: z.string().min(1).optional(),
+  name: z.string().max(80).optional(),
 });
 
 export function createMemberController(members: MemberService) {
@@ -79,7 +80,7 @@ export function createMemberController(members: MemberService) {
       if (!parsed.success || !parsed.data.password) {
         return ResponseUtils.error(res, 'Password is required', parsed.success ? null : parsed.error.flatten(), 400);
       }
-      const result = await members.accept(token, parsed.data.password);
+      const result = await members.accept(token, parsed.data.password, parsed.data.name);
       return ResponseUtils.success(res, 'Joined workspace', withRefreshCookie(res, 'user', result), 201);
     }),
 

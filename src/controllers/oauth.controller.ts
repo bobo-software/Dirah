@@ -30,7 +30,8 @@ export function createOAuthController(oauth: OAuthService) {
     start: asyncHandler(async (req: Request, res: Response) => {
       const provider = req.params.provider ?? '';
       const returnTo = typeof req.query.return === 'string' ? req.query.return : undefined;
-      const url = oauth.authorizeUrl(provider, returnTo);
+      const invite = typeof req.query.invite === 'string' ? req.query.invite : undefined;
+      const url = oauth.authorizeUrl(provider, returnTo, invite);
       return res.redirect(302, url);
     }),
 
@@ -54,13 +55,15 @@ export function createOAuthController(oauth: OAuthService) {
         const result = await oauth.finish(provider, code, state, { issueTokens: !returnTo });
         if (returnTo) {
           const oneTime = await oauth.createMobileCode(result.user.id);
-          return res.redirect(302, mobileRedirect(returnTo, { code: oneTime }));
+          const params: Record<string, string> = { code: oneTime };
+          if (result.joinedWorkspaceId) params.workspace = result.joinedWorkspaceId;
+          return res.redirect(302, mobileRedirect(returnTo, params));
         }
         if (!result.tokens) {
           throw new HttpError('OAuth provider failed', 502, 'OAUTH_PROVIDER_ERROR');
         }
         setRefreshCookie(res, 'user', result.tokens.refreshToken);
-        return res.redirect(302, oauth.appRedirect());
+        return res.redirect(302, oauth.appRedirect(result.joinedWorkspaceId));
       } catch (error) {
         if (error instanceof HttpError && (error.status === 400 || error.status === 502 || error.status === 503)) {
           if (returnTo) return res.redirect(302, mobileRedirect(returnTo, { error: error.message }));

@@ -97,6 +97,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   const oauthService = new OAuthService(
     db,
     authService,
+    memberService,
     options.oauthExchanger ?? defaultOAuthExchanger
   );
   const mcpTokenService = new McpTokenService(db, authService);

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { and, eq, gt, isNull } from 'drizzle-orm';
-import { oauthAccounts, oauthMobileCodes, users, workspaceMembers, workspaces } from '../db/schemas';
+import { oauthAccounts, oauthMobileCodes, users, workspaceInvites, workspaceMembers, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { env } from '../config/env';
 import {
@@ -18,8 +18,11 @@ import {
   type PublicUser,
   type PublicWorkspace,
 } from './AuthService';
+import type { MemberService } from './MemberService';
 
-type StatePayload = { provider: OAuthProvider; returnTo?: string };
+type StatePayload = { provider: OAuthProvider; returnTo?: string; invite?: string };
+
+const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 /** The only return URL a mobile OAuth start may ask the callback to use. */
 export const MOBILE_OAUTH_RETURN = 'diramobile://oauth';
@@ -37,6 +40,7 @@ export class OAuthService {
   constructor(
     private readonly database: Database,
     private readonly auth: AuthService,
+    private readonly members: MemberService,
     private readonly exchanger: OAuthExchanger = defaultOAuthExchanger,
     config: OAuthConfig = oauthConfigFromEnv()
   ) {
@@ -50,7 +54,7 @@ export class OAuthService {
     };
   }
 
-  authorizeUrl(providerRaw: string, returnTo?: string): string {
+  authorizeUrl(providerRaw: string, returnTo?: string, inviteRaw?: string): string {
     if (!isOAuthProvider(providerRaw)) {
       throw new HttpError('Unknown OAuth provider', 404, 'OAUTH_PROVIDER');
     }
@@ -62,11 +66,14 @@ export class OAuthService {
     if (mobileReturn && mobileReturn !== MOBILE_OAUTH_RETURN) {
       throw new HttpError('Unknown return URL', 400, 'OAUTH_RETURN');
     }
-    const state = jwt.sign(
-      mobileReturn ? { provider: providerRaw, returnTo: mobileReturn } : { provider: providerRaw },
-      env.jwtSecret,
-      { expiresIn: '10m' }
-    );
+    const invite = inviteRaw?.trim() || undefined;
+    if (invite && !INVITE_TOKEN_PATTERN.test(invite)) {
+      throw new HttpError('Invalid invite', 400, 'OAUTH_INVITE');
+    }
+    const payload: StatePayload = { provider: providerRaw };
+    if (mobileReturn) payload.returnTo = mobileReturn;
+    if (invite) payload.invite = invite;
+    const state = jwt.sign(payload, env.jwtSecret, { expiresIn: '10m' });
     const redirectUri = this.redirectUri(providerRaw);
     if (providerRaw === 'google') {
       const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -94,11 +101,16 @@ export class OAuthService {
     code: string,
     state: string,
     options?: { issueTokens?: boolean }
-  ): Promise<{ tokens: AuthTokens | null; user: PublicUser; workspace: PublicWorkspace | null }> {
+  ): Promise<{
+    tokens: AuthTokens | null;
+    user: PublicUser;
+    workspace: PublicWorkspace | null;
+    joinedWorkspaceId: string | null;
+  }> {
     if (!code.trim() || !state.trim()) {
       throw new HttpError('Invalid OAuth callback', 400, 'OAUTH_CALLBACK');
     }
-    this.readState(providerRaw, state);
+    const { invite: inviteToken } = this.readState(providerRaw, state);
     if (!isOAuthProvider(providerRaw)) {
       throw new HttpError('Unknown OAuth provider', 404, 'OAUTH_PROVIDER');
     }
@@ -129,6 +141,11 @@ export class OAuthService {
     if (!email || !email.includes('@') || !profile.providerUserId) {
       throw new HttpError('OAuth provider did not return an email', 400, 'OAUTH_EMAIL');
     }
+
+    // Join only when the provider-verified email is the invited one; otherwise the
+    // invite page explains the mismatch after a normal sign-in.
+    const openInvite = inviteToken ? await this.members.findOpenInvite(inviteToken) : null;
+    const invite = openInvite && openInvite.email === email ? openInvite : null;
 
     const [linked] = await this.database
       .select({ userId: oauthAccounts.userId })
@@ -167,6 +184,31 @@ export class OAuthService {
               role: users.role,
               about: users.about,
             });
+          await tx.insert(oauthAccounts).values({
+            userId: user.id,
+            provider: providerRaw,
+            providerUserId: profile.providerUserId,
+          });
+          if (invite) {
+            await tx.insert(workspaceMembers).values({
+              workspaceId: invite.workspaceId,
+              userId: user.id,
+              role: invite.role,
+            });
+            await tx
+              .update(workspaceInvites)
+              .set({ acceptedAt: new Date() })
+              .where(eq(workspaceInvites.id, invite.id));
+            const workspace: PublicWorkspace = {
+              id: invite.workspaceId,
+              name: invite.workspaceName,
+              description: invite.workspaceDescription,
+              encrypted: invite.encrypted,
+              mcpEnabled: invite.mcpEnabled ?? true,
+              role: invite.role,
+            };
+            return { user, workspace };
+          }
           const [workspace] = await tx
             .insert(workspaces)
             .values({ name: 'My workspace' })
@@ -182,26 +224,35 @@ export class OAuthService {
             userId: user.id,
             role: 'owner',
           });
-          await tx.insert(oauthAccounts).values({
-            userId: user.id,
-            provider: providerRaw,
-            providerUserId: profile.providerUserId,
-          });
-          return { user, workspace };
+          return { user, workspace: { ...workspace, role: 'owner' } };
         });
         const tokens = options?.issueTokens === false ? null : await this.auth.issueSession(created.user.id);
         return {
           user: created.user,
           tokens,
-          workspace: { ...created.workspace, role: 'owner' },
+          workspace: created.workspace,
+          joinedWorkspaceId: invite ? invite.workspaceId : null,
         };
+      }
+    }
+
+    let joined: PublicWorkspace | null = null;
+    if (invite && inviteToken) {
+      try {
+        joined = (await this.members.acceptAsUser(inviteToken, userId)).workspace;
+      } catch (error) {
+        // Revoked or used between lookup and join: sign in without joining.
+        if (!(error instanceof HttpError) || error.status !== 404) throw error;
       }
     }
 
     const user = await this.auth.me(userId);
     const tokens = options?.issueTokens === false ? null : await this.auth.issueSession(user.id);
+    if (joined) {
+      return { user, tokens, workspace: joined, joinedWorkspaceId: joined.id };
+    }
     const workspacesForUser = await this.auth.listWorkspaces(user.id);
-    return { user, tokens, workspace: workspacesForUser[0] ?? null };
+    return { user, tokens, workspace: workspacesForUser[0] ?? null, joinedWorkspaceId: null };
   }
 
   async createMobileCode(userId: string): Promise<string> {
@@ -238,11 +289,13 @@ export class OAuthService {
     return { user, tokens };
   }
 
-  appRedirect(): string {
-    return `${env.appPublicUrl}/oauth`;
+  appRedirect(joinedWorkspaceId?: string | null): string {
+    const url = new URL(`${env.appPublicUrl}/oauth`);
+    if (joinedWorkspaceId) url.searchParams.set('workspace', joinedWorkspaceId);
+    return url.toString();
   }
 
-  private readState(providerRaw: string, state: string): { returnTo: string | null } {
+  private readState(providerRaw: string, state: string): { returnTo: string | null; invite: string | null } {
     if (!isOAuthProvider(providerRaw)) {
       throw new HttpError('Unknown OAuth provider', 404, 'OAUTH_PROVIDER');
     }
@@ -258,7 +311,8 @@ export class OAuthService {
     if (payload.returnTo !== undefined && payload.returnTo !== MOBILE_OAUTH_RETURN) {
       throw new HttpError('Unknown return URL', 400, 'OAUTH_RETURN');
     }
-    return { returnTo: payload.returnTo ?? null };
+    const invite = typeof payload.invite === 'string' && INVITE_TOKEN_PATTERN.test(payload.invite) ? payload.invite : null;
+    return { returnTo: payload.returnTo ?? null, invite };
   }
 
   private redirectUri(provider: OAuthProvider): string {
