@@ -6,9 +6,10 @@ import { createApp } from '../app';
 import { pool } from '../db';
 import { runPendingMigrations } from '../db/migrationRunner';
 import { db } from '../db';
-import { emailLogs, passwordResetCodes } from '../db/schemas';
+import { emailLogs, passwordResetCodes, workspaces } from '../db/schemas';
 import { env } from '../config/env';
 import { passwordResetCodeForTests } from '../services/PasswordResetService';
+import { AuthService, WORKSPACE_PURGE_AFTER_MS } from '../services/AuthService';
 
 function refreshCookieLine(setCookie: string | string[] | undefined): string {
   const list = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
@@ -243,15 +244,39 @@ describe('auth and workspaces API', () => {
       .set('Authorization', `Bearer ${editorAccess}`);
     expect(editorDelete.status).toBe(403);
 
+    const misnamed = await request(app)
+      .delete(`/api/workspaces/${extraId}`)
+      .set('Authorization', `Bearer ${access}`)
+      .send({ confirmName: 'Extra' });
+    expect(misnamed.status).toBe(400);
+    expect(misnamed.body.error).toBe('NAME_MISMATCH');
+
     const removed = await request(app)
       .delete(`/api/workspaces/${extraId}`)
-      .set('Authorization', `Bearer ${access}`);
+      .set('Authorization', `Bearer ${access}`)
+      .send({ confirmName: 'Extra workspace' });
     expect(removed.status).toBe(200);
+    const purgeAt = new Date(removed.body.data.purgeAt as string).getTime();
+    expect(purgeAt - Date.now()).toBeGreaterThan(WORKSPACE_PURGE_AFTER_MS - 60_000);
 
     const gone = await request(app)
       .get(`/api/workspaces/${extraId}`)
       .set('Authorization', `Bearer ${access}`);
     expect(gone.status).toBe(404);
+
+    const listed = await request(app).get('/api/workspaces').set('Authorization', `Bearer ${access}`);
+    expect((listed.body.data.workspaces as { id: string }[]).some((item) => item.id === extraId)).toBe(false);
+
+    // Soft-deleted: the row stays until the purge window passes.
+    const [kept] = await db.select({ deletedAt: workspaces.deletedAt }).from(workspaces).where(eq(workspaces.id, extraId));
+    expect(kept?.deletedAt).toBeInstanceOf(Date);
+
+    const purger = new AuthService(db);
+    await purger.purgeDeletedWorkspaces();
+    expect(await db.select().from(workspaces).where(eq(workspaces.id, extraId))).toHaveLength(1);
+
+    await purger.purgeDeletedWorkspaces(new Date(Date.now() + WORKSPACE_PURGE_AFTER_MS + 60_000));
+    expect(await db.select().from(workspaces).where(eq(workspaces.id, extraId))).toHaveLength(0);
   });
 
   it('updates email and password, and re-wraps an encryption key', async () => {

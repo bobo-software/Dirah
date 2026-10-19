@@ -83,8 +83,9 @@ export function createWorkspaceController(authService: AuthService, mcpTokens?: 
       if (!id) {
         return ResponseUtils.error(res, 'Workspace id is required', null, 400);
       }
-      await authService.deleteWorkspace(req.user!.userId, id);
-      return ResponseUtils.success(res, 'Workspace deleted');
+      const confirmName = typeof req.body?.confirmName === 'string' ? req.body.confirmName : '';
+      const { purgeAt } = await authService.deleteWorkspace(req.user!.userId, id, confirmName);
+      return ResponseUtils.success(res, 'Workspace deleted', { purgeAt: purgeAt.toISOString() });
     }),
   };
 }

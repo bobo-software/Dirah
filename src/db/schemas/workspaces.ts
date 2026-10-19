@@ -8,6 +8,8 @@ export const workspaces = pgTable('workspaces', {
   encrypted: boolean('encrypted').notNull().default(false),
   mcpEnabled: boolean('mcp_enabled').notNull().default(true),
   agentIndexPath: text('agent_index_path'),
+  /** Set when an owner deletes the workspace; the purge job removes it 48 hours later. */
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

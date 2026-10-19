@@ -225,6 +225,13 @@
       "when": 1756539100000,
       "tag": "0031_note_blobs",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1756539200000,
+      "tag": "0032_workspace_soft_delete",
+      "breakpoints": true
     }
   ]
 }
