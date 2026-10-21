@@ -13,3 +13,13 @@ export function isValidBlobId(id: string): boolean {
 export function blobIdsInMarkdown(markdown: string): string[] {
   return [...new Set([...markdown.matchAll(BLOB_URL)].map((match) => match[1]))];
 }
+
+export interface BlobAttachment {
+  blobId: string;
+  url: string;
+}
+
+/** The distinct blobs linked across several markdown bodies, for MCP read results. */
+export function attachmentsIn(...markdowns: string[]): BlobAttachment[] {
+  return blobIdsInMarkdown(markdowns.join('\n')).map((blobId) => ({ blobId, url: `/api/blobs/${blobId}` }));
+}

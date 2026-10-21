@@ -1,4 +1,5 @@
 import { HttpError } from '../utils/HttpError';
+import { attachmentsIn, type BlobAttachment } from '../utils/blobRefs';
 import { formatNoteLink } from '../utils/noteLinks';
 import { applyMarkdownEdit, type MarkdownEditInput } from './mcp/markdownPatch';
 import type { DocsMcpService } from './DocsMcpService';
@@ -60,6 +61,8 @@ export interface NoteReadResult extends NoteListRow {
   totalLines: number;
   /** Notes visible to the caller that link here with `[[Label|noteId]]`. */
   backlinks?: { noteId: string; title: string; context: string }[];
+  /** Images and files linked in the note; open them with read_image. */
+  attachments?: BlobAttachment[];
 }
 
 function breadcrumbTitles(all: PublicNote[], noteId: string): string[] {
@@ -207,6 +210,7 @@ export class NotesMcpService {
         title: link.note.title,
         context: link.context,
       })),
+      attachments: attachmentsIn(body.content),
     };
   }
 

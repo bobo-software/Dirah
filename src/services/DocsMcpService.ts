@@ -6,6 +6,7 @@ import {
 } from '../utils/slugify';
 import { parseFrontmatter } from '../utils/frontmatter';
 import { extractMarkdownLinks } from '../utils/markdownLinks';
+import { attachmentsIn } from '../utils/blobRefs';
 import type { PageKind, PageService, PublicPage } from './PageService';
 import type { McpTokenService } from './McpTokenService';
 import { applyMarkdownEdit, type EditPatch } from './mcp/markdownPatch';
@@ -347,6 +348,7 @@ export class DocsMcpService {
       startLine,
       endLine: sliced.length ? endLine : startLine - 1,
       totalLines,
+      attachments: attachmentsIn(body.content),
     };
   }
 
