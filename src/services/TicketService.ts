@@ -669,7 +669,11 @@ export class TicketService {
       const current = await this.assigneesFor([ticketId]);
       const before = current.get(ticketId) ?? [];
       if (!sameIds(before, next)) {
-        await this.assertAssignable(board.workspaceId, next);
+        // Only new assignees are checked, so a hidden member already on the ticket can stay.
+        await this.assertAssignable(
+          board.workspaceId,
+          next.filter((id) => !before.includes(id))
+        );
         assigneeDelta = {
           added: next.filter((id) => !before.includes(id)),
           removed: before.filter((id) => !next.includes(id)),
@@ -926,10 +930,13 @@ export class TicketService {
   }
 
   /** Members of a workspace the caller belongs to, for resolving assignee emails and names. */
-  async members(userId: string, workspaceId: string): Promise<{ userId: string; email: string; name: string | null }[]> {
+  async members(
+    userId: string,
+    workspaceId: string
+  ): Promise<{ userId: string; email: string; name: string | null; hidden: boolean }[]> {
     await this.auth.requireMember(userId, workspaceId);
     return this.database
-      .select({ userId: users.id, email: users.email, name: users.name })
+      .select({ userId: users.id, email: users.email, name: users.name, hidden: workspaceMembers.hidden })
       .from(workspaceMembers)
       .innerJoin(users, eq(workspaceMembers.userId, users.id))
       .where(eq(workspaceMembers.workspaceId, workspaceId));
@@ -1039,7 +1046,11 @@ export class TicketService {
           .from(users)
           .leftJoin(
             workspaceMembers,
-            and(eq(workspaceMembers.userId, users.id), eq(workspaceMembers.workspaceId, board.workspaceId))
+            and(
+              eq(workspaceMembers.userId, users.id),
+              eq(workspaceMembers.workspaceId, board.workspaceId),
+              eq(workspaceMembers.hidden, false)
+            )
           )
           .where(inArray(users.id, [...ids, actorId])),
       ]);
@@ -1214,7 +1225,13 @@ export class TicketService {
     const rows = await this.database
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)
-      .where(and(eq(workspaceMembers.workspaceId, workspaceId), inArray(workspaceMembers.userId, userIds)));
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.hidden, false),
+          inArray(workspaceMembers.userId, userIds)
+        )
+      );
     if (rows.length !== new Set(userIds).size) {
       throw new HttpError('Assignees must be workspace members', 400, 'INVALID_ASSIGNEE');
     }

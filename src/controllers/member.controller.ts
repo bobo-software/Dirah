@@ -10,8 +10,19 @@ const inviteSchema = z.object({
   role: z.string().min(1),
 });
 
-const roleSchema = z.object({
-  role: z.string().min(1),
+const memberPatchSchema = z
+  .object({
+    role: z.string().min(1).optional(),
+    hidden: z.boolean().optional(),
+  })
+  .refine((body) => body.role !== undefined || body.hidden !== undefined, {
+    message: 'Send role or hidden',
+  });
+
+const memberWorkspacesSchema = z.object({
+  workspaces: z
+    .array(z.object({ workspaceId: z.string().uuid(), hidden: z.boolean() }))
+    .max(500),
 });
 
 const acceptSchema = z.object({
@@ -90,12 +101,38 @@ export function createMemberController(members: MemberService) {
       if (!workspaceId || !userId) {
         return ResponseUtils.error(res, 'Workspace id and user id are required', null, 400);
       }
-      const parsed = roleSchema.safeParse(req.body ?? {});
+      const parsed = memberPatchSchema.safeParse(req.body ?? {});
       if (!parsed.success) {
-        return ResponseUtils.error(res, 'Role is required', parsed.error.flatten(), 400);
+        return ResponseUtils.error(res, 'Role or hidden is required', parsed.error.flatten(), 400);
       }
-      const member = await members.setRole(req.user!.userId, workspaceId, userId, parsed.data.role);
+      const { role, hidden } = parsed.data;
+      let member = role !== undefined ? await members.setRole(req.user!.userId, workspaceId, userId, role) : null;
+      if (hidden !== undefined) {
+        member = await members.setVisibility(req.user!.userId, workspaceId, userId, hidden);
+      }
       return ResponseUtils.success(res, 'ok', { member });
+    }),
+
+    memberWorkspaces: asyncHandler(async (req: Request, res: Response) => {
+      const userId = req.params.userId;
+      if (!userId) {
+        return ResponseUtils.error(res, 'User id is required', null, 400);
+      }
+      const workspaces = await members.workspacesForMember(req.user!.userId, userId);
+      return ResponseUtils.success(res, 'ok', { workspaces });
+    }),
+
+    setMemberWorkspaces: asyncHandler(async (req: Request, res: Response) => {
+      const userId = req.params.userId;
+      if (!userId) {
+        return ResponseUtils.error(res, 'User id is required', null, 400);
+      }
+      const parsed = memberWorkspacesSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return ResponseUtils.error(res, 'Invalid workspaces payload', parsed.error.flatten(), 400);
+      }
+      const workspaces = await members.setWorkspacesForMember(req.user!.userId, userId, parsed.data.workspaces);
+      return ResponseUtils.success(res, 'ok', { workspaces });
     }),
 
     remove: asyncHandler(async (req: Request, res: Response) => {
