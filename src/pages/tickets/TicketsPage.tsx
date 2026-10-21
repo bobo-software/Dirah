@@ -1,14 +1,11 @@
-import { type CSSProperties, useCallback, useEffect, useState } from 'react';
-import { Link, Navigate, useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { searchTickets, type TicketSearchResult } from '../../api/tickets';
-import { categoryHue } from '../../components/docs/categoryColor';
+import { useState } from 'react';
+import { Navigate, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { CreateBoardModal } from '../../components/tickets/BoardModals';
-import { dueTone, formatDue, PRIORITY_META, TICKET_POLL_MS } from '../../components/tickets/ticketMeta';
-import { useVisiblePoll } from '../../hooks/useVisiblePoll';
-import { EMPTY_TICKET_BOARDS, useAuthStore, useTicketStore, useWorkspaceStore } from '../../stores/StoresIndex';
+import { EMPTY_TICKET_BOARDS, useTicketStore, useWorkspaceStore } from '../../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from '../workspaceContext';
 import { Button } from '../../components/buttons/Button';
 
+/** `/tickets` opens the first board; it only renders when there is no board yet. */
 export function TicketsPage() {
   const { workspaceId = '' } = useParams();
   const { role } = useOutletContext<WorkspaceOutlet>();
@@ -16,120 +13,30 @@ export function TicketsPage() {
   const workspace = useWorkspaceStore((state) => state.workspaces.find((item) => item.id === workspaceId));
   const boards = useTicketStore((state) => state.byWorkspace[workspaceId] ?? EMPTY_TICKET_BOARDS);
   const loaded = useTicketStore((state) => state.loadedWorkspaces.has(workspaceId));
-  const accessToken = useAuthStore((state) => state.accessToken);
-  const [mine, setMine] = useState<TicketSearchResult[] | null>(null);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const editable = canEdit(role);
-
-  const enabled = Boolean(accessToken) && !workspace?.encrypted;
-  const loadMine = useCallback(
-    (isCancelled: () => boolean = () => false) =>
-      searchTickets(accessToken ?? '', workspaceId, { assignee: 'me', state: 'open' }).then(
-        (tickets) => !isCancelled() && setMine(tickets),
-        (err: unknown) => !isCancelled() && setError(err instanceof Error ? err.message : 'Could not load your tickets')
-      ),
-    [accessToken, workspaceId]
-  );
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    void loadMine(() => cancelled);
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, loadMine]);
-
-  // Coming back to the tab shows work assigned meanwhile.
-  useVisiblePoll(() => loadMine(), TICKET_POLL_MS, enabled);
 
   if (workspace?.encrypted) {
     return <Navigate to={`/w/${workspaceId}/docs`} replace />;
   }
-
-  const ticketHref = (ticket: TicketSearchResult) =>
-    `/w/${workspaceId}/tickets/${ticket.boardId}?ticket=${encodeURIComponent(ticket.key)}`;
+  if (!loaded) {
+    return <p className="muted">Loading boards…</p>;
+  }
+  if (boards.length > 0) {
+    return <Navigate to={`/w/${workspaceId}/tickets/${boards[0].id}`} replace />;
+  }
 
   return (
     <div className="home-landing">
       <h1 className="home-landing-title">Tickets</h1>
-      {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
+      <p className="muted home-empty-state">
+        No boards yet. A board holds tickets with a status, owner and due date. Try one per team or project.
+      </p>
+      {editable ? (
+        <Button type="button" onClick={() => setCreating(true)}>
+          New board
+        </Button>
       ) : null}
-
-      <section className="notes-home" aria-label="Assigned to me">
-        <div className="notes-home-head">
-          <h2 className="ticket-home-heading">Assigned to me</h2>
-        </div>
-        {mine === null ? (
-          <p className="muted">Loading…</p>
-        ) : mine.length === 0 ? (
-          <p className="muted home-empty-state">Nothing open is assigned to you.</p>
-        ) : (
-          <ul className="ticket-mine">
-            {mine.map((ticket) => {
-              const tone = dueTone(ticket.dueDate, false);
-              return (
-                <li key={ticket.id}>
-                  <Link to={ticketHref(ticket)} className="ticket-mine-row">
-                    <span className="ticket-key">{ticket.key}</span>
-                    <span className="ticket-mine-title">{ticket.title}</span>
-                    <span className="ticket-mine-board muted">{ticket.boardName}</span>
-                    <span className={`ticket-pill note-type-${ticket.statusColor}`}>{ticket.statusName}</span>
-                    {ticket.priority !== 'none' ? (
-                      <span className={`ticket-pill ticket-pill-soft note-type-${PRIORITY_META[ticket.priority].color}`}>
-                        {PRIORITY_META[ticket.priority].label}
-                      </span>
-                    ) : null}
-                    {ticket.dueDate ? <span className={`ticket-due ${tone}`}>{formatDue(ticket.dueDate)}</span> : null}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section className="notes-home" aria-label="Boards">
-        <div className="notes-home-head">
-          <h2 className="ticket-home-heading">Boards</h2>
-          {editable ? (
-            <Button type="button" onClick={() => setCreating(true)}>
-              New board
-            </Button>
-          ) : null}
-        </div>
-        {!loaded ? (
-          <p className="muted">Loading boards…</p>
-        ) : boards.length === 0 ? (
-          <p className="muted home-empty-state">
-            No boards yet. A board holds tickets with a status, owner and due date. Try one per team or project.
-          </p>
-        ) : (
-          <div className="docs-grid task-grid">
-            {boards.map((board) => {
-              const cardStyle = { '--card-hue': categoryHue(board.id) } as CSSProperties;
-              return (
-                <div key={board.id} className="doc-card task-list-card" style={cardStyle}>
-                  <Link to={`/w/${workspaceId}/tickets/${board.id}`} className="doc-card-link">
-                    <div className="doc-card-meta">
-                      <span>{board.key}</span>
-                    </div>
-                    <h3 className="doc-card-title">{board.name}</h3>
-                    <p className="task-card-count">
-                      {board.openCount} open · {board.ticketCount} total
-                    </p>
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
       {creating ? (
         <CreateBoardModal
           workspaceId={workspaceId}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { EMPTY_TICKET_BOARDS, useTicketStore } from '../../stores/StoresIndex';
-import { HomeIcon, TicketsIcon } from '../layout/SectionIcons';
+import { TicketsIcon } from '../layout/SectionIcons';
 import { CreateBoardModal } from './BoardModals';
 import { Button } from '../buttons/Button';
 
@@ -22,10 +22,6 @@ export function TicketsSidebarSection({ workspaceId, editable }: { workspaceId: 
 
   return (
     <>
-      <NavLink className="sidebar-home" to={`/w/${workspaceId}/tickets`} end>
-        <HomeIcon />
-        <span>My tickets</span>
-      </NavLink>
       <div className="sidebar-pages-header">
         <p className="sidebar-label">Boards</p>
         {editable ? (

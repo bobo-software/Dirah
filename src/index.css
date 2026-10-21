@@ -9312,55 +9312,6 @@ label.ticket-menu-row {
   padding-top: 0.9rem;
 }
 
-/* Tickets home */
-
-.ticket-home-heading {
-  margin: 0;
-  color: var(--text-h);
-  font: 600 1.05rem/1.3 var(--ui);
-}
-
-.ticket-mine {
-  display: flex;
-  flex-direction: column;
-  margin: 0 0 2rem;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  list-style: none;
-}
-
-.ticket-mine li + li {
-  border-top: 1px solid var(--border);
-}
-
-.ticket-mine-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.85rem;
-  color: var(--text-h);
-  text-decoration: none;
-}
-
-.ticket-mine-row:hover {
-  background: var(--accent-soft);
-}
-
-.ticket-mine-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ticket-mine-board {
-  font-size: 0.82rem;
-  white-space: nowrap;
-}
-
 @media (max-width: 760px) {
   .ticket-board-page {
     padding: 1rem 1rem 0;
@@ -9375,10 +9326,6 @@ label.ticket-menu-row {
   .ticket-panel-bar {
     padding-left: 1rem;
     padding-right: 1rem;
-  }
-
-  .ticket-mine-board {
-    display: none;
   }
 }
 
