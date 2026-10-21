@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { and, count, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { users, workspaceInvites, workspaceMemberKeys, workspaceMembers, workspaces } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
-import { isMemberRole, isOwner, isWorkspaceRole } from '../authz/roles';
+import { canAdminMembers, isMemberRole, isOwner, isWorkspaceRole } from '../authz/roles';
 import { env } from '../config/env';
 import { sendInviteEmail } from '../mail/inviteMailer';
 import { type AuthService, type AuthTokens, type Database, type PublicUser, type PublicWorkspace } from './AuthService';
@@ -17,6 +17,16 @@ export interface PublicMember {
   email: string;
   name: string | null;
   role: string;
+  /** Hidden members keep their role but cannot see or open the workspace. */
+  hidden: boolean;
+}
+
+/** One of the target member's workspaces, as seen by an owner/admin of it. */
+export interface MemberWorkspace {
+  workspaceId: string;
+  name: string;
+  role: string;
+  hidden: boolean;
 }
 
 export interface PublicInvite {
@@ -96,6 +106,7 @@ export class MemberService {
         email: users.email,
         name: users.name,
         role: workspaceMembers.role,
+        hidden: workspaceMembers.hidden,
       })
       .from(workspaceMembers)
       .innerJoin(users, eq(users.id, workspaceMembers.userId))
@@ -469,7 +480,8 @@ export class MemberService {
     }
     const [updated] = await this.database
       .update(workspaceMembers)
-      .set({ role: roleRaw })
+      // Owners can never be hidden, so promoting someone to owner also unhides them.
+      .set(isOwner(roleRaw) ? { role: roleRaw, hidden: false } : { role: roleRaw })
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
@@ -479,13 +491,110 @@ export class MemberService {
       .returning({
         userId: workspaceMembers.userId,
         role: workspaceMembers.role,
+        hidden: workspaceMembers.hidden,
       });
+    return this.toPublicMember(updated);
+  }
+
+  /** Hides a workspace from one member (or shows it again) without touching their role. */
+  async setVisibility(
+    actorId: string,
+    workspaceId: string,
+    targetUserId: string,
+    hidden: boolean
+  ): Promise<PublicMember> {
+    await this.auth.requireMemberAdmin(actorId, workspaceId);
+    const member = await this.requireMemberRow(workspaceId, targetUserId);
+    this.assertCanHide(actorId, member, hidden);
+    const [updated] = await this.database
+      .update(workspaceMembers)
+      .set({ hidden })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, targetUserId)
+        )
+      )
+      .returning({
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+        hidden: workspaceMembers.hidden,
+      });
+    return this.toPublicMember(updated);
+  }
+
+  /** The target's workspaces that the actor administers; nothing outside that set is listed. */
+  async workspacesForMember(actorId: string, targetUserId: string): Promise<MemberWorkspace[]> {
+    const actorMembership = alias(workspaceMembers, 'actor_membership');
+    const rows = await this.database
+      .select({
+        workspaceId: workspaces.id,
+        name: workspaces.name,
+        role: workspaceMembers.role,
+        hidden: workspaceMembers.hidden,
+        actorRole: actorMembership.role,
+      })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .innerJoin(
+        actorMembership,
+        and(
+          eq(actorMembership.workspaceId, workspaceMembers.workspaceId),
+          eq(actorMembership.userId, actorId),
+          eq(actorMembership.hidden, false)
+        )
+      )
+      .where(and(eq(workspaceMembers.userId, targetUserId), isNull(workspaces.deletedAt)))
+      .orderBy(asc(workspaces.name));
+    return rows
+      .filter((row) => canAdminMembers(row.actorRole))
+      .map(({ workspaceId, name, role, hidden }) => ({ workspaceId, name, role, hidden }));
+  }
+
+  /** Sets visibility across several workspaces at once; all-or-nothing. */
+  async setWorkspacesForMember(
+    actorId: string,
+    targetUserId: string,
+    items: Array<{ workspaceId: string; hidden: boolean }>
+  ): Promise<MemberWorkspace[]> {
+    for (const item of items) {
+      await this.auth.requireMemberAdmin(actorId, item.workspaceId);
+      const member = await this.requireMemberRow(item.workspaceId, targetUserId);
+      this.assertCanHide(actorId, member, item.hidden);
+    }
+    await this.database.transaction(async (tx) => {
+      for (const item of items) {
+        await tx
+          .update(workspaceMembers)
+          .set({ hidden: item.hidden })
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, item.workspaceId),
+              eq(workspaceMembers.userId, targetUserId)
+            )
+          );
+      }
+    });
+    return this.workspacesForMember(actorId, targetUserId);
+  }
+
+  private assertCanHide(actorId: string, member: { userId: string; role: string }, hidden: boolean): void {
+    if (!hidden) return;
+    if (member.userId === actorId) {
+      throw new HttpError('You cannot hide a workspace from yourself', 409, 'CANNOT_HIDE_SELF');
+    }
+    if (isOwner(member.role)) {
+      throw new HttpError('Owners always see their workspace', 409, 'CANNOT_HIDE_OWNER');
+    }
+  }
+
+  private async toPublicMember(row: { userId: string; role: string; hidden: boolean }): Promise<PublicMember> {
     const [user] = await this.database
       .select({ email: users.email, name: users.name })
       .from(users)
-      .where(eq(users.id, updated.userId))
+      .where(eq(users.id, row.userId))
       .limit(1);
-    return { userId: updated.userId, email: user.email, name: user.name, role: updated.role };
+    return { userId: row.userId, email: user.email, name: user.name, role: row.role, hidden: row.hidden };
   }
 
   async remove(actorId: string, workspaceId: string, targetUserId: string): Promise<void> {

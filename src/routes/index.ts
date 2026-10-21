@@ -6,6 +6,7 @@ import { createPageRouter } from './page.routes';
 import { createBlobRouter } from './blob.routes';
 import { createPublicRouter } from './public.routes';
 import { createInviteRouter } from './invite.routes';
+import { createMemberRouter } from './member.routes';
 import { createAiRouter } from './ai.routes';
 import { createAdminRouter } from './admin.routes';
 import { createKanbanCardRouter, createKanbanColumnRouter, createNoteRouter, createNoteTagRouter } from './note.routes';
@@ -71,6 +72,7 @@ export function createApiRouter(
   router.use('/blobs', createBlobRouter(blobService));
   router.use('/public', createPublicRouter(shareService, blobService));
   router.use('/invites', createInviteRouter(memberService));
+  router.use('/members', createMemberRouter(memberService));
   router.use('/ai', createAiRouter(aiService));
   router.use('/mcp', createMcpSettingsRouter(mcpTokenService));
   router.use('/mcp', createMcpOAuthApproveRouter(mcpOAuthService));

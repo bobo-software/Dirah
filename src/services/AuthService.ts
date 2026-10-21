@@ -414,7 +414,9 @@ export class AuthService {
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
-      .where(and(eq(workspaceMembers.userId, userId), isNull(workspaces.deletedAt)));
+      .where(
+        and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.hidden, false), isNull(workspaces.deletedAt))
+      );
 
     return rows;
   }
@@ -460,7 +462,13 @@ export class AuthService {
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
       .where(
-        and(eq(workspaceMembers.userId, userId), eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt))
+        and(
+          eq(workspaceMembers.userId, userId),
+          eq(workspaces.id, workspaceId),
+          // A hidden member gets the same 403 as a non-member.
+          eq(workspaceMembers.hidden, false),
+          isNull(workspaces.deletedAt)
+        )
       )
       .limit(1);
 
