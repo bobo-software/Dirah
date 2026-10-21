@@ -3,6 +3,7 @@ import { confirmDelete } from '../layout/deleteDialogue';
 import { encryptWorkspace, isUnlocked, provisionAccount, syncMemberKeys, useEncryptionStore } from '../../crypto/workspaceCrypto';
 import { EMPTY_INVITES, EMPTY_MEMBERS, useAuthStore, useMarkdownContentStore, useMembersStore, useWorkspaceStore } from '../../stores/StoresIndex';
 import { Button } from '../buttons/Button';
+import MemberWorkspacesModal from './MemberWorkspacesModal';
 
 /** Owners and admins see this panel; `owner` unlocks encryption and owner rows. */
 export default function MembersPanel({ workspaceId, owner }: { workspaceId: string; owner: boolean }) {
@@ -13,6 +14,9 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
   const revokeInvite = useMembersStore((state) => state.revokeInvite);
   const setMemberRole = useMembersStore((state) => state.setMemberRole);
   const removeMember = useMembersStore((state) => state.removeMember);
+  const setMemberHidden = useMembersStore((state) => state.setMemberHidden);
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const [workspacesFor, setWorkspacesFor] = useState<{ userId: string; label: string } | null>(null);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('editor');
   const [message, setMessage] = useState<string | null>(null);
@@ -134,18 +138,41 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
       <ul className="member-list">
         {members.map((member) => {
           const locked = !owner && member.role === 'owner';
+          const label = member.name?.trim() || member.email;
+          const self = member.userId === currentUserId;
           return (
-            <li key={member.userId}>
+            <li key={member.userId} className={member.hidden ? 'member-row member-hidden' : 'member-row'}>
               <span className="member-email">
                 {member.name?.trim() ? (
                   <>
                     {member.name}
+                    {member.hidden ? <span className="member-hidden-tag">hidden</span> : null}
                     <span className="member-email-sub">{member.email}</span>
                   </>
                 ) : (
-                  member.email
+                  <>
+                    {member.email}
+                    {member.hidden ? <span className="member-hidden-tag">hidden</span> : null}
+                  </>
                 )}
               </span>
+              {self || member.role === 'owner' ? (
+                <span />
+              ) : (
+                <label className="member-visibility" title="Hidden members keep their role but can't see or open this workspace">
+                  <input
+                    type="checkbox"
+                    checked={!member.hidden}
+                    aria-label={`${label} can see this workspace`}
+                    onChange={(event) => {
+                      void setMemberHidden(workspaceId, member.userId, !event.target.checked).catch((error: unknown) => {
+                        setMessage(error instanceof Error ? error.message : 'Could not change visibility');
+                      });
+                    }}
+                  />
+                  Can see
+                </label>
+              )}
               {locked ? (
                 <span className="muted">owner</span>
               ) : (
@@ -164,12 +191,18 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
                   <option value="viewer">viewer</option>
                 </select>
               )}
+              {self ? (
+                <span />
+              ) : (
+                <Button variant="link" type="button" onClick={() => setWorkspacesFor({ userId: member.userId, label })}>
+                  Workspaces…
+                </Button>
+              )}
               {locked ? null : (
                 <Button variant="link"
                   type="button"
                   className="danger"
                   onClick={() => {
-                    const label = member.name?.trim() || member.email;
                     void confirmDelete({
                       title: 'Remove member?',
                       message: `Remove ${label} from this workspace?`,
@@ -249,6 +282,13 @@ export default function MembersPanel({ workspaceId, owner }: { workspaceId: stri
         <p className={copiedUrl && message.includes('copied') ? 'muted' : 'error'} role="alert">
           {message}
         </p>
+      ) : null}
+      {workspacesFor ? (
+        <MemberWorkspacesModal
+          key={workspacesFor.userId}
+          member={workspacesFor}
+          onClose={() => setWorkspacesFor(null)}
+        />
       ) : null}
     </div>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore, useWorkspaceStore } from '../stores/StoresIndex';
-import type { PageKind, PublicPage } from '../api/client';
+import { ApiError, type PageKind, type PublicPage } from '../api/client';
 import {
   EmptyEditorPane,
   HomeIcon,
@@ -11,6 +11,7 @@ import {
   PageTree,
   Sidebar,
   buildPageTree,
+  clearLastWorkspaceId,
   draggedPageId,
   setLastWorkspaceId,
   useSidebarDrawer,
@@ -63,10 +64,17 @@ export function WorkspaceShellPage() {
         await Promise.all([fetchWorkspaces(), setActiveWorkspace(workspaceId)]);
         await fetchPages(workspaceId, { q: query || undefined });
       } catch (error) {
+        if (error instanceof ApiError && error.status === 403) {
+          // Removed or hidden from this workspace: refresh the list so home doesn't route back here.
+          clearLastWorkspaceId();
+          await fetchWorkspaces(true).catch(() => undefined);
+          navigate('/', { replace: true });
+          return;
+        }
         setMessage(error instanceof Error ? error.message : 'Workspace not found');
       }
     })();
-  }, [workspaceId, query, fetchWorkspaces, setActiveWorkspace, fetchPages]);
+  }, [workspaceId, query, fetchWorkspaces, setActiveWorkspace, fetchPages, navigate]);
 
   useEffect(() => {
     setSidebarOpen(false);

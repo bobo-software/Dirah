@@ -77,7 +77,9 @@ export function MemberPicker({
 
   const needle = query.trim().toLowerCase();
   const visible = members.filter(
-    (member) => !needle || member.email.toLowerCase().includes(needle) || member.name?.toLowerCase().includes(needle)
+    (member) =>
+      (!member.hidden || selected.includes(member.userId)) &&
+      (!needle || member.email.toLowerCase().includes(needle) || member.name?.toLowerCase().includes(needle))
   );
 
   function toggle(userId: string) {

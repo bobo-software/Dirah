@@ -4,8 +4,12 @@ import {
   inviteMember,
   revokeInvite,
   setMemberRole,
+  setMemberHidden,
+  setWorkspacesForMember,
+  workspacesForMember,
   removeMember,
   type InviteResult,
+  type MemberWorkspace,
   type PublicInvite,
   type PublicMember,
 } from '../../api/members';
@@ -23,6 +27,12 @@ type MembersState = {
   inviteMember: (workspaceId: string, email: string, role: string) => Promise<InviteResult>;
   revokeInvite: (workspaceId: string, inviteId: string) => Promise<void>;
   setMemberRole: (workspaceId: string, userId: string, role: string) => Promise<void>;
+  setMemberHidden: (workspaceId: string, userId: string, hidden: boolean) => Promise<void>;
+  workspacesForMember: (userId: string) => Promise<MemberWorkspace[]>;
+  setWorkspacesForMember: (
+    userId: string,
+    workspaces: { workspaceId: string; hidden: boolean }[]
+  ) => Promise<MemberWorkspace[]>;
   removeMember: (workspaceId: string, userId: string) => Promise<void>;
 };
 
@@ -62,6 +72,20 @@ export const useMembersStore = create<MembersState>((set, get) => ({
   setMemberRole: async (workspaceId, userId, role) => {
     await setMemberRole(token(), workspaceId, userId, role);
     await get().fetchMembers(workspaceId);
+  },
+
+  setMemberHidden: async (workspaceId, userId, hidden) => {
+    await setMemberHidden(token(), workspaceId, userId, hidden);
+    await get().fetchMembers(workspaceId);
+  },
+
+  workspacesForMember: (userId) => workspacesForMember(token(), userId),
+
+  setWorkspacesForMember: async (userId, workspaces) => {
+    const result = await setWorkspacesForMember(token(), userId, workspaces);
+    const cached = workspaces.map((item) => item.workspaceId).filter((id) => get().byWorkspace[id]);
+    await Promise.all(cached.map((id) => get().fetchMembers(id).catch(() => undefined)));
+    return result;
   },
 
   removeMember: async (workspaceId, userId) => {

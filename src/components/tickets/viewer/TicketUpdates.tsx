@@ -181,7 +181,7 @@ function CommentItem({
   return (
     <li className={editing ? 'ticket-comment is-editing' : 'ticket-comment'}>
       <div className="ticket-comment-head">
-        <Avatar member={author ?? { userId: '', email: comment.authorName ?? '?', role: '' }} size="md" />
+        <Avatar member={author ?? { userId: '', email: comment.authorName ?? '?', role: '', hidden: false }} size="md" />
         <strong>{comment.authorName ?? 'Former member'}</strong>
         <time dateTime={comment.createdAt} title={new Date(comment.createdAt).toLocaleString()}>
           {timeAgo(comment.createdAt)}

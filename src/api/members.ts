@@ -5,6 +5,15 @@ export type PublicMember = {
   email: string;
   name?: string | null;
   role: string;
+  /** Still a member, but the workspace is out of their list and returns 403. */
+  hidden: boolean;
+};
+
+export type MemberWorkspace = {
+  workspaceId: string;
+  name: string;
+  role: string;
+  hidden: boolean;
 };
 
 export type PublicInvite = {
@@ -81,6 +90,43 @@ export async function setMemberRole(
     }
   );
   return data.member;
+}
+
+export async function setMemberHidden(
+  accessToken: string,
+  workspaceId: string,
+  userId: string,
+  hidden: boolean
+): Promise<PublicMember> {
+  const data = await apiRequest<{ member: PublicMember }>(
+    `/api/workspaces/${workspaceId}/members/${userId}`,
+    {
+      method: 'PATCH',
+      accessToken,
+      body: JSON.stringify({ hidden }),
+    }
+  );
+  return data.member;
+}
+
+export async function workspacesForMember(accessToken: string, userId: string): Promise<MemberWorkspace[]> {
+  const data = await apiRequest<{ workspaces: MemberWorkspace[] }>(`/api/members/${userId}/workspaces`, {
+    accessToken,
+  });
+  return data.workspaces;
+}
+
+export async function setWorkspacesForMember(
+  accessToken: string,
+  userId: string,
+  workspaces: { workspaceId: string; hidden: boolean }[]
+): Promise<MemberWorkspace[]> {
+  const data = await apiRequest<{ workspaces: MemberWorkspace[] }>(`/api/members/${userId}/workspaces`, {
+    method: 'PUT',
+    accessToken,
+    body: JSON.stringify({ workspaces }),
+  });
+  return data.workspaces;
 }
 
 export async function removeMember(

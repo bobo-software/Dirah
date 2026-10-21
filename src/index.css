@@ -3347,6 +3347,54 @@ button.linkish.danger {
   grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
 
+.member-list li.member-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+}
+
+.member-list li.member-hidden .member-email {
+  opacity: 0.6;
+}
+
+.member-visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.member-hidden-tag {
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.member-workspace-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0.75rem;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.member-workspace-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.member-workspace-list label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .settings-section-head {
   display: flex;
   align-items: flex-start;
