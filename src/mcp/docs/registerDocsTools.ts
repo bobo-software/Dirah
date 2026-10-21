@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HttpError } from '../../utils/HttpError';
+import { toolError } from '../../utils/publicError';
 import type { DocsMcpService } from '../../services/DocsMcpService';
 import type { PgMcpServerHost } from '../registerPgTools';
 import { currentDocsAuth } from './authContext';
@@ -51,9 +52,7 @@ async function run<T>(tool: string, fn: () => Promise<T>, workspaceId?: string |
     });
     return asToolContent(data);
   } catch (error) {
-    const message = error instanceof HttpError ? error.message : error instanceof Error ? error.message : 'MCP tool failed';
-    const code = error instanceof HttpError ? error.code : undefined;
-    const details = error instanceof HttpError ? error.details : undefined;
+    const { message, code, details } = toolError(error);
     void serviceRef?.recordAudit({
       userId: auth.userId,
       tokenId: auth.tokenId,
