@@ -1,4 +1,5 @@
 import { HttpError } from '../utils/HttpError';
+import { attachmentsIn, type BlobAttachment } from '../utils/blobRefs';
 import type { DocsMcpService } from './DocsMcpService';
 import {
   type PublicTicket,
@@ -28,6 +29,8 @@ export interface TicketReadResult extends TicketRow {
   board: { key: string; name: string };
   description: string;
   comments: { id: string; author: string | null; body: string; createdAt: Date }[];
+  /** Images and files linked in the description or comments; open them with read_image. */
+  attachments: BlobAttachment[];
   activity: { actor: string | null; type: string; data: Record<string, unknown>; createdAt: Date }[];
   createdAt: Date;
   updatedAt: Date;
@@ -430,6 +433,7 @@ export class TicketsMcpService {
         body: comment.body,
         createdAt: comment.createdAt,
       })),
+      attachments: attachmentsIn(detail.ticket.description, ...detail.comments.map((comment) => comment.body)),
       activity: detail.activity.slice(-MAX_ACTIVITY).map((entry) => ({
         actor: entry.actorName,
         type: entry.type,

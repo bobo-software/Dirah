@@ -27,6 +27,7 @@ import { OAuthService } from './services/OAuthService';
 import { McpTokenService } from './services/McpTokenService';
 import { DocsMcpService } from './services/DocsMcpService';
 import { NotesMcpService } from './services/NotesMcpService';
+import { BlobsMcpService } from './services/BlobsMcpService';
 import { createDocsMcpExpressHandler } from './mcp/docs/createDocsMcpExpressHandler';
 import { createDocsMcpAuthMiddleware } from './middlewares/docsMcpAuth';
 import { docsMcpRateLimit } from './middlewares/docsMcpRateLimit';
@@ -110,6 +111,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   const ticketsMcpService = new TicketsMcpService(ticketService, docsMcpService, {
     appPublicUrl: env.appPublicUrl,
   });
+  const blobsMcpService = new BlobsMcpService(blobService, docsMcpService);
   const apiPublicUrl = env.apiPublicUrl;
   const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl, mcpTokenService);
   const shareService = new ShareService(db, authService, pageService);
@@ -174,7 +176,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   });
   app.all('/mcp/protocol', mcpApiKeyMiddleware, mcpHandler);
 
-  const docsMcpHandler = await createDocsMcpExpressHandler(docsMcpService, notesMcpService, ticketsMcpService);
+  const docsMcpHandler = await createDocsMcpExpressHandler(
+    docsMcpService,
+    notesMcpService,
+    ticketsMcpService,
+    blobsMcpService
+  );
   app.all(
     '/mcp',
     createDocsMcpAuthMiddleware({

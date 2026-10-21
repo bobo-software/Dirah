@@ -1717,4 +1717,134 @@ describe('docs MCP protocol', () => {
     );
     expect(audited.rows.map((row: { workspace_id: string | null }) => row.workspace_id)).toEqual([workspaceId]);
   });
+
+  it('opens images linked from tickets, notes and pages with read_image', async () => {
+    if (!dbReady) return;
+    const register = async (label: string) => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email: `mcp-images-${label}-${stamp}@example.com`, password });
+      expect(res.status).toBe(201);
+      return { jwt: res.body.data.tokens.accessToken as string, workspaceId: res.body.data.workspace.id as string };
+    };
+    const owner = await register('owner');
+    const viewer = await register('viewer');
+    const stranger = await register('stranger');
+    const workspaceId = owner.workspaceId;
+    const as = (jwt: string) => ({ Authorization: `Bearer ${jwt}` });
+
+    const invite = await request(app)
+      .post(`/api/workspaces/${workspaceId}/members`)
+      .set(as(owner.jwt))
+      .send({ email: `mcp-images-viewer-${stamp}@example.com`, role: 'viewer' });
+    const inviteToken = String(invite.body.data.invite.inviteUrl).split('/invite/')[1];
+    expect((await request(app).post(`/api/invites/${inviteToken}/accept`).set(as(viewer.jwt)).send({})).status).toBe(201);
+
+    const second = await request(app).post('/api/workspaces').set(as(owner.jwt)).send({ name: 'Images elsewhere' });
+    const secondId = second.body.data.workspace.id as string;
+
+    const upload = async (jwt: string, ws: string, body: Buffer, type: string) => {
+      const res = await request(app).post(`/api/workspaces/${ws}/blobs`).set(as(jwt)).set('Content-Type', type).send(body);
+      expect(res.status).toBe(201);
+      return res.body.data.blob as { id: string; url: string };
+    };
+    const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const pngBytes = Buffer.concat([pngHeader, Buffer.from(`shot-${stamp}`)]);
+    const shot = await upload(owner.jwt, workspaceId, pngBytes, 'image/png');
+    const textFile = await upload(owner.jwt, workspaceId, Buffer.from(`notes ${stamp}`), 'text/plain');
+    const huge = await upload(owner.jwt, workspaceId, Buffer.concat([pngHeader, Buffer.alloc(6 * 1024 * 1024, 1)]), 'image/png');
+    const elsewhere = await upload(owner.jwt, secondId, Buffer.concat([pngHeader, Buffer.from(`second-${stamp}`)]), 'image/png');
+    const strangers = await upload(stranger.jwt, stranger.workspaceId, Buffer.concat([pngHeader, Buffer.from(`x-${stamp}`)]), 'image/png');
+
+    const tokenFor = async (jwt: string, canWrite: boolean) => {
+      const res = await request(app).post('/api/mcp/tokens').set(as(jwt)).send({ name: 'image-agent' });
+      const id = res.body.data.token.id as string;
+      await request(app).put(`/api/mcp/tokens/${id}/access`).set(as(jwt)).send({ workspaces: [{ workspaceId, canWrite }] });
+      return res.body.data.token.secret as string;
+    };
+    const ownerSecret = await tokenFor(owner.jwt, true);
+    const viewerSecret = await tokenFor(viewer.jwt, false);
+
+    const rawCall = async (secret: string, name: string, args: Record<string, unknown>) => {
+      const res = await mcpPost(app, secret, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+      const body = parseMcpBody(res.body?.result ? res.body : res.text);
+      return (body.result ?? body) as { content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> };
+    };
+    const call = async (secret: string, name: string, args: Record<string, unknown>) =>
+      JSON.parse((await rawCall(secret, name, args)).content[0].text ?? '{}') as {
+        success: boolean;
+        data?: Record<string, unknown>;
+        error?: string;
+      };
+
+    // A ticket lists its images; read_image returns the bytes as MCP image content.
+    await call(ownerSecret, 'create_ticket_board', { name: 'Bugs', key: 'IMG' });
+    await call(ownerSecret, 'create_ticket', {
+      board: 'IMG',
+      title: 'Broken layout',
+      description: `See ![shot](${shot.url}) and [log](${textFile.url}).`,
+    });
+    await call(ownerSecret, 'comment_ticket', { key: 'IMG-1', body: `Again: ![shot](${shot.url})` });
+    const ticket = await call(ownerSecret, 'read_ticket', { key: 'IMG-1' });
+    expect(ticket.data?.attachments).toEqual([
+      { blobId: shot.id, url: shot.url },
+      { blobId: textFile.id, url: textFile.url },
+    ]);
+
+    const opened = await rawCall(ownerSecret, 'read_image', { url: shot.url });
+    const meta = JSON.parse(opened.content[0].text ?? '{}');
+    expect(meta.data).toMatchObject({ blobId: shot.id, workspaceId, mimeType: 'image/png', viewable: true });
+    expect(opened.content[1]).toMatchObject({ type: 'image', mimeType: 'image/png' });
+    expect(Buffer.from(opened.content[1].data ?? '', 'base64').equals(pngBytes)).toBe(true);
+
+    const byId = await rawCall(ownerSecret, 'read_image', { blobId: shot.id });
+    expect(byId.content[1]?.type).toBe('image');
+    const fullUrl = await rawCall(ownerSecret, 'read_image', { url: `https://api.example.com${shot.url}` });
+    expect(fullUrl.content[1]?.type).toBe('image');
+
+    // Not an image, or too big: details only.
+    const text = await rawCall(ownerSecret, 'read_image', { url: textFile.url });
+    expect(text.content).toHaveLength(1);
+    expect(JSON.parse(text.content[0].text ?? '{}').data).toMatchObject({ viewable: false, reason: 'not_an_image' });
+    const big = await rawCall(ownerSecret, 'read_image', { url: huge.url });
+    expect(big.content).toHaveLength(1);
+    expect(JSON.parse(big.content[0].text ?? '{}').data).toMatchObject({ viewable: false, reason: 'too_large' });
+
+    // Outside the token's allowlist, or the user's workspaces, it looks missing.
+    expect((await call(ownerSecret, 'read_image', { url: elsewhere.url })).error).toBe('BLOB_NOT_FOUND');
+    expect((await call(ownerSecret, 'read_image', { url: strangers.url })).error).toBe('BLOB_NOT_FOUND');
+    expect((await call(ownerSecret, 'read_image', { url: '/api/blobs/does-not-exist' })).error).toBe('BLOB_NOT_FOUND');
+    expect((await call(ownerSecret, 'read_image', { url: 'https://evil.example/x.png' })).error).toBe('INVALID_BLOB_REF');
+    expect((await call(ownerSecret, 'read_image', {})).error).toBe('INVALID_BLOB_REF');
+
+    // A private note's image stays private: the author sees it, another member does not.
+    const note = await request(app)
+      .post(`/api/workspaces/${workspaceId}/notes`)
+      .set(as(owner.jwt))
+      .send({ title: 'Private photos', visibility: 'private' });
+    expect(note.status).toBe(201);
+    const noteId = note.body.data.note.id as string;
+    const attached = await request(app)
+      .post(`/api/notes/${noteId}/attachments`)
+      .set(as(owner.jwt))
+      .set('Content-Type', 'image/png')
+      .send(Buffer.concat([pngHeader, Buffer.from(`note-${stamp}`)]));
+    expect(attached.status).toBe(201);
+    const noteImage = attached.body.data.blob as { id: string; url: string };
+    const saved = await request(app)
+      .put(`/api/notes/${noteId}/content`)
+      .set(as(owner.jwt))
+      .send({ content: `![photo](${noteImage.url})\n` });
+    expect(saved.status).toBe(200);
+    const readNote = await call(ownerSecret, 'read_note', { noteId });
+    expect(readNote.data?.attachments).toEqual([{ blobId: noteImage.id, url: noteImage.url }]);
+    expect((await rawCall(ownerSecret, 'read_image', { url: noteImage.url })).content[1]?.type).toBe('image');
+    expect((await call(viewerSecret, 'read_image', { url: noteImage.url })).error).toBe('BLOB_NOT_FOUND');
+    expect((await rawCall(viewerSecret, 'read_image', { url: shot.url })).content[1]?.type).toBe('image');
+
+    // Pages list their images too.
+    await call(ownerSecret, 'write_file', { path: 'design.md', content: `# Design\n\n![shot](${shot.url})\n` });
+    const page = await call(ownerSecret, 'read_file', { path: 'design.md' });
+    expect(page.data?.attachments).toEqual([{ blobId: shot.id, url: shot.url }]);
+  }, 30_000);
 });
