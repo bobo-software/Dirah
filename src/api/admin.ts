@@ -1,4 +1,14 @@
-import { apiRequest, type AuthTokens } from './client';
+import { apiRequest, type ApiRequestOptions, type AuthTokens } from './client';
+
+async function refreshAdminSession(): Promise<string> {
+  const { refreshAdminAccessToken } = await import('../stores/data/adminAuthStore');
+  return refreshAdminAccessToken();
+}
+
+/** Admin calls refresh the admin session on a 401, never the user one. */
+function adminApiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  return apiRequest<T>(path, { ...options, refresh: refreshAdminSession });
+}
 
 export type PublicSystemAdmin = {
   id: string;
@@ -87,6 +97,7 @@ export async function adminLogin(email: string, password: string) {
   return apiRequest<{ admin: PublicSystemAdmin; tokens: AuthTokens }>('/api/admin/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
+    skipAuthRetry: true,
   });
 }
 
@@ -94,6 +105,7 @@ export async function adminRefresh(legacyRefreshToken?: string) {
   return apiRequest<{ tokens: AuthTokens }>('/api/admin/auth/refresh', {
     method: 'POST',
     body: JSON.stringify(legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {}),
+    skipAuthRetry: true,
   });
 }
 
@@ -101,26 +113,27 @@ export async function adminLogout() {
   return apiRequest('/api/admin/auth/logout', {
     method: 'POST',
     body: JSON.stringify({}),
+    skipAuthRetry: true,
   });
 }
 
 export async function adminMe(accessToken: string) {
-  return apiRequest<{ admin: PublicSystemAdmin }>('/api/admin/auth/me', { accessToken });
+  return adminApiRequest<{ admin: PublicSystemAdmin }>('/api/admin/auth/me', { accessToken });
 }
 
 export async function fetchAdminMetrics(accessToken: string) {
-  return apiRequest<{ metrics: AdminMetrics }>('/api/admin/metrics', { accessToken });
+  return adminApiRequest<{ metrics: AdminMetrics }>('/api/admin/metrics', { accessToken });
 }
 
 export async function fetchAdminUsers(accessToken: string, page = 1, pageSize = 25) {
-  return apiRequest<Paginated<AdminUserRow>>(
+  return adminApiRequest<Paginated<AdminUserRow>>(
     `/api/admin/users?page=${page}&pageSize=${pageSize}`,
     { accessToken }
   );
 }
 
 export async function fetchAdminEmails(accessToken: string, page = 1, pageSize = 25) {
-  return apiRequest<Paginated<AdminEmailRow>>(
+  return adminApiRequest<Paginated<AdminEmailRow>>(
     `/api/admin/emails?page=${page}&pageSize=${pageSize}`,
     { accessToken }
   );
@@ -139,13 +152,13 @@ export async function fetchAdminRequestLogs(
   if (filters.success !== undefined) params.set('success', String(filters.success));
   if (filters.statusCode !== undefined) params.set('statusCode', String(filters.statusCode));
   if (filters.method) params.set('method', filters.method);
-  return apiRequest<Paginated<AdminRequestLogRow>>(`/api/admin/request-logs?${params}`, {
+  return adminApiRequest<Paginated<AdminRequestLogRow>>(`/api/admin/request-logs?${params}`, {
     accessToken,
   });
 }
 
 export async function fetchAdminRequestAnalytics(accessToken: string, hours = 24) {
-  return apiRequest<{ analytics: RequestAnalytics }>(
+  return adminApiRequest<{ analytics: RequestAnalytics }>(
     `/api/admin/request-logs/analytics?hours=${hours}`,
     { accessToken }
   );
@@ -163,7 +176,7 @@ export async function fetchAdminMcpAudit(
   });
   if (filters.tool) params.set('tool', filters.tool);
   if (filters.outcome) params.set('outcome', filters.outcome);
-  return apiRequest<Paginated<AdminMcpAuditRow>>(`/api/admin/mcp-audit?${params}`, {
+  return adminApiRequest<Paginated<AdminMcpAuditRow>>(`/api/admin/mcp-audit?${params}`, {
     accessToken,
   });
 }

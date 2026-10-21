@@ -100,7 +100,12 @@ async function parseJson(res: Response): Promise<ApiSuccess<unknown> | ApiFailur
   return (await res.json()) as ApiSuccess<unknown> | ApiFailure;
 }
 
-type ApiRequestOptions = RequestInit & { accessToken?: string; skipAuthRetry?: boolean };
+export type ApiRequestOptions = RequestInit & {
+  accessToken?: string;
+  skipAuthRetry?: boolean;
+  /** Gets a fresh access token after a 401. Defaults to the user session refresh. */
+  refresh?: () => Promise<string>;
+};
 
 /** Reads `exp` from the JWT payload. The server still verifies the signature. */
 export function accessTokenExpiresAt(token: string): number | null {
@@ -158,7 +163,9 @@ export function refreshAccessToken(): Promise<string> {
 }
 
 async function apiRequestOnce<T>(path: string, options: ApiRequestOptions): Promise<T> {
-  const { accessToken, headers, skipAuthRetry: _skip, ...rest } = options;
+  const { accessToken, headers, ...rest } = options;
+  delete rest.skipAuthRetry;
+  delete rest.refresh;
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
     credentials: 'include',
@@ -186,7 +193,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       error instanceof ApiError &&
       error.status === 401;
     if (!expired) throw error;
-    const accessToken = await refreshAccessToken();
+    const accessToken = await (options.refresh ?? refreshAccessToken)();
     return apiRequestOnce(path, { ...options, accessToken, skipAuthRetry: true });
   }
 }

@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "build:sec": "infisical run --env=dev -- npm run build",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview",
     "preview:sec": "infisical run --env=dev -- npm run preview"
   },
@@ -44,8 +45,10 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "globals": "^17.11.0",
+    "jsdom": "^30.1.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.67.0",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^5.0.5"
   }
 }
