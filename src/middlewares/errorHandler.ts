@@ -1,23 +1,12 @@
 import { NextFunction, Request, Response } from 'express';
 import ResponseUtils from '../utils/ResponseUtils';
-import { HttpError } from '../utils/HttpError';
+import { toPublicError } from '../utils/publicError';
 
-export function errorHandler(
-  err: Error & { status?: number },
-  _req: Request,
-  res: Response,
-  _next: NextFunction,
-) {
-  if (err instanceof HttpError) {
-    return ResponseUtils.error(res, err.message, err.code ?? err.message, err.status);
+export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  const { status, message, code, requestId } = toPublicError(err);
+  if (requestId) {
+    res.setHeader('X-Request-Id', requestId);
+    return ResponseUtils.error(res, message, code, status, { requestId });
   }
-
-  const statusCode = err.status ?? 500;
-  const message = statusCode === 500 ? 'Internal server error' : err.message;
-
-  if (statusCode === 500) {
-    console.error(err);
-  }
-
-  return ResponseUtils.error(res, message, err, statusCode);
+  return ResponseUtils.error(res, message, code ?? message, status);
 }

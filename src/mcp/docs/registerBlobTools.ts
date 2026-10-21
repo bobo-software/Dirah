@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HttpError } from '../../utils/HttpError';
+import { toolError } from '../../utils/publicError';
 import { MAX_MCP_IMAGE_BYTES, type BlobsMcpService, type McpImage } from '../../services/BlobsMcpService';
 import type { PgMcpServerHost } from '../registerPgTools';
 import { currentDocsAuth } from './authContext';
@@ -31,9 +32,7 @@ function toContent(image: McpImage) {
 }
 
 function toError(error: unknown) {
-  const message = error instanceof HttpError ? error.message : error instanceof Error ? error.message : 'MCP tool failed';
-  const code = error instanceof HttpError ? error.code : undefined;
-  const details = error instanceof HttpError ? error.details : undefined;
+  const { message, code, details } = toolError(error);
   return {
     content: [
       {

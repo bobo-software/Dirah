@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { HttpError } from '../../utils/HttpError';
+import { toolError } from '../../utils/publicError';
 import { TICKET_COLORS, TICKET_PRIORITIES, TICKET_STATUS_CATEGORIES } from '../../services/TicketService';
 import type { TicketsMcpService } from '../../services/TicketsMcpService';
 import type { PgMcpServerHost } from '../registerPgTools';
@@ -83,9 +83,7 @@ async function run<T>(tool: string, fn: (seen: Seen) => Promise<T>) {
     void serviceRef?.recordAudit({ userId: auth.userId, tokenId: auth.tokenId, workspaceId, tool, outcome: 'ok' });
     return asToolContent(data);
   } catch (error) {
-    const message = error instanceof HttpError ? error.message : error instanceof Error ? error.message : 'MCP tool failed';
-    const code = error instanceof HttpError ? error.code : undefined;
-    const details = error instanceof HttpError ? error.details : undefined;
+    const { message, code, details } = toolError(error);
     void serviceRef?.recordAudit({
       userId: auth.userId,
       tokenId: auth.tokenId,

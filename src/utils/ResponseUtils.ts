@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { db } from '../db';
 import { requestLogs } from '../db/schemas';
+import { INTERNAL_ERROR } from './publicError';
 
 const REDACTED_KEYS = new Set([
   'password',
@@ -62,22 +63,32 @@ class ResponseUtils {
     });
   }
 
-  static error(res: Response, message: string, error: unknown = null, statusCode = 500) {
-    const errorPayload = error instanceof Error ? error.message : error;
+  static error(
+    res: Response,
+    message: string,
+    error: unknown = null,
+    statusCode = 500,
+    extra: Record<string, unknown> = {}
+  ) {
+    // A raw Error on a 5xx can carry SQL or schema names; never send its message.
+    const errorPayload =
+      error instanceof Error ? (statusCode >= 500 ? INTERNAL_ERROR : error.message) : error;
 
     console.error({
       success: false,
       message,
       error: errorPayload,
+      ...extra,
       timestamp: new Date().toISOString(),
     });
 
-    logRequest(res, false, message, errorPayload);
+    logRequest(res, false, message, Object.keys(extra).length ? { error: errorPayload, ...extra } : errorPayload);
 
     return res.status(statusCode).json({
       success: false,
       message,
       ...(error ? { error: errorPayload } : {}),
+      ...extra,
     });
   }
 }
