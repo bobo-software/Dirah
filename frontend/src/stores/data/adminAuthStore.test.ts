@@ -43,7 +43,8 @@ describe('admin session refresh', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init: RequestInit = {}) => {
-        const path = new URL(url).pathname;
+        // Production calls its own origin, so the client may pass a relative URL.
+        const path = new URL(url, 'http://localhost').pathname;
         const auth = (init.headers as Record<string, string> | undefined)?.Authorization;
         calls.push({ path, auth });
         const route = routes[path];
