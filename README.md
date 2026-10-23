@@ -48,7 +48,7 @@ Both applications point at this repo and build from the repo root:
 | API (`api.dirah.co.za`) | `/backend/Dockerfile` | 4006 | `GET /health` |
 | Web (`dirah.co.za`) | `/frontend/Dockerfile` | 83 | `GET /health` |
 
-- Base directory `/`; branch `master` once the monorepo merge is in.
+- Base directory `/`; branch `monorepo` until the merge lands on `master`.
 - API environment: `PORT=4006` and `SESSION_COOKIE_DOMAIN=dirah.co.za`. The web
   and API hosts differ, so the OAuth callback on the API host needs the shared
   domain to set a refresh cookie the web origin sends. The API refuses to boot
