@@ -30,20 +30,18 @@ The dev server listens on **http://localhost:5181** (`vite.config.ts`, `host: tr
 
 The browser calls its own origin: Vite proxies `/api` to `http://localhost:4006` (`vite.config.ts`) and nginx does the same in production, so `CORS_ORIGIN` is only needed for the mobile app and other cross-origin clients. `VITE_API_URL` is an optional override for an API on another origin; leave it unset. `VITE_PUBLIC_API_URL` is the API origin shown to users and called by MCP clients (`src/api/client.ts`).
 
-`npm run dev` reads `.env`. `npm run dev:sec` loads Infisical `dev` first. Secret injection is documented in the backend [INFISICAL.md](../backend/INFISICAL.md). This app never imports an Infisical SDK.
+`npm run dev` reads `.env` (copy [`.env.example`](.env.example)). Only `VITE_PUBLIC_API_URL` is needed for a deployed build; the rest of the API configuration stays on the server.
 
 ## Scripts
 
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | Vite on port 5181 |
-| `npm run dev:sec` | Same, with Infisical `dev` |
 | `npm run build` | `tsc -b` then `vite build` into `dist/` |
-| `npm run build:sec` | Build with Infisical secrets |
 | `npm run preview` | Serve the production build locally |
 | `npm run lint` | ESLint |
 
-There is no test script in this package. API behaviour is covered by Vitest in `dirah_backend`.
+There is no test script in this package. API behaviour is covered by Vitest in `backend`.
 
 ## Environment
 
@@ -124,8 +122,7 @@ OAuth start URLs come from `GET /api/auth/oauth/status`. The API redirects back 
 
 `Dockerfile` builds static files, then nginx serves them. Build from the repo root so the workspace lockfile is available.
 
-- Build arg `VITE_PUBLIC_API_URL` is required for a deploy: the API origin shown to users (MCP connectors). The browser itself calls its own origin; nginx proxies `/api` to `backend:4006` on the compose network. The build script refuses to finish when the arg is missing.
-- Alternatively set `INFISICAL_TOKEN`, `INFISICAL_ENV`, and `INFISICAL_DOMAIN` so the build stage loads secrets. A BuildKit secret named `infisical_token` wins over the `INFISICAL_TOKEN` build arg. The nginx stage does not talk to Infisical.
+- Build arg `VITE_PUBLIC_API_URL` is required for a deploy: the API origin shown to users (MCP connectors). The browser itself calls its own origin; nginx proxies `/api` to `backend:4006` on the compose network. The build script refuses to finish when the arg is missing. Pass it with `--build-arg` or the Coolify build variable.
 - nginx listens on **port 83**. The healthcheck is `GET http://127.0.0.1:83/health` and returns `ok`.
 - `nginx.conf` is an SPA: unknown paths fall through to `index.html`. Static assets (css, js, images, fonts) are cached for six months. `index.html` is sent with `Cache-Control: no-cache`.
 
@@ -138,4 +135,4 @@ docker build -f frontend/Dockerfile \
 ## Related
 
 - API: [`backend`](../backend)
-- Secrets and Coolify: [INFISICAL.md](../backend/INFISICAL.md)
+- Deployment: [README.md](../README.md#deploy-coolify)

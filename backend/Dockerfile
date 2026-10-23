@@ -22,12 +22,8 @@ RUN npm prune --omit=dev --workspace backend && mkdir -p backend/node_modules
 # Stage 2: runtime
 FROM node:26-alpine
 
-# Secrets are injected at start by the CLI. The app never calls Infisical itself.
-# Pin matches the npm package; the preinstall script downloads the platform binary.
 # curl is what the Coolify/Docker healthcheck runs inside the container.
-RUN apk add --no-cache curl \
-  && npm install -g @infisical/cli@0.43.138 \
-  && npm cache clean --force
+RUN apk add --no-cache curl
 
 WORKDIR /app/backend
 
@@ -38,8 +34,6 @@ COPY --from=builder /app/backend/node_modules ./node_modules
 COPY --from=builder /app/backend/dist ./dist
 # Migrations and other runtime assets that live outside dist
 COPY --from=builder /app/backend/drizzle ./drizzle
-COPY backend/scripts/infisical-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
 EXPOSE 4006
 
@@ -47,4 +41,4 @@ EXPOSE 4006
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl --fail --silent "http://127.0.0.1:${PORT:-4006}/health" || exit 1
 
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["node", "dist/server.js"]

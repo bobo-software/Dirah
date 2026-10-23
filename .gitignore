@@ -23,8 +23,6 @@ lerna-debug.log*
 .env
 .env.*
 !.env.example
-.infisical.json
-.infisical.yaml
 
 # Personal MCP client config. See backend/.mcp.json.example.
 # `mcp.json` covers cursor/mcp.json and .cursor/mcp.json at any depth.

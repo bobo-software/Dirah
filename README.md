@@ -56,12 +56,12 @@ Both applications point at this repo and build from the repo root:
 - Web build: `VITE_PUBLIC_API_URL=https://api.dirah.co.za`. Delete
   `VITE_API_URL` from that environment: the browser calls its own origin and
   setting it brings CORS back.
-- Both values come from each app's Infisical `prod` environment; Coolify holds
-  only the three `INFISICAL_*` keys. [backend/INFISICAL.md](backend/INFISICAL.md)
-  lists the keys and the order to change them in.
+- Both values are plain environment variables: `PORT` and
+  `SESSION_COOKIE_DOMAIN` in the API app, and `VITE_PUBLIC_API_URL` as a build
+  variable on the web app. Nothing fetches secrets at build or start time.
 - Both containers must share a Docker network, and the API needs the network
   alias `backend`: nginx proxies to `http://backend:4006`.
-- Migrations are an explicit step from a checkout (`npm run db:migrate:sec`).
+- Migrations are an explicit step from a checkout (`npm run db:migrate`).
   Ask before running them against the live database.
 
 CI lives in `.github/workflows/backend.yml` and `frontend.yml`. A change under
@@ -80,6 +80,3 @@ CI lives in `.github/workflows/backend.yml` and `frontend.yml`. A change under
 | `npm run lint` | ESLint for the web app |
 | `npm run db:generate` | Generate a Drizzle migration (`--workspace backend`) |
 | `npm run db:migrate` | Apply pending SQL (`--workspace backend`) |
-
-The `:sec` variants inside each workspace load secrets from Infisical. See
-[backend/INFISICAL.md](backend/INFISICAL.md).

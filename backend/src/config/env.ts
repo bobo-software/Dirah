@@ -5,7 +5,7 @@ import { resolveDatabaseConfig, resolveLiveDatabaseConfig } from './databaseEnv'
 
 dotenv.config();
 
-/** Values written in `.env`. These win over Infisical for the system-admin login. */
+/** Values written in `.env`. These win over the process environment for the system-admin login. */
 function dotenvFile(): Record<string, string> {
   const filePath = path.resolve(process.cwd(), '.env');
   try {
