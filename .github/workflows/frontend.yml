@@ -1,0 +1,61 @@
+name: Frontend
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.dockerignore'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches: [master, monorepo]
+    paths:
+      - 'frontend/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.dockerignore'
+      - '.github/workflows/frontend.yml'
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Typecheck, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspace frontend
+      - run: npm test --workspace frontend
+      - run: npm run build --workspace frontend
+
+  image:
+    name: Build web image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: false
+          # Placeholder origin for the CI image; production passes the real one.
+          build-args: |
+            VITE_PUBLIC_API_URL=https://api.dirah.co.za
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

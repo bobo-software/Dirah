@@ -39,6 +39,31 @@ Open `http://localhost:8080`. The web container proxies `/api` to `backend:4006`
 on the compose network; only the web port needs to be public in a deployed
 stack. Set `VITE_PUBLIC_API_URL` when building the web image for a real host.
 
+## Deploy (Coolify)
+
+Both applications point at this repo and build from the repo root:
+
+| App | Dockerfile | Exposed port | Health check |
+| --- | --- | --- | --- |
+| API (`api.dirah.co.za`) | `/backend/Dockerfile` | 4006 | `GET /health` |
+| Web (`dirah.co.za`) | `/frontend/Dockerfile` | 83 | `GET /health` |
+
+- Base directory `/`; branch `master` once the monorepo merge is in.
+- API environment: `PORT=4006` and `SESSION_COOKIE_DOMAIN=dirah.co.za`. The web
+  and API hosts differ, so the OAuth callback on the API host needs the shared
+  domain to set a refresh cookie the web origin sends. The API refuses to boot
+  in production without it.
+- Web build: `VITE_PUBLIC_API_URL=https://api.dirah.co.za` (from Infisical
+  `prod` or the app's build args). Leave `VITE_API_URL` unset.
+- Both containers must share a Docker network, and the API needs the network
+  alias `backend`: nginx proxies to `http://backend:4006`.
+- Migrations are an explicit step from a checkout (`npm run db:migrate:sec`).
+  Ask before running them against the live database.
+
+CI lives in `.github/workflows/backend.yml` and `frontend.yml`. A change under
+`backend/**` (or the root lockfile) only runs the API checks and image build;
+`frontend/**` does the same for the web.
+
 ## Scripts
 
 | Script | What |
