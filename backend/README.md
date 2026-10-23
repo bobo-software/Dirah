@@ -59,7 +59,7 @@ npm run dev
 
 Both run from the repo root (`--workspace backend`). `npm run dev` uses nodemon and `ts-node`. It reads `backend/.env`. `npm run dev:sec` loads the Infisical `dev` environment first. See [INFISICAL.md](INFISICAL.md).
 
-In `NODE_ENV=development` the API connects with `DB_LOCAL_*` and TLS stays off. `DB_HOST` / `DB_SSL` / `DB_SSL_CA` are the remote database. The deployed API uses those. The Postgres MCP can reach either one.
+The API, Drizzle, migrations, and both Postgres MCP targets use `DB_*` in every environment, including development. Set `DB_SSL=disable` for a local database and `verify-full` for the remote one. `DB_LOCAL_*` are no longer read.
 
 Health check: `GET http://localhost:4006/health` (or whatever `PORT` you set). The same payload is on `GET /api/health`.
 
@@ -94,9 +94,10 @@ Copy `.env.example`. Groups:
 | Copilot | `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` | Empty key disables Ask. Editing still works. OpenAI-compatible. |
 | OAuth | `GOOGLE_*`, `GITHUB_*` | Empty pair hides that provider. Callbacks are `{API_PUBLIC_URL}/api/auth/oauth/google/callback` and `.../github/callback`. |
 | MCP | `MCP_API_KEY`, `MCP_PG_*`, `MCP_DOCS_*` | `MCP_API_KEY` guards `/mcp/protocol`. Docs MCP uses per-user tokens, not this key. |
-| Rate limits | `AUTH_LOGIN_*`, `AUTH_REFRESH_*` | Per IP. Login, register, and invite accept share the login window. |
+| Rate limits | `AUTH_LOGIN_*`, `AUTH_REFRESH_*` | Per IP. Login, register, and invite accept share the login window. Behind nginx the API trusts private proxy ranges to find the client IP. |
+| Cookies | `SESSION_COOKIE_DOMAIN` | Bare domain shared by the web and API hosts, so the OAuth callback's refresh cookie is sent to the web origin. Empty for a single host. |
 
-Production (`NODE_ENV=production`) also requires `CORS_ORIGIN`, `APP_PUBLIC_URL`, and `API_PUBLIC_URL` to be explicit `https` origins, and `MINIO_ENDPOINT` to be `https://` when object storage is set.
+Production (`NODE_ENV=production`) also requires `CORS_ORIGIN`, `APP_PUBLIC_URL`, and `API_PUBLIC_URL` to be explicit `https` origins, `MINIO_ENDPOINT` to be `https://` when object storage is set, and `SESSION_COOKIE_DOMAIN` when the web and API hosts differ (e.g. `dirah.co.za` for `dirah.co.za` + `api.dirah.co.za`).
 
 ## HTTP API
 
@@ -210,12 +211,18 @@ Vitest covers routes with Supertest, plus SQL guards, auth rate limits, slugs, f
 
 ## Docker
 
-`Dockerfile` is a two-stage build. The runtime image installs the Infisical CLI and starts through `scripts/infisical-entrypoint.sh`.
+Build from the repo root so the workspace lockfile is available:
 
-- `EXPOSE 4002` is the image metadata. The process listens on `PORT`, and the healthcheck calls `http://127.0.0.1:${PORT:-4000}/health`.
+```bash
+docker build -f backend/Dockerfile -t dirah-backend .
+```
+
+The image is a two-stage build. The runtime image installs the Infisical CLI and starts through `scripts/infisical-entrypoint.sh`.
+
+- `EXPOSE 4006` is the image metadata. The process listens on `PORT` (4006 in the root compose file), and the healthcheck calls `http://127.0.0.1:${PORT:-4006}/health`.
 - Set `INFISICAL_TOKEN`, `INFISICAL_ENV`, and `INFISICAL_DOMAIN` as runtime env vars when the container should pull secrets. If any of the three is missing, it runs `node dist/server.js` with the env it was given.
 
-`docker compose up` only starts Postgres (`5433`) and MinIO (`9000`, console `9001`). It does not run the API.
+The root [docker-compose.yml](../docker-compose.yml) starts Postgres (`5433`), MinIO (`9000`, console `9001`), the API (`4006`) and the web app (`8080`).
 
 ## Related
 

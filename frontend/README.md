@@ -28,7 +28,7 @@ npm run dev:web
 
 The dev server listens on **http://localhost:5181** (`vite.config.ts`, `host: true`).
 
-`VITE_API_URL` is the API origin. `.env.example` sets `http://localhost:4006`, and `backend/.env.example` sets the matching `PORT`. A blank value is treated as unset and falls back to that same URL (`src/api/client.ts`). The API `CORS_ORIGIN` must be `http://localhost:5181`.
+The browser calls its own origin: Vite proxies `/api` to `http://localhost:4006` (`vite.config.ts`) and nginx does the same in production, so `CORS_ORIGIN` is only needed for the mobile app and other cross-origin clients. `VITE_API_URL` is an optional override for an API on another origin; leave it unset. `VITE_PUBLIC_API_URL` is the API origin shown to users and called by MCP clients (`src/api/client.ts`).
 
 `npm run dev` reads `.env`. `npm run dev:sec` loads Infisical `dev` first. Secret injection is documented in the backend [INFISICAL.md](../backend/INFISICAL.md). This app never imports an Infisical SDK.
 
@@ -49,7 +49,8 @@ There is no test script in this package. API behaviour is covered by Vitest in `
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `VITE_API_URL` | For a real deploy | API origin, no trailing path. Local default `http://localhost:4006`. |
+| `VITE_PUBLIC_API_URL` | A deployed build | API origin used in MCP connector URLs, e.g. `https://api.dirah.co.za`. |
+| `VITE_API_URL` | Rarely | Override when the API is on another origin. Unset means this origin. |
 
 That is the only client env var. Auth, OAuth, SMTP, and AI keys stay on the API.
 
@@ -113,7 +114,7 @@ Typical local pairing:
 | App | URL |
 | --- | --- |
 | This client | `http://localhost:5181` |
-| API | `http://localhost:4006` if you set backend `PORT=4006` to match `VITE_API_URL` |
+| API | `http://localhost:4006` (backend `PORT`; Vite proxies `/api` to it) |
 
 User register and login: `POST /api/auth/register` and `/login`. Session refresh: `POST /api/auth/refresh`. System admin uses `/api/admin/auth/*` and does not share the user cookie.
 
@@ -121,15 +122,17 @@ OAuth start URLs come from `GET /api/auth/oauth/status`. The API redirects back 
 
 ## Docker
 
-`Dockerfile` builds static files, then nginx serves them.
+`Dockerfile` builds static files, then nginx serves them. Build from the repo root so the workspace lockfile is available.
 
-- Build arg `VITE_API_URL` is required for a deploy that should call a real API. The build script refuses to finish when it is missing.
+- Build arg `VITE_PUBLIC_API_URL` is required for a deploy: the API origin shown to users (MCP connectors). The browser itself calls its own origin; nginx proxies `/api` to `backend:4006` on the compose network. The build script refuses to finish when the arg is missing.
 - Alternatively set `INFISICAL_TOKEN`, `INFISICAL_ENV`, and `INFISICAL_DOMAIN` so the build stage loads secrets. A BuildKit secret named `infisical_token` wins over the `INFISICAL_TOKEN` build arg. The nginx stage does not talk to Infisical.
 - nginx listens on **port 83**. The healthcheck is `GET http://127.0.0.1:83/health` and returns `ok`.
 - `nginx.conf` is an SPA: unknown paths fall through to `index.html`. Static assets (css, js, images, fonts) are cached for six months. `index.html` is sent with `Cache-Control: no-cache`.
 
 ```bash
-docker build --build-arg VITE_API_URL=https://dirabackend.bobosoftware.co.za -t dirah-web .
+docker build -f frontend/Dockerfile \
+  --build-arg VITE_PUBLIC_API_URL=https://api.dirah.co.za \
+  -t dirah-web .
 ```
 
 ## Related

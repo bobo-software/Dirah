@@ -5,7 +5,8 @@ const ready: ProductionSecurityConfig = {
   nodeEnv: 'production',
   corsOrigin: 'https://dirah.example',
   appPublicUrl: 'https://dirah.example',
-  apiPublicUrl: 'https://api.example',
+  apiPublicUrl: 'https://api.dirah.example',
+  sessionCookieDomain: 'dirah.example',
   jwtSecret: 'a'.repeat(32),
   jwtRefreshSecret: 'b'.repeat(32),
   dbSsl: 'verify-full',
@@ -55,9 +56,28 @@ describe('production boot checks', () => {
     expect(() => assertProductionSecurity({ ...ready, apiPublicUrl: 'http://api.example' })).toThrow(
       /API_PUBLIC_URL/
     );
-    expect(() => assertProductionSecurity({ ...ready, apiPublicUrl: 'https://api.example/mcp' })).not.toThrow();
+    expect(() => assertProductionSecurity({ ...ready, apiPublicUrl: 'https://api.dirah.example/mcp' })).not.toThrow();
     expect(() => assertProductionSecurity({ ...ready, minioEndpoint: 'http://minio.example' })).toThrow(
       /MINIO_ENDPOINT/
     );
+  });
+
+  it('requires a cookie domain that covers both hosts', () => {
+    expect(() => assertProductionSecurity({ ...ready, sessionCookieDomain: '' })).toThrow(
+      /SESSION_COOKIE_DOMAIN/
+    );
+    expect(() =>
+      assertProductionSecurity({
+        ...ready,
+        sessionCookieDomain: '',
+        apiPublicUrl: 'https://dirah.example',
+      })
+    ).not.toThrow();
+    expect(() => assertProductionSecurity({ ...ready, sessionCookieDomain: 'example.com' })).toThrow(
+      /does not cover/
+    );
+    expect(() =>
+      assertProductionSecurity({ ...ready, sessionCookieDomain: 'https://dirah.example' })
+    ).toThrow(/bare domain/);
   });
 });

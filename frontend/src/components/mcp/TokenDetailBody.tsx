@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_URL } from '../../api/client';
+import { PUBLIC_API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
 import { useMcpStore } from '../../stores/StoresIndex';
 import { confirmDelete } from '../layout/deleteDialogue';
@@ -48,7 +48,7 @@ export function TokenDetailBody({
         {
           mcpServers: {
             dirah: {
-              url: `${API_URL}/mcp`,
+              url: `${PUBLIC_API_URL}/mcp`,
               headers: { Authorization: `Bearer ${token.tokenPrefix}…` },
             },
           },

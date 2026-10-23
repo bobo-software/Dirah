@@ -12,19 +12,32 @@ Internal plans, progress notes and technical debt live in the Dirah workspace.
 
 ## Local development
 
-Requires Node 22+ and a Postgres database. `backend/docker-compose.yml` starts
-Postgres (host port 5433) and MinIO.
+Requires Node 22+ and a Postgres database. Start one from the root compose file
+(Postgres on host port 5433), or use your own.
 
 ```bash
 npm install
-cp backend/.env.example backend/.env        # set DB_LOCAL_* (compose: port 5433)
-cp frontend/.env.example frontend/.env      # VITE_API_URL must match the API PORT
-npm run db:migrate --workspace backend
+cp backend/.env.example backend/.env        # DB_* must point at your Postgres
+cp frontend/.env.example frontend/.env
+npm run db:migrate
 npm run dev                                 # API and web together
 ```
 
-Default ports: web `http://localhost:5181`, API `http://localhost:4006`
-(both `.env.example` files agree).
+Default ports: web `http://localhost:5181`, API `http://localhost:4006`. The web
+calls its own origin and Vite proxies `/api` to the API, like nginx does in
+production.
+
+## Docker
+
+```bash
+docker compose up -d --build
+# Migrations run from a checkout (the runtime image has no ts-node):
+DB_HOST=127.0.0.1 DB_PORT=5433 DB_USERNAME=dirah DB_PASSWORD=dirah DB_DATABASE=dirah DB_SSL=disable npm run db:migrate
+```
+
+Open `http://localhost:8080`. The web container proxies `/api` to `backend:4006`
+on the compose network; only the web port needs to be public in a deployed
+stack. Set `VITE_PUBLIC_API_URL` when building the web image for a real host.
 
 ## Scripts
 

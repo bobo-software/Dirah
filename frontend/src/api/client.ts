@@ -1,5 +1,28 @@
+const LOCAL_API_URL = 'http://localhost:4006';
+
+function trimSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
-export const API_URL = configuredApiUrl || 'http://localhost:4006';
+const configuredPublicApiUrl = import.meta.env.VITE_PUBLIC_API_URL?.trim();
+
+/**
+ * Where the browser sends API calls. Empty means this origin: nginx proxies
+ * `/api` to the backend in production, and the Vite dev server does the same
+ * locally. `VITE_API_URL` is the escape hatch for an API on another origin.
+ */
+export const API_URL = configuredApiUrl ? trimSlash(configuredApiUrl) : '';
+
+/**
+ * The API origin shown to users and called by outside clients (MCP connectors,
+ * mobile). Never relative. Set `VITE_PUBLIC_API_URL` in a deployed build.
+ */
+export const PUBLIC_API_URL = trimSlash(
+  configuredPublicApiUrl ||
+    configuredApiUrl ||
+    (import.meta.env.PROD ? window.location.origin : LOCAL_API_URL),
+);
 
 export type PublicUser = {
   id: string;

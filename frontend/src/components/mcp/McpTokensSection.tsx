@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../../api/client';
+import { PUBLIC_API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
 import { confirmDelete } from '../layout/deleteDialogue';
 import { useMcpStore } from '../../stores/StoresIndex';
@@ -243,7 +243,7 @@ export function McpTokensSection({
           <h2>MCP tokens</h2>
           <p className="muted">{description}</p>
           <p className="muted">
-            Using Claude, ChatGPT, or another AI chat app? Add <code>{`${API_URL}/mcp`}</code> as a custom connector and
+            Using Claude, ChatGPT, or another AI chat app? Add <code>{`${PUBLIC_API_URL}/mcp`}</code> as a custom connector and
             sign in. You don't need a token.
           </p>
         </div>

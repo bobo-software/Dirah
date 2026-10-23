@@ -15,6 +15,10 @@ function cookieOptions(path: string) {
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: env.nodeEnv === 'production',
+    // In production the web and API sit on different hosts (dirah.co.za and
+    // api.dirah.co.za). The OAuth callback runs on the API host, so the cookie
+    // needs the shared parent domain to be sent to the web origin afterwards.
+    ...(env.sessionCookieDomain ? { domain: env.sessionCookieDomain } : {}),
     path,
     maxAge: REFRESH_MAX_AGE_MS,
   };
@@ -31,6 +35,7 @@ export function clearRefreshCookie(res: Response, kind: SessionKind): void {
     httpOnly: true,
     sameSite: 'lax',
     secure: env.nodeEnv === 'production',
+    ...(env.sessionCookieDomain ? { domain: env.sessionCookieDomain } : {}),
     path: spec.path,
   });
 }
