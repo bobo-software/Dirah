@@ -1,0 +1,39 @@
+# One Coolify Application (Docker Compose build pack): web + API on one
+# network. Postgres and MinIO stay external (the existing Coolify-managed
+# services), so their connection details come from the root .env.
+#
+# Coolify: create an Application with the Compose build strategy, point it at
+# this file, paste the keys from .env.example into Environment Variables, then
+# add the domains with the internal port suffix:
+#   https://dirah.co.za:83       -> service web
+#   https://api.dirah.co.za:4006 -> service backend
+#
+# Local check:
+#   cp .env.example .env   # fill it in
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 4006
+    expose:
+      - '4006'
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_PUBLIC_API_URL: ${VITE_PUBLIC_API_URL:?set VITE_PUBLIC_API_URL in .env}
+    expose:
+      - '83'
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

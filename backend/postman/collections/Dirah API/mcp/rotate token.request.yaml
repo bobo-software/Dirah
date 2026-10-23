@@ -1,0 +1,15 @@
+$kind: http-request
+name: rotate token
+url: '{{baseUrl}}/api/mcp/tokens/{{mcpTokenId}}/rotate'
+method: POST
+headers:
+  - key: Authorization
+    value: 'Bearer {{accessToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: none
+auth:
+  type: noauth
+order: 4500
+examples: ./.resources/rotate token.resources/examples
