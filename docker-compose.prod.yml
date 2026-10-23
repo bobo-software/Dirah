@@ -34,5 +34,6 @@ services:
     expose:
       - '83'
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
