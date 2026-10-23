@@ -1,5 +1,17 @@
+# Dependencies
+node_modules/
+jspm_packages/
+
+# Build output
+dist/
+dist-ssr/
+build/
+out/
+coverage/
+*.tsbuildinfo
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,21 +19,42 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-out
-*.local
+# Local env and secrets. One root .env.example is the contract.
+.env
+.env.*
+!.env.example
+!.env.selfhost.example
 
-# Editor directories and files
+# Personal MCP client config. See backend/.mcp.json.example.
+# `mcp.json` covers cursor/mcp.json and .cursor/mcp.json at any depth.
+.mcp.json
+mcp.json
+
+# Local runtime data
+uploads/
+.tmp-blobs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors and agent config that is machine-specific
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
 *.sw?
-.env
-.infisical.json
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Misc
+*.local
+*.cache
+.pnp.*
+.pnpm-debug.log
+/.envrc
+/.run
+*.swp
+Untitled

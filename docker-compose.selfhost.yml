@@ -1,0 +1,60 @@
+# Self-hosted install: web + API only. Postgres and MinIO/S3 stay external, so
+# point DB_* and MINIO_* at services you run (or a managed provider).
+#
+#   cp .env.selfhost.example .env
+#   # edit .env: external DB/MinIO, public URLs, secrets
+#   docker compose -f docker-compose.selfhost.yml up -d --build
+#
+# Migrations run once in the `migrate` service before the API starts. The web
+# container is the only published port; nginx proxies /api, /mcp and the OAuth
+# discovery paths to backend:4006, so one hostname is enough.
+#
+# Set DIRAH_BACKEND_IMAGE / DIRAH_WEB_IMAGE to use prebuilt images instead of
+# building from this checkout. A public HTTPS install should sit behind a
+# reverse proxy and set ALLOW_INSECURE_HTTP=false.
+
+x-backend: &backend
+  image: ${DIRAH_BACKEND_IMAGE:-dirah-backend:local}
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  env_file:
+    - .env
+  environment:
+    NODE_ENV: production
+    PORT: 4006
+
+services:
+  migrate:
+    <<: *backend
+    command: ['node', 'dist/migrate.js']
+    restart: on-failure:5
+
+  backend:
+    <<: *backend
+    expose:
+      - '4006'
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # Uncomment to expose the API directly (for MCP clients that need a
+    # separate API host); also set VITE_PUBLIC_API_URL when building the web.
+    # ports:
+    #   - '${API_PORT:-4006}:4006'
+
+  web:
+    image: ${DIRAH_WEB_IMAGE:-dirah-web:local}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Optional. Empty means "use the page origin", which is what a
+        # same-origin install wants.
+        VITE_PUBLIC_API_URL: ${VITE_PUBLIC_API_URL:-}
+    ports:
+      - '${WEB_PORT:-8080}:83'
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
