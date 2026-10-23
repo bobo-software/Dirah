@@ -190,6 +190,17 @@ Tools: `pg_list_tables`, `pg_describe_table`, `pg_get_table_ddl`, `pg_select`, `
 
 Writes require `confirm: true`. `DROP` and `TRUNCATE` also require `allowDestructive: true`. Selects are timeout- and row-limited (`MCP_PG_*`).
 
+## MCP client config
+
+`.mcp.json` and `cursor/mcp.json` are personal files and are gitignored. Copy the matching `*.example` and fill the placeholders:
+
+```bash
+cp .mcp.json.example .mcp.json          # Claude Code
+cp cursor/mcp.json.example cursor/mcp.json   # Cursor
+```
+
+`${env:MCP_API_KEY}` is the Postgres MCP key (`MCP_API_KEY` in `.env`). `${env:DIRAH_DOCS_MCP_TOKEN}` is a personal docs token from **Settings → MCP** in the web app.
+
 ## Tests
 
 ```bash
