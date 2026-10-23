@@ -7,7 +7,7 @@ WORKDIR /app
 # The root lockfile covers every workspace, so npm ci needs both manifests.
 COPY package.json package-lock.json ./
 COPY frontend/package.json frontend/
-RUN npm ci --workspace frontend
+RUN npm ci --workspace frontend --include=dev
 
 COPY frontend/ ./frontend/
 
