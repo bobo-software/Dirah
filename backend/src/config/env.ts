@@ -28,6 +28,8 @@ export type ProductionSecurityConfig = {
   corsOrigin: string;
   appPublicUrl: string;
   apiPublicUrl: string;
+  /** Bare domain shared by the web and API hosts, e.g. dirah.co.za. Empty means host-only cookies. */
+  sessionCookieDomain: string;
   jwtSecret: string;
   jwtRefreshSecret: string;
   dbSsl: string;
@@ -92,6 +94,34 @@ export function assertProductionSecurity(config: ProductionSecurityConfig): void
   if (!httpsOrigin(config.apiPublicUrl)) {
     problems.push(`API_PUBLIC_URL must be an https origin (received ${JSON.stringify(config.apiPublicUrl)})`);
   }
+  const cookieDomain = config.sessionCookieDomain.trim().replace(/^\./, '');
+  const hostOf = (value: string): string => {
+    try {
+      return new URL(value).hostname;
+    } catch {
+      return '';
+    }
+  };
+  const appHost = hostOf(config.appPublicUrl);
+  const apiHost = hostOf(config.apiPublicUrl);
+  if (!cookieDomain) {
+    if (appHost && apiHost && appHost !== apiHost) {
+      problems.push(
+        `SESSION_COOKIE_DOMAIN is required when APP_PUBLIC_URL and API_PUBLIC_URL differ (received ${appHost} and ${apiHost}), so OAuth can set the refresh cookie for both`
+      );
+    }
+  } else if (/[/:]/.test(cookieDomain)) {
+    problems.push(`SESSION_COOKIE_DOMAIN must be a bare domain such as dirah.co.za (received ${JSON.stringify(config.sessionCookieDomain)})`);
+  } else {
+    for (const [label, host] of [
+      ['APP_PUBLIC_URL', appHost],
+      ['API_PUBLIC_URL', apiHost],
+    ] as const) {
+      if (host && host !== cookieDomain && !host.endsWith(`.${cookieDomain}`)) {
+        problems.push(`SESSION_COOKIE_DOMAIN ${cookieDomain} does not cover the ${label} host ${host}`);
+      }
+    }
+  }
   const minioEndpoint = config.minioEndpoint.trim();
   if (minioEndpoint && !isHttpsUrl(minioEndpoint)) {
     problems.push('MINIO_ENDPOINT must use https:// when object storage is configured');
@@ -124,6 +154,7 @@ const appPublicUrl = (() => {
 })();
 const apiPublicRaw = (process.env.API_PUBLIC_URL ?? '').trim();
 const apiPublicUrl = httpsOrigin(apiPublicRaw) ?? (apiPublicRaw || `http://localhost:${port}`);
+const sessionCookieDomain = (process.env.SESSION_COOKIE_DOMAIN ?? '').trim().replace(/^\./, '');
 const database = resolveDatabaseConfig(nodeEnv, process.env);
 const liveDatabase = resolveLiveDatabaseConfig(process.env);
 const minioEndpoint = process.env.MINIO_ENDPOINT ?? '';
@@ -134,6 +165,7 @@ export const env = {
   corsOrigin,
   appPublicUrl,
   apiPublicUrl,
+  sessionCookieDomain,
   smtp: {
     host: (process.env.SMTP_HOST ?? '').trim(),
     port: Number(process.env.SMTP_PORT ?? 465),
@@ -187,6 +219,7 @@ assertProductionSecurity({
   corsOrigin: env.corsOrigin,
   appPublicUrl: env.appPublicUrl,
   apiPublicUrl: env.apiPublicUrl,
+  sessionCookieDomain: env.sessionCookieDomain,
   jwtSecret: env.jwtSecret,
   jwtRefreshSecret: env.jwtRefreshSecret,
   dbSsl: env.db.sslMode,

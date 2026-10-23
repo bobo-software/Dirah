@@ -35,7 +35,7 @@ Point the checkout at the project (`infisical init`, or pass `--projectId` / `--
 | `npm run build:sec` | `npm run build` |
 | `npm run preview:sec` | `npm run preview` |
 
-Plain `npm run dev` still reads `.env` as usual. Infisical is optional locally. A blank `VITE_API_URL` is treated as unset and falls back to `http://localhost:4006`.
+Plain `npm run dev` still reads `.env` as usual. Infisical is optional locally. Leave `VITE_API_URL` unset: the Vite dev server proxies `/api` to `http://localhost:4006`, and nginx does the same in production. `VITE_PUBLIC_API_URL` overrides the API origin shown to users (MCP connectors).
 
 The API, Drizzle, migrations, and both Postgres MCP targets (`local` and `live`) use `DB_*`, `DB_SSL`, and `DB_SSL_CA` in every environment. `DB_SSL_CA` is the CA certificate PEM (a file path is also accepted). Infisical can still inject the other secrets.
 
@@ -61,7 +61,9 @@ Vite inlines `VITE_*` at **build** time. The nginx image does not talk to Infisi
 
 Coolify can skip Infisical and pass this as a Docker **build arg** (the Dockerfile declares matching `ARG` / `ENV`):
 
-- `VITE_API_URL` (required for a real deploy; local dev defaults to `http://localhost:4006`)
+- `VITE_PUBLIC_API_URL` (required for a real deploy, e.g. `https://api.dirah.co.za`; local dev defaults to `http://localhost:4006`)
+
+`VITE_API_URL` is optional and only for an API on another origin; the browser normally calls its own origin.
 
 To build from Infisical instead, provide all of:
 
@@ -74,9 +76,9 @@ Token resolution order in the Dockerfile:
 1. BuildKit secret file `/run/secrets/infisical_token`, if present
 2. Build arg `INFISICAL_TOKEN`
 
-When domain, env, and token are all set, the image runs `infisical run … -- sh ./scripts/vite-build.sh`, which checks `VITE_API_URL` and then runs `npm run build`. Otherwise it prints a notice and runs that same build script with the `VITE_*` build args.
+When domain, env, and token are all set, the image runs `infisical run … -- sh ./scripts/vite-build.sh`, which checks `VITE_PUBLIC_API_URL` and then runs `npm run build`. Otherwise it prints a notice and runs that same build script with the `VITE_*` build args.
 
-An empty `VITE_API_URL=""` (common when Infisical or Docker injects a blank value) is ignored. `src/api/client.ts` turns a blank string into unset before using the local default. The Docker build still refuses to finish when `VITE_API_URL` is missing after that.
+An empty `VITE_PUBLIC_API_URL=""` (common when Infisical or Docker injects a blank value) is treated as missing, and the Docker build refuses to finish.
 
 ## What the app never does
 

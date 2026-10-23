@@ -1,6 +1,6 @@
-import { API_URL } from '../../api/client';
+import { PUBLIC_API_URL } from '../../api/client';
 
-export const MCP_URL = `${API_URL.replace(/\/$/, '')}/mcp`;
+export const MCP_URL = `${PUBLIC_API_URL}/mcp`;
 
 export const CLAUDE_CODE_COMMAND = `claude mcp add --transport http dirah ${MCP_URL}`;
 

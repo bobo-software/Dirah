@@ -1,0 +1,83 @@
+# Web + API on one network. The browser calls the web origin and nginx proxies
+# /api to backend:4006, matching production.
+#
+#   docker compose up -d --build
+#   docker compose exec backend npm run db:migrate
+#
+# Then open http://localhost:8080. Only the web port needs to be public in a
+# deployed stack; 4006 is published here so local MCP clients can reach the API.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dirah
+      POSTGRES_PASSWORD: dirah
+      POSTGRES_DB: dirah
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dirah -d dirah']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ':9001'
+    # Optional. Point MINIO_ENDPOINT at http://localhost:9000 and keys at MINIO_ROOT_* below.
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio_data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 4006
+      CORS_ORIGIN: http://localhost:8080
+      APP_PUBLIC_URL: http://localhost:8080
+      API_PUBLIC_URL: http://localhost:4006
+      SESSION_COOKIE_DOMAIN: ''
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: dirah
+      DB_PASSWORD: dirah
+      DB_DATABASE: dirah
+      DB_SSL: disable
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-jwt-refresh-secret-change-me}
+      BLOB_DIR: uploads
+    ports:
+      - '4006:4006'
+    volumes:
+      - backend_uploads:/app/backend/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Users open the web origin here, so this is the API origin for local
+        # MCP clients. In production set it to https://api.dirah.co.za.
+        VITE_PUBLIC_API_URL: ${VITE_PUBLIC_API_URL:-http://localhost:4006}
+    ports:
+      - '8080:83'
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  minio_data:
+  backend_uploads:

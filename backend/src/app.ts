@@ -50,7 +50,10 @@ export interface CreateAppOptions {
 
 export async function createApp(options: CreateAppOptions = {}): Promise<Express> {
   const app = express();
-  app.set('trust proxy', 1);
+  // Two entry points: the public proxy in front of api.dirah.co.za (one hop)
+  // and web nginx, which proxies /api to this container (two hops). Trust only
+  // private ranges so a public client cannot spoof X-Forwarded-For.
+  app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
   app.use(
     helmet({
       contentSecurityPolicy: false,
