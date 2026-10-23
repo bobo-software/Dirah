@@ -17,15 +17,16 @@ Requires Node 22+ and a Postgres database. Start one from the root compose file
 
 ```bash
 npm install
-cp backend/.env.example backend/.env        # DB_* must point at your Postgres
-cp frontend/.env.example frontend/.env
+cp .env.example .env                        # one file for both workspaces
+# edit .env: DB_* must point at your Postgres
 npm run db:migrate
 npm run dev                                 # API and web together
 ```
 
-Default ports: web `http://localhost:5181`, API `http://localhost:4006`. The web
-calls its own origin and Vite proxies `/api` to the API, like nginx does in
-production.
+The API reads the root `.env`, and Vite points its `envDir` at it too, so there
+is one file to edit. Default ports: web `http://localhost:5181`, API
+`http://localhost:4006`. The web calls its own origin and Vite proxies `/api` to
+the API, like nginx does in production.
 
 ## Docker
 
@@ -41,26 +42,30 @@ stack. Set `VITE_PUBLIC_API_URL` when building the web image for a real host.
 
 ## Deploy (Coolify)
 
-Both applications point at this repo and build from the repo root:
+One **Service** (Docker Compose) runs the web and API from
+`docker-compose.prod.yml`. Postgres and MinIO stay external, as the existing
+Coolify-managed services.
 
-| App | Dockerfile | Exposed port | Health check |
-| --- | --- | --- | --- |
-| API (`api.dirah.co.za`) | `/backend/Dockerfile` | 4006 | `GET /health` |
-| Web (`dirah.co.za`) | `/frontend/Dockerfile` | 83 | `GET /health` |
+| Container | Exposed port | Domain |
+| --- | --- | --- |
+| `web` | 83 | `dirah.co.za` |
+| `backend` | 4006 | `api.dirah.co.za` |
 
-- Base directory `/`; branch `monorepo` until the merge lands on `master`.
-- API environment: `PORT=4006` and `SESSION_COOKIE_DOMAIN=dirah.co.za`. The web
-  and API hosts differ, so the OAuth callback on the API host needs the shared
-  domain to set a refresh cookie the web origin sends. The API refuses to boot
-  in production without it.
-- Web build: `VITE_PUBLIC_API_URL=https://api.dirah.co.za`. Delete
-  `VITE_API_URL` from that environment: the browser calls its own origin and
-  setting it brings CORS back.
-- Both values are plain environment variables: `PORT` and
-  `SESSION_COOKIE_DOMAIN` in the API app, and `VITE_PUBLIC_API_URL` as a build
-  variable on the web app. Nothing fetches secrets at build or start time.
-- Both containers must share a Docker network, and the API needs the network
-  alias `backend`: nginx proxies to `http://backend:4006`.
+- Point the Service at `/docker-compose.prod.yml`; branch `monorepo` until the
+  merge lands on `master`.
+- Put every key from [`.env.example`](.env.example) in the Service environment.
+  Coolify writes them to `.env` for the compose stack; the API container reads
+  them through `env_file`.
+- The non-obvious values: `NODE_ENV=production`, `PORT=4006`,
+  `SESSION_COOKIE_DOMAIN=dirah.co.za`, and
+  `VITE_PUBLIC_API_URL=https://api.dirah.co.za`.
+- The web and API hosts differ, so the OAuth callback on the API host needs the
+  shared domain to set a refresh cookie the web origin sends. The API refuses to
+  boot in production without it.
+- Leave `VITE_API_URL` unset: the browser calls its own origin and nginx proxies
+  `/api` to `backend:4006`.
+- `DB_*` points at the existing Coolify Postgres. `DB_SSL=verify-full` and
+  `DB_SSL_CA` (the PEM) are required.
 - Migrations are an explicit step from a checkout (`npm run db:migrate`).
   Ask before running them against the live database.
 

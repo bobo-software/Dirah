@@ -12,7 +12,7 @@ Product notes live in the Dirah workspace (`folder/readme.md` or `docs/`), not i
 - CodeMirror for markdown, `react-markdown` for preview
 - Motion for animation
 
-The Docker build needs Node 20.19+ or 22.12+ (the image uses Node 20). Vite inlines `VITE_*` at build time.
+The Docker build needs Node 20.19+ or 22.12+ (the image uses Node 26). Vite inlines `VITE_*` at build time.
 
 ## Local setup
 
@@ -20,7 +20,7 @@ Run the API first. See the backend README for Postgres, `.env`, and migrations. 
 
 ```bash
 npm install
-cp frontend/.env.example frontend/.env
+cp .env.example .env
 npm run dev:web
 ```
 
@@ -30,7 +30,7 @@ The dev server listens on **http://localhost:5181** (`vite.config.ts`, `host: tr
 
 The browser calls its own origin: Vite proxies `/api` to `http://localhost:4006` (`vite.config.ts`) and nginx does the same in production, so `CORS_ORIGIN` is only needed for the mobile app and other cross-origin clients. `VITE_API_URL` is an optional override for an API on another origin; leave it unset. `VITE_PUBLIC_API_URL` is the API origin shown to users and called by MCP clients (`src/api/client.ts`).
 
-`npm run dev` reads `.env` (copy [`.env.example`](.env.example)). Only `VITE_PUBLIC_API_URL` is needed for a deployed build; the rest of the API configuration stays on the server.
+`npm run dev` reads the root `.env` (Vite's `envDir` points there; copy [`../.env.example`](../.env.example)). Only `VITE_PUBLIC_API_URL` is needed for a deployed build; the rest of the API configuration stays on the server.
 
 ## Scripts
 

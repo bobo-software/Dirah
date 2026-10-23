@@ -3,13 +3,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveDatabaseConfig, resolveLiveDatabaseConfig } from './databaseEnv';
 
-dotenv.config();
+const isTest = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
 
-/** Values written in `.env`. These win over the process environment for the system-admin login. */
+/**
+ * One env file lives at the repo root. Fall back to `backend/.env` for older
+ * checkouts, and to the process environment in containers (no file is copied).
+ */
+function resolveEnvFile(): string {
+  if (process.env.ENV_FILE) return path.resolve(process.env.ENV_FILE);
+  const cwd = process.cwd();
+  const root = path.basename(cwd) === 'backend' ? path.resolve(cwd, '..') : cwd;
+  const rootEnv = path.resolve(root, '.env');
+  if (fs.existsSync(rootEnv)) return rootEnv;
+  return path.resolve(cwd, '.env');
+}
+
+const envFilePath = resolveEnvFile();
+
+if (!isTest) dotenv.config({ path: envFilePath });
+
+/** Values written in the root `.env`. These win over the process environment for the system-admin login. */
 function dotenvFile(): Record<string, string> {
-  const filePath = path.resolve(process.cwd(), '.env');
+  if (isTest) return {};
   try {
-    return dotenv.parse(fs.readFileSync(filePath));
+    return dotenv.parse(fs.readFileSync(envFilePath));
   } catch {
     return {};
   }

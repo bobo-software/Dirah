@@ -1,3 +1,6 @@
+# Local, self-contained dev stack (throwaway Postgres/MinIO). The Coolify
+# deployment uses docker-compose.prod.yml and the root .env instead.
+#
 # Web + API on one network. The browser calls the web origin and nginx proxies
 # /api to backend:4006, matching production.
 #
@@ -53,8 +56,8 @@ services:
       DB_PASSWORD: dirah
       DB_DATABASE: dirah
       DB_SSL: disable
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-jwt-refresh-secret-change-me}
+      JWT_SECRET: dev-jwt-secret-change-me
+      JWT_REFRESH_SECRET: dev-jwt-refresh-secret-change-me
       BLOB_DIR: uploads
     ports:
       - '4006:4006'
