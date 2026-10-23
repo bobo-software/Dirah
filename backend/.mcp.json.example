@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "dirah-postgres": {
+      "type": "http",
+      "url": "http://127.0.0.1:4002/mcp/protocol",
+      "headers": {
+        "Authorization": "Bearer ${env:MCP_API_KEY}"
+      }
+    },
+    "dirah-docs": {
+      "type": "http",
+      "url": "https://api.dirah.co.za/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:DIRAH_DOCS_MCP_TOKEN}"
+      }
+    }
+  }
+}

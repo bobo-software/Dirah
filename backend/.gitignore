@@ -1,0 +1,57 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.env
+.env.*
+!.env.example
+.infisical.json
+dist/
+build/
+coverage/
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Personal MCP and CLI config. Copy .mcp.json.example / cursor/mcp.json.example,
+# and point INFISICAL_* at your own project.
+.mcp.json
+.cursor/mcp.json
+cursor/mcp.json
+.infisical.yaml
+
+# Scratch
+Untitled
+
+# Misc
+*.local
+*.cache
+*.pnp.*
+.pnpm-debug.log
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript
+*.tsbuildinfo
+
+# Others
+/.envrc
+/.run
+*.swp
+*.code-workspace
+uploads/
+.tmp-blobs/
+
+CLAUDE.local.md
