@@ -31,7 +31,8 @@ src/
   oauth/             Google and GitHub
   config/            env, database selection, MCP limits
 drizzle/migrations/  committed SQL
-scripts/migrate.ts   apply pending migrations
+src/migrate.ts       compiled runtime migration entry (`node dist/migrate.js`)
+scripts/migrate.ts   dev migration entry (`npm run db:migrate`, ts-node)
 postman/             collection fragments
 ```
 
@@ -74,7 +75,8 @@ Health check: `GET http://localhost:4006/health` (or whatever `PORT` you set). T
 | `npm test` | Vitest, once |
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run db:generate` | Generate a Drizzle migration from schema changes |
-| `npm run db:migrate` | Apply pending SQL in `drizzle/migrations` |
+| `npm run db:migrate` | Apply pending SQL in `drizzle/migrations` (ts-node) |
+| `npm run db:migrate:prod` | Apply pending SQL with the compiled `dist/migrate.js` (Docker) |
 
 ## Environment
 
@@ -82,7 +84,7 @@ Copy [`../.env.example`](../.env.example) to `.env` at the repo root. Groups:
 
 | Group | Variables | Notes |
 | --- | --- | --- |
-| Server | `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `APP_PUBLIC_URL`, `API_PUBLIC_URL` | `APP_PUBLIC_URL` is the web origin used in invite links. `API_PUBLIC_URL` is this API, used in OAuth callbacks and MCP metadata. |
+| Server | `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `APP_PUBLIC_URL`, `API_PUBLIC_URL`, `ALLOW_INSECURE_HTTP` | `APP_PUBLIC_URL` is the web origin used in invite links. `API_PUBLIC_URL` is this API, used in OAuth callbacks and MCP metadata. `ALLOW_INSECURE_HTTP=true` is for a self-hosted localhost/LAN install over plain HTTP only. |
 | Auth | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Dev defaults exist. Production refuses to boot unless both are unique and at least 32 characters. |
 | System admin | `SYSTEM_ADMIN_EMAIL`, `SYSTEM_ADMIN_PASSWORD` | Creates the first row in `system_admins` when that table is empty. Leave blank to skip. |
 | Postgres | `DB_*`, `DB_SSL`, `DB_SSL_CA` | `DB_*` is used in every environment. `DB_SSL` is `disable` or `verify-full`. `DB_SSL_CA` is a PEM or a path to one. |
@@ -94,7 +96,7 @@ Copy [`../.env.example`](../.env.example) to `.env` at the repo root. Groups:
 | Rate limits | `AUTH_LOGIN_*`, `AUTH_REFRESH_*` | Per IP. Login, register, and invite accept share the login window. Behind nginx the API trusts private proxy ranges to find the client IP. |
 | Cookies | `SESSION_COOKIE_DOMAIN` | Bare domain shared by the web and API hosts, so the OAuth callback's refresh cookie is sent to the web origin. Empty for a single host. |
 
-Production (`NODE_ENV=production`) also requires `CORS_ORIGIN`, `APP_PUBLIC_URL`, and `API_PUBLIC_URL` to be explicit `https` origins, `MINIO_ENDPOINT` to be `https://` when object storage is set, and `SESSION_COOKIE_DOMAIN` when the web and API hosts differ (e.g. `dirah.co.za` for `dirah.co.za` + `api.dirah.co.za`).
+Production (`NODE_ENV=production`) also requires `CORS_ORIGIN`, `APP_PUBLIC_URL`, and `API_PUBLIC_URL` to be explicit `https` origins, `MINIO_ENDPOINT` to be `https://` when object storage is set, and `SESSION_COOKIE_DOMAIN` when the web and API hosts differ (e.g. `dirah.co.za` for `dirah.co.za` + `api.dirah.co.za`). A self-hosted install over plain HTTP must set `ALLOW_INSECURE_HTTP=true`; that also allows an `http://` `MINIO_ENDPOINT` on a private network.
 
 ## HTTP API
 
@@ -106,7 +108,7 @@ JSON envelope:
 
 Failures use `success: false`. Authenticated routes take `Authorization: Bearer <accessToken>` and `credentials: include` so the refresh cookie is sent.
 
-Refresh cookies are httpOnly, `SameSite=Lax`, and `Secure` in production:
+Refresh cookies are httpOnly, `SameSite=Lax`, and `Secure` when the API public URL is `https`:
 
 - Users: `dirah_refresh` on path `/api/auth` (7 days)
 - System admins: `dirah_admin_refresh` on path `/api/admin/auth`

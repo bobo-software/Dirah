@@ -11,6 +11,7 @@ const ready: ProductionSecurityConfig = {
   jwtRefreshSecret: 'b'.repeat(32),
   dbSsl: 'verify-full',
   minioEndpoint: '',
+  allowInsecureHttp: false,
 };
 
 describe('production boot checks', () => {
@@ -60,6 +61,35 @@ describe('production boot checks', () => {
     expect(() => assertProductionSecurity({ ...ready, minioEndpoint: 'http://minio.example' })).toThrow(
       /MINIO_ENDPOINT/
     );
+  });
+
+  it('allows an explicit http install only with ALLOW_INSECURE_HTTP', () => {
+    const selfHosted: ProductionSecurityConfig = {
+      ...ready,
+      corsOrigin: 'http://localhost:8080',
+      appPublicUrl: 'http://localhost:8080',
+      apiPublicUrl: 'http://localhost:8080',
+      sessionCookieDomain: '',
+      minioEndpoint: 'http://minio:9000',
+      allowInsecureHttp: true,
+    };
+    expect(() => assertProductionSecurity(selfHosted)).not.toThrow();
+
+    expect(() => assertProductionSecurity({ ...selfHosted, allowInsecureHttp: false })).toThrow(
+      /CORS_ORIGIN/
+    );
+    expect(() =>
+      assertProductionSecurity({
+        ...selfHosted,
+        corsOrigin: 'https://localhost:8080',
+        appPublicUrl: 'https://localhost:8080',
+        apiPublicUrl: 'https://localhost:8080',
+        allowInsecureHttp: false,
+      })
+    ).toThrow(/MINIO_ENDPOINT/);
+    expect(() =>
+      assertProductionSecurity({ ...selfHosted, minioEndpoint: 'ftp://minio:9000' })
+    ).toThrow(/MINIO_ENDPOINT/);
   });
 
   it('requires a cookie domain that covers both hosts', () => {

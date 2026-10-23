@@ -16,7 +16,8 @@
     "typecheck": "npm run typecheck --workspace frontend && npm run typecheck --workspace backend",
     "lint": "npm run lint --workspace frontend",
     "db:generate": "npm run db:generate --workspace backend",
-    "db:migrate": "npm run db:migrate --workspace backend"
+    "db:migrate": "npm run db:migrate --workspace backend",
+    "db:migrate:prod": "npm run db:migrate:prod --workspace backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

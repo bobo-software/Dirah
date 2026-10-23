@@ -14,7 +14,7 @@ function cookieOptions(path: string) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: env.nodeEnv === 'production',
+    secure: env.secureCookies,
     // In production the web and API sit on different hosts (dirah.co.za and
     // api.dirah.co.za). The OAuth callback runs on the API host, so the cookie
     // needs the shared parent domain to be sent to the web origin afterwards.
@@ -34,7 +34,7 @@ export function clearRefreshCookie(res: Response, kind: SessionKind): void {
   res.clearCookie(spec.name, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: env.nodeEnv === 'production',
+    secure: env.secureCookies,
     ...(env.sessionCookieDomain ? { domain: env.sessionCookieDomain } : {}),
     path: spec.path,
   });
