@@ -1,6 +1,6 @@
 # Dirah web
 
-React client for [Dirah](https://dirah.co.za), a markdown knowledge base. It talks to the API in [`dirah_backend`](../dira_backend): workspaces, a page tree, the editor, sharing, members, MCP tokens, and a separate system-admin console.
+React client for [Dirah](https://dirah.co.za), a markdown knowledge base. It talks to the API in [`backend`](../backend): workspaces, a page tree, the editor, sharing, members, MCP tokens, and a separate system-admin console.
 
 Product notes live in the Dirah workspace (`folder/readme.md` or `docs/`), not in this repo.
 
@@ -16,20 +16,21 @@ The Docker build needs Node 20.19+ or 22.12+ (the image uses Node 20). Vite inli
 
 ## Local setup
 
-Run the API first. See the backend README for Postgres, `.env`, and migrations.
+Run the API first. See the backend README for Postgres, `.env`, and migrations. From the repo root:
 
 ```bash
-cd dira_web
-npm ci
-cp .env.example .env
-npm run dev
+npm install
+cp frontend/.env.example frontend/.env
+npm run dev:web
 ```
+
+`npm run dev` starts the API and the web app together.
 
 The dev server listens on **http://localhost:5181** (`vite.config.ts`, `host: true`).
 
-`VITE_API_URL` is the API origin. `.env.example` sets `http://localhost:4006`. A blank value is treated as unset and falls back to that same URL (`src/api/client.ts`). The backend `.env.example` sets `PORT=4000`, so pick one port and use it on both sides. The API `CORS_ORIGIN` must be `http://localhost:5181`.
+`VITE_API_URL` is the API origin. `.env.example` sets `http://localhost:4006`, and `backend/.env.example` sets the matching `PORT`. A blank value is treated as unset and falls back to that same URL (`src/api/client.ts`). The API `CORS_ORIGIN` must be `http://localhost:5181`.
 
-`npm run dev` reads `.env`. `npm run dev:sec` loads Infisical `dev` first. Secret injection is documented in the backend [INFISICAL.md](../dira_backend/INFISICAL.md). This app never imports an Infisical SDK.
+`npm run dev` reads `.env`. `npm run dev:sec` loads Infisical `dev` first. Secret injection is documented in the backend [INFISICAL.md](../backend/INFISICAL.md). This app never imports an Infisical SDK.
 
 ## Scripts
 
@@ -133,5 +134,5 @@ docker build --build-arg VITE_API_URL=https://dirabackend.bobosoftware.co.za -t 
 
 ## Related
 
-- API: [`dira_backend`](../dira_backend)
-- Secrets and Coolify: [INFISICAL.md](../dira_backend/INFISICAL.md) in the backend repo
+- API: [`backend`](../backend)
+- Secrets and Coolify: [INFISICAL.md](../backend/INFISICAL.md)
