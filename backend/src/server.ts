@@ -1,0 +1,44 @@
+import http from 'node:http';
+import { createApp } from './app';
+import { env } from './config/env';
+import { db } from './db';
+import { schedulePurgeDeletedWorkspaces } from './jobs/purgeDeletedWorkspaces';
+import { AuthService } from './services/AuthService';
+
+async function main(): Promise<void> {
+  const app = await createApp();
+  const server = http.createServer(app);
+  schedulePurgeDeletedWorkspaces(new AuthService(db));
+
+  server.listen(env.port, () => {
+    console.log(`Dirah API listening on http://localhost:${env.port}`);
+    console.log(`Database: ${env.db.host}:${env.db.port} ssl=${env.db.sslMode}`);
+    console.log(`Live database: ${env.liveDb.host}:${env.liveDb.port} ssl=${env.liveDb.sslMode}`);
+    console.log(`MCP docs at http://localhost:${env.port}/mcp`);
+    console.log(`MCP protocol at http://localhost:${env.port}/mcp/protocol`);
+    const minioReady =
+      Boolean(env.minio.endpoint.trim()) &&
+      Boolean(env.minio.accessKey.trim()) &&
+      Boolean(env.minio.secretKey.trim());
+    console.log(minioReady ? `Blobs: MinIO bucket ${env.minio.bucket}` : `Blobs: disk ${env.blobDir}`);
+    console.log(
+      env.smtpConfigured
+        ? `Invites: SMTP ${env.smtp.host}:${env.smtp.port} (${env.appPublicUrl})`
+        : `Invites: copy-link (${env.appPublicUrl})`
+    );
+    const oauth = {
+      google: Boolean((process.env.GOOGLE_CLIENT_ID ?? '').trim() && (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()),
+      github: Boolean((process.env.GITHUB_CLIENT_ID ?? '').trim() && (process.env.GITHUB_CLIENT_SECRET ?? '').trim()),
+    };
+    const oauthNames = [
+      oauth.google ? 'Google' : null,
+      oauth.github ? 'GitHub' : null,
+    ].filter(Boolean);
+    console.log(oauthNames.length ? `OAuth: ${oauthNames.join(', ')}` : 'OAuth: off');
+  });
+}
+
+main().catch((error) => {
+  console.error('Failed to start Dirah API:', error);
+  process.exit(1);
+});

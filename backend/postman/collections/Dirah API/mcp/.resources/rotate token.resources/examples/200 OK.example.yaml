@@ -1,0 +1,31 @@
+$kind: http-example
+name: 200 OK
+request:
+  url: '{{baseUrl}}/api/mcp/tokens/{{mcpTokenId}}/rotate'
+  method: POST
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    - key: Content-Type
+      value: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "success": true,
+        "message": "Token rotated",
+        "data": {
+          "token": {
+            "id": "3f1c2a40-6b7e-4d1a-9c2e-1a2b3c4d5e6f",
+            "name": "Cursor",
+            "tokenPrefix": "dirah_mcp_abc123",
+            "defaultWorkspaceId": "8c0b1a22-1111-4222-8333-444455556666",
+            "createdAt": "2026-09-30T15:00:00.000Z",
+            "lastUsedAt": null,
+            "revokedAt": null,
+            "secret": "dirah_mcp_exampleSecretShownOnce"
+          }
+        }
+      }
+order: 1000
