@@ -23,7 +23,16 @@ Thumbs.db
 .idea/
 *.sublime-workspace
 *.sublime-project
+
+# Personal MCP and CLI config. Copy .mcp.json.example / cursor/mcp.json.example,
+# and point INFISICAL_* at your own project.
+.mcp.json
 .cursor/mcp.json
+cursor/mcp.json
+.infisical.yaml
+
+# Scratch
+Untitled
 
 # Misc
 *.local

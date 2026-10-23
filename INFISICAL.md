@@ -4,7 +4,7 @@ Dirah does not call the Infisical API from application code. The CLI (`@infisica
 
 Self-hosted instance: `https://infisical.bobosoftware.co.za`
 
-`.infisical.json` (from `infisical init`) is gitignored in both repos. It only links a local checkout to a project. It is not used in Docker.
+`.infisical.json` (from `infisical init`) is gitignored in both repos. It only links a local checkout to a project. It is not used in Docker. The CLI also writes `.infisical.yaml`; that is gitignored too.
 
 ## Local
 
