@@ -1,12 +1,12 @@
-import { useEffect, useState, type DragEvent } from 'react';
+import { useEffect, useId, useState, type DragEvent } from 'react';
 import type { PublicMember } from '../../api/members';
-import type { Ticket, TicketBoardView, TicketGroup, TicketPatch } from '../../api/tickets';
+import type { Ticket, TicketBoardView, TicketGroup, TicketPatch, TicketStatus } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
 import { confirmDelete } from '../layout/deleteDialogue';
 import { ColorDot } from '../notes/table/ColorDot';
 import type { SelectColor } from '../notes/table/columnTypes';
 import { AssigneeCell, DueCell, PriorityCell, StatusCell } from './TicketCells';
-import { formatCreated, isFiltering, matchesFilter, type TicketFilters } from './ticketMeta';
+import { formatCreated, isFiltering, matchesFilter, partitionDone, type TicketFilters } from './ticketMeta';
 import { Button } from '../buttons/Button';
 
 const ROW_DRAG = 'text/ticket-row';
@@ -56,6 +56,25 @@ export function TicketTableView({
     .sort((a, b) => a.position - b.position);
   const doneIds = new Set(view.statuses.filter((status) => status.category === 'done').map((status) => status.id));
   const statusById = new Map(view.statuses.map((status) => [status.id, status]));
+  const groupById = new Map(view.groups.map((group) => [group.id, group]));
+  const visibleGroupIds = new Set(groups.map((group) => group.id));
+  const { done } = partitionDone(
+    view.tickets.filter((ticket) => visibleGroupIds.has(ticket.groupId) && matchesFilter(ticket, filters, doneIds)),
+    doneIds
+  );
+  // null = follow the filter: a done status in the status filter opens the section.
+  const [doneOpen, setDoneOpen] = useState<boolean | null>(null);
+  const doneExpanded = doneOpen ?? filters.statusIds.some((id) => doneIds.has(id));
+  const doneTableId = useId();
+  const rowProps = {
+    statuses: view.statuses,
+    statusById,
+    members,
+    editable,
+    doneIds,
+    onOpen,
+    onPatch: patch,
+  };
 
   function fail(error: unknown, fallback: string) {
     onError(error instanceof Error ? error.message : fallback);
@@ -98,7 +117,8 @@ export function TicketTableView({
     <div className={`ticket-table-wrap${dragId ? ' is-dragging' : ''}`}>
       {groups.map((group) => {
         const all = ticketsIn(group.id);
-        const rows = all.filter((ticket) => matchesFilter(ticket, filters, doneIds));
+        const rows = all.filter((ticket) => !doneIds.has(ticket.statusId) && matchesFilter(ticket, filters, doneIds));
+        const openCount = all.filter((ticket) => !doneIds.has(ticket.statusId)).length;
         const isCollapsed = collapsed.has(group.id);
         return (
           <section
@@ -120,7 +140,8 @@ export function TicketTableView({
             <GroupHeader
               boardId={boardId}
               group={group}
-              count={all.length}
+              count={openCount}
+              total={all.length}
               collapsed={isCollapsed}
               editable={editable}
               canDelete={groups.length > 1}
@@ -146,91 +167,44 @@ export function TicketTableView({
                     const isDrop = drop?.targetId === ticket.id;
                     const dropClass = isDrop ? (drop.after ? ' drop-after' : ' drop-before') : '';
                     return (
-                      <tr
+                      <TicketRow
                         key={ticket.id}
-                        className={`ticket-row${dragId === ticket.id ? ' dragging' : ''}${dropClass}`}
-                        draggable={canDrag}
-                        onDragStart={(event) => {
-                          event.dataTransfer.setData(ROW_DRAG, ticket.id);
-                          event.dataTransfer.effectAllowed = 'move';
-                          setDragId(ticket.id);
-                          setDragging(boardId, true);
-                        }}
-                        onDragEnd={() => {
-                          setDragId(null);
-                          setDragging(boardId, false);
-                          setDrop(null);
-                        }}
-                        onDragOver={(event) => {
-                          if (!canDrag || !event.dataTransfer.types.includes(ROW_DRAG)) return;
-                          event.preventDefault();
-                          const rect = event.currentTarget.getBoundingClientRect();
-                          const after = event.clientY > rect.top + rect.height / 2;
-                          if (drop?.targetId !== ticket.id || drop.after !== after) {
-                            setDrop({ groupId: group.id, targetId: ticket.id, after });
-                          }
-                        }}
-                      >
-                        <td className="ticket-col-handle">
-                          {canDrag ? (
-                            <span className="ticket-grip" aria-hidden="true">
-                              ⋮⋮
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="ticket-col-title">
-                          <Button variant="plain" type="button" className="ticket-title-button" onClick={() => onOpen(ticket)}>
-                            <span className="ticket-title-text">{ticket.title}</span>
-                            {ticket.labels.map((label) => (
-                              <span key={label} className="ticket-label">
-                                {label}
-                              </span>
-                            ))}
-                          </Button>
-                        </td>
-                        <td className="ticket-col-status">
-                          <StatusCell
-                            status={statusById.get(ticket.statusId)}
-                            statuses={view.statuses}
-                            editable={editable}
-                            onChange={(statusId) => patch(ticket, { statusId })}
-                          />
-                        </td>
-                        <td className="ticket-col-priority">
-                          <PriorityCell
-                            priority={ticket.priority}
-                            editable={editable}
-                            onChange={(priority) => patch(ticket, { priority })}
-                          />
-                        </td>
-                        <td className="ticket-col-people">
-                          <AssigneeCell
-                            assigneeIds={ticket.assigneeIds}
-                            members={members}
-                            editable={editable}
-                            onChange={(assigneeIds) => patch(ticket, { assigneeIds })}
-                          />
-                        </td>
-                        <td className="ticket-col-due">
-                          <DueCell
-                            dueDate={ticket.dueDate}
-                            done={doneIds.has(ticket.statusId)}
-                            editable={editable}
-                            onChange={(dueDate) => patch(ticket, { dueDate })}
-                          />
-                        </td>
-                        <td className="ticket-col-created">
-                          <time dateTime={ticket.createdAt} title={new Date(ticket.createdAt).toLocaleString()}>
-                            {formatCreated(ticket.createdAt)}
-                          </time>
-                        </td>
-                      </tr>
+                        {...rowProps}
+                        ticket={ticket}
+                        className={`${dragId === ticket.id ? ' dragging' : ''}${dropClass}`}
+                        drag={
+                          canDrag
+                            ? {
+                                onDragStart: (event) => {
+                                  event.dataTransfer.setData(ROW_DRAG, ticket.id);
+                                  event.dataTransfer.effectAllowed = 'move';
+                                  setDragId(ticket.id);
+                                  setDragging(boardId, true);
+                                },
+                                onDragEnd: () => {
+                                  setDragId(null);
+                                  setDragging(boardId, false);
+                                  setDrop(null);
+                                },
+                                onDragOver: (event) => {
+                                  if (!event.dataTransfer.types.includes(ROW_DRAG)) return;
+                                  event.preventDefault();
+                                  const rect = event.currentTarget.getBoundingClientRect();
+                                  const after = event.clientY > rect.top + rect.height / 2;
+                                  if (drop?.targetId !== ticket.id || drop.after !== after) {
+                                    setDrop({ groupId: group.id, targetId: ticket.id, after });
+                                  }
+                                },
+                              }
+                            : undefined
+                        }
+                      />
                     );
                   })}
-                  {rows.length === 0 && filtering ? (
+                  {rows.length === 0 && (filtering || all.length > 0) ? (
                     <tr className="ticket-row-empty">
                       <td colSpan={7} className="muted">
-                        No matching tickets.
+                        {filtering ? 'No matching tickets.' : 'No open tickets.'}
                       </td>
                     </tr>
                   ) : null}
@@ -252,6 +226,42 @@ export function TicketTableView({
           </section>
         );
       })}
+      {done.length > 0 ? (
+        <section className="ticket-done-section" aria-label="Done tickets">
+          <header className="ticket-group-head ticket-done-head">
+            <Button
+              variant="plain"
+              type="button"
+              className={doneExpanded ? 'ticket-group-caret' : 'ticket-group-caret collapsed'}
+              aria-expanded={doneExpanded}
+              aria-controls={doneTableId}
+              onClick={() => setDoneOpen(!doneExpanded)}
+            >
+              ▾
+            </Button>
+            <h2 className="ticket-group-name">
+              <Button variant="plain" type="button" className="ticket-done-toggle" onClick={() => setDoneOpen(!doneExpanded)}>
+                Done ({done.length})
+              </Button>
+            </h2>
+          </header>
+          {doneExpanded ? (
+            <table className="ticket-table" id={doneTableId}>
+              <tbody>
+                {done.map((ticket) => (
+                  <TicketRow
+                    key={ticket.id}
+                    {...rowProps}
+                    ticket={ticket}
+                    className=" is-done"
+                    groupName={groupById.get(ticket.groupId)?.name}
+                  />
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </section>
+      ) : null}
       {editable ? (
         <Button variant="plain"
           type="button"
@@ -267,10 +277,105 @@ export function TicketTableView({
   );
 }
 
+type RowDrag = {
+  onDragStart: (event: DragEvent<HTMLTableRowElement>) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragEvent<HTMLTableRowElement>) => void;
+};
+
+function TicketRow({
+  ticket,
+  statuses,
+  statusById,
+  members,
+  editable,
+  doneIds,
+  className = '',
+  groupName,
+  drag,
+  onOpen,
+  onPatch,
+}: {
+  ticket: Ticket;
+  statuses: TicketStatus[];
+  statusById: Map<string, TicketStatus>;
+  members: PublicMember[];
+  editable: boolean;
+  doneIds: Set<string>;
+  className?: string;
+  /** Shown beside the title where rows from several groups are mixed. */
+  groupName?: string;
+  drag?: RowDrag;
+  onOpen: (ticket: Ticket) => void;
+  onPatch: (ticket: Ticket, input: TicketPatch) => void;
+}) {
+  return (
+    <tr
+      className={`ticket-row${className}`}
+      draggable={Boolean(drag)}
+      onDragStart={drag?.onDragStart}
+      onDragEnd={drag?.onDragEnd}
+      onDragOver={drag?.onDragOver}
+    >
+      <td className="ticket-col-handle">
+        {drag ? (
+          <span className="ticket-grip" aria-hidden="true">
+            ⋮⋮
+          </span>
+        ) : null}
+      </td>
+      <td className="ticket-col-title">
+        <Button variant="plain" type="button" className="ticket-title-button" onClick={() => onOpen(ticket)}>
+          <span className="ticket-title-text">{ticket.title}</span>
+          {groupName ? <span className="ticket-done-group">{groupName}</span> : null}
+          {ticket.labels.map((label) => (
+            <span key={label} className="ticket-label">
+              {label}
+            </span>
+          ))}
+        </Button>
+      </td>
+      <td className="ticket-col-status">
+        <StatusCell
+          status={statusById.get(ticket.statusId)}
+          statuses={statuses}
+          editable={editable}
+          onChange={(statusId) => onPatch(ticket, { statusId })}
+        />
+      </td>
+      <td className="ticket-col-priority">
+        <PriorityCell priority={ticket.priority} editable={editable} onChange={(priority) => onPatch(ticket, { priority })} />
+      </td>
+      <td className="ticket-col-people">
+        <AssigneeCell
+          assigneeIds={ticket.assigneeIds}
+          members={members}
+          editable={editable}
+          onChange={(assigneeIds) => onPatch(ticket, { assigneeIds })}
+        />
+      </td>
+      <td className="ticket-col-due">
+        <DueCell
+          dueDate={ticket.dueDate}
+          done={doneIds.has(ticket.statusId)}
+          editable={editable}
+          onChange={(dueDate) => onPatch(ticket, { dueDate })}
+        />
+      </td>
+      <td className="ticket-col-created">
+        <time dateTime={ticket.createdAt} title={new Date(ticket.createdAt).toLocaleString()}>
+          {formatCreated(ticket.createdAt)}
+        </time>
+      </td>
+    </tr>
+  );
+}
+
 function GroupHeader({
   boardId,
   group,
   count,
+  total,
   collapsed,
   editable,
   canDelete,
@@ -280,7 +385,10 @@ function GroupHeader({
 }: {
   boardId: string;
   group: TicketGroup;
+  /** Open tickets, shown in the header. */
   count: number;
+  /** Every ticket in the group, done included; all of them move on delete. */
+  total: number;
   collapsed: boolean;
   editable: boolean;
   canDelete: boolean;
@@ -313,7 +421,7 @@ function GroupHeader({
   async function remove() {
     const ok = await confirmDelete({
       title: `Delete “${group.name}”?`,
-      message: count > 0 ? `Its ${count} ticket${count === 1 ? '' : 's'} will move to “${fallbackName}”.` : 'This group is empty.',
+      message: total > 0 ? `Its ${total} ticket${total === 1 ? '' : 's'} will move to “${fallbackName}”.` : 'This group is empty.',
       confirmLabel: 'Delete group',
     });
     if (!ok) return;

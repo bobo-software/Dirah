@@ -8533,6 +8533,37 @@ label.ticket-menu-row {
   white-space: nowrap;
 }
 
+.ticket-done-section {
+  --type: var(--muted);
+  min-width: 0;
+}
+
+.ticket-done-head .ticket-group-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ticket-done-toggle {
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+}
+
+.ticket-done-toggle:hover {
+  color: var(--text);
+}
+
+.ticket-row.is-done .ticket-title-text {
+  color: var(--muted);
+}
+
+.ticket-done-group {
+  color: var(--muted);
+  font: 500 0.72rem/1.4 var(--ui);
+  white-space: nowrap;
+}
+
 .ticket-add-group {
   align-self: flex-start;
   padding: 0.35rem 0.7rem;

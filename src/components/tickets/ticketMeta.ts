@@ -173,6 +173,15 @@ export function matchesFilter(ticket: Ticket, filters: TicketFilters, doneIds: S
   return true;
 }
 
+/** Splits tickets on the board's done statuses; done comes back most recently updated first. */
+export function partitionDone(tickets: Ticket[], doneIds: Set<string>): { open: Ticket[]; done: Ticket[] } {
+  const open: Ticket[] = [];
+  const done: Ticket[] = [];
+  for (const ticket of tickets) (doneIds.has(ticket.statusId) ? done : open).push(ticket);
+  done.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return { open, done };
+}
+
 export const BOARD_KEY_RE = /^[A-Z][A-Z0-9]{1,9}$/;
 
 /** Mirrors the backend's suggestBoardKey so the field previews what the server would pick. */
