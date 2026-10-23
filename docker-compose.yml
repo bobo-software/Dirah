@@ -5,7 +5,7 @@
 # /api to backend:4006, matching production.
 #
 #   docker compose up -d --build
-#   docker compose exec backend npm run db:migrate
+#   docker compose run --rm backend node dist/migrate.js
 #
 # Then open http://localhost:8080. Only the web port needs to be public in a
 # deployed stack; 4006 is published here so local MCP clients can reach the API.

@@ -28,17 +28,44 @@ is one file to edit. Default ports: web `http://localhost:5181`, API
 `http://localhost:4006`. The web calls its own origin and Vite proxies `/api` to
 the API, like nginx does in production.
 
-## Docker
+## Docker (local stack)
 
 ```bash
 docker compose up -d --build
-# Migrations run from a checkout (the runtime image has no ts-node):
-DB_HOST=127.0.0.1 DB_PORT=5433 DB_USERNAME=dirah DB_PASSWORD=dirah DB_DATABASE=dirah DB_SSL=disable npm run db:migrate
+docker compose run --rm backend node dist/migrate.js
 ```
 
 Open `http://localhost:8080`. The web container proxies `/api` to `backend:4006`
 on the compose network; only the web port needs to be public in a deployed
 stack. Set `VITE_PUBLIC_API_URL` when building the web image for a real host.
+
+## Self-host with Docker
+
+`docker-compose.selfhost.yml` runs the web and API only. Postgres and MinIO/S3
+are **external**: point `DB_*` and `MINIO_*` at services you run or a managed
+provider. The bundle does not start them.
+
+```bash
+cp .env.selfhost.example .env
+# edit .env: external DB/MinIO, public URLs, JWT secrets, first admin
+docker compose -f docker-compose.selfhost.yml up -d --build
+```
+
+Open `http://localhost:8080` (or `WEB_PORT`). The one-shot `migrate` service
+applies pending migrations before the API starts. Upgrades are
+`git pull && docker compose -f docker-compose.selfhost.yml up -d --build`.
+
+- One hostname is enough: nginx proxies `/api`, `/mcp` and the OAuth discovery
+  paths to `backend:4006`. The MCP URL is `http://localhost:8080/mcp`.
+- Plain HTTP is allowed only with `ALLOW_INSECURE_HTTP=true` (localhost/LAN).
+  For a public install, put Caddy/Traefik in front, set `APP_PUBLIC_URL`,
+  `API_PUBLIC_URL` and `CORS_ORIGIN` to the `https://` origin, and set
+  `ALLOW_INSECURE_HTTP=false`.
+- `VITE_PUBLIC_API_URL` can stay empty for a same-origin install; the browser
+  uses its own origin. Set it only when the API is on a separate host, and
+  rebuild the web image after changing it.
+- Back up Postgres and the MinIO bucket; the app containers are stateless.
+
 
 ## Deploy (Coolify)
 
@@ -71,8 +98,10 @@ existing Coolify-managed services.
   `/api` to `backend:4006`.
 - `DB_*` points at the existing Coolify Postgres. `DB_SSL=verify-full` and
   `DB_SSL_CA` (the PEM) are required.
-- Migrations are an explicit step from a checkout (`npm run db:migrate`).
-  Ask before running them against the live database.
+- Migrations are an explicit step for the hosted deploy: run
+  `docker compose -f docker-compose.prod.yml run --rm backend node dist/migrate.js`
+  from a checkout, or `npm run db:migrate` from the repo. Ask before running
+  them against the live database.
 
 CI lives in `.github/workflows/backend.yml` and `frontend.yml`. A change under
 `backend/**` (or the root lockfile) only runs the API checks and image build;
@@ -90,3 +119,4 @@ CI lives in `.github/workflows/backend.yml` and `frontend.yml`. A change under
 | `npm run lint` | ESLint for the web app |
 | `npm run db:generate` | Generate a Drizzle migration (`--workspace backend`) |
 | `npm run db:migrate` | Apply pending SQL (`--workspace backend`) |
+| `npm run db:migrate:prod` | Apply pending SQL with the compiled entrypoint (`node dist/migrate.js`) |

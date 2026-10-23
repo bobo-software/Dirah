@@ -51,20 +51,24 @@ export type ProductionSecurityConfig = {
   jwtRefreshSecret: string;
   dbSsl: string;
   minioEndpoint: string;
+  /** Self-hosted installs served over plain HTTP (localhost/LAN) only. */
+  allowInsecureHttp: boolean;
 };
 
 function trimSlash(value: string): string {
   return value.trim().replace(/\/$/, '');
 }
 
-function httpsOrigin(raw: string): string | undefined {
+function publicOrigin(raw: string, allowInsecureHttp: boolean): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const url = new URL(withScheme);
+    const schemeAllowed =
+      url.protocol === 'https:' || (allowInsecureHttp && url.protocol === 'http:');
     if (
-      url.protocol !== 'https:' ||
+      !schemeAllowed ||
       url.username !== '' ||
       url.password !== '' ||
       !url.hostname ||
@@ -86,6 +90,14 @@ function isHttpsUrl(value: string): boolean {
   }
 }
 
+function isHttpUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export function assertProductionSecurity(config: ProductionSecurityConfig): void {
   if (config.nodeEnv !== 'production') return;
 
@@ -102,14 +114,21 @@ export function assertProductionSecurity(config: ProductionSecurityConfig): void
   ) {
     problems.push('JWT_REFRESH_SECRET must be a unique value of at least 32 characters');
   }
-  if (!httpsOrigin(config.corsOrigin)) {
-    problems.push(`CORS_ORIGIN must be one explicit https origin, not * (received ${JSON.stringify(config.corsOrigin)})`);
+  const schemeLabel = config.allowInsecureHttp ? 'http(s)' : 'https';
+  if (!publicOrigin(config.corsOrigin, config.allowInsecureHttp)) {
+    problems.push(
+      `CORS_ORIGIN must be one explicit ${schemeLabel} origin, not * (received ${JSON.stringify(config.corsOrigin)})`
+    );
   }
-  if (!httpsOrigin(config.appPublicUrl)) {
-    problems.push(`APP_PUBLIC_URL must be an https origin (received ${JSON.stringify(config.appPublicUrl)})`);
+  if (!publicOrigin(config.appPublicUrl, config.allowInsecureHttp)) {
+    problems.push(
+      `APP_PUBLIC_URL must be a valid ${schemeLabel} origin (received ${JSON.stringify(config.appPublicUrl)})`
+    );
   }
-  if (!httpsOrigin(config.apiPublicUrl)) {
-    problems.push(`API_PUBLIC_URL must be an https origin (received ${JSON.stringify(config.apiPublicUrl)})`);
+  if (!publicOrigin(config.apiPublicUrl, config.allowInsecureHttp)) {
+    problems.push(
+      `API_PUBLIC_URL must be a valid ${schemeLabel} origin (received ${JSON.stringify(config.apiPublicUrl)})`
+    );
   }
   const cookieDomain = config.sessionCookieDomain.trim().replace(/^\./, '');
   const hostOf = (value: string): string => {
@@ -141,7 +160,11 @@ export function assertProductionSecurity(config: ProductionSecurityConfig): void
   }
   const minioEndpoint = config.minioEndpoint.trim();
   if (minioEndpoint && !isHttpsUrl(minioEndpoint)) {
-    problems.push('MINIO_ENDPOINT must use https:// when object storage is configured');
+    if (!(config.allowInsecureHttp && isHttpUrl(minioEndpoint))) {
+      problems.push(
+        'MINIO_ENDPOINT must use https:// when object storage is configured (http:// is allowed only with ALLOW_INSECURE_HTTP)'
+      );
+    }
   }
 
   if (problems.length > 0) {
@@ -161,17 +184,25 @@ function loadSslCa(raw: string | undefined): string | undefined {
 }
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
+const allowInsecureHttp = bool(process.env.ALLOW_INSECURE_HTTP);
 const port = Number(process.env.PORT ?? 4000);
-const corsOrigin = httpsOrigin(process.env.CORS_ORIGIN ?? '') ?? (process.env.CORS_ORIGIN ?? '*').trim();
+const corsOrigin =
+  publicOrigin(process.env.CORS_ORIGIN ?? '', allowInsecureHttp) ??
+  (process.env.CORS_ORIGIN ?? '*').trim();
 const appPublicUrl = (() => {
-  const explicit = httpsOrigin(process.env.APP_PUBLIC_URL ?? '');
+  const explicit = publicOrigin(process.env.APP_PUBLIC_URL ?? '', allowInsecureHttp);
   if (explicit) return explicit;
-  if (corsOrigin && corsOrigin !== '*') return httpsOrigin(corsOrigin) ?? trimSlash(corsOrigin);
+  if (corsOrigin && corsOrigin !== '*') {
+    return publicOrigin(corsOrigin, allowInsecureHttp) ?? trimSlash(corsOrigin);
+  }
   return 'http://localhost:5181';
 })();
 const apiPublicRaw = (process.env.API_PUBLIC_URL ?? '').trim();
-const apiPublicUrl = httpsOrigin(apiPublicRaw) ?? (apiPublicRaw || `http://localhost:${port}`);
+const apiPublicUrl =
+  publicOrigin(apiPublicRaw, allowInsecureHttp) ??
+  (apiPublicRaw || `http://localhost:${port}`);
 const sessionCookieDomain = (process.env.SESSION_COOKIE_DOMAIN ?? '').trim().replace(/^\./, '');
+const secureCookies = nodeEnv === 'production' && isHttpsUrl(apiPublicUrl);
 const database = resolveDatabaseConfig(nodeEnv, process.env);
 const liveDatabase = resolveLiveDatabaseConfig(process.env);
 const minioEndpoint = process.env.MINIO_ENDPOINT ?? '';
@@ -179,6 +210,8 @@ const minioEndpoint = process.env.MINIO_ENDPOINT ?? '';
 export const env = {
   nodeEnv,
   port,
+  allowInsecureHttp,
+  secureCookies,
   corsOrigin,
   appPublicUrl,
   apiPublicUrl,
@@ -231,6 +264,11 @@ function positiveInt(raw: string | undefined, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function bool(raw: string | undefined): boolean {
+  const value = (raw ?? '').trim().toLowerCase();
+  return value === 'true' || value === '1' || value === 'yes';
+}
+
 assertProductionSecurity({
   nodeEnv: env.nodeEnv,
   corsOrigin: env.corsOrigin,
@@ -241,4 +279,5 @@ assertProductionSecurity({
   jwtRefreshSecret: env.jwtRefreshSecret,
   dbSsl: env.db.sslMode,
   minioEndpoint: env.minio.endpoint,
+  allowInsecureHttp: env.allowInsecureHttp,
 });
