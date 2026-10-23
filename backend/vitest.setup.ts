@@ -9,7 +9,7 @@ process.env.DB_DATABASE ??= 'dirah_test';
 process.env.DB_USERNAME ??= 'dirah_test';
 process.env.DB_PASSWORD ??= 'dirah_test';
 process.env.DB_SSL ??= 'disable';
-// Never send real mail from tests, even when .env or Infisical sets SMTP.
+// Never send real mail from tests, even when .env sets SMTP.
 process.env.SMTP_HOST = '';
 process.env.MCP_PG_DEFAULT_SELECT_LIMIT ??= '100';
 process.env.MCP_PG_MAX_SELECT_LIMIT ??= '1000';

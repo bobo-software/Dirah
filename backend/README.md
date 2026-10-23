@@ -57,7 +57,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Both run from the repo root (`--workspace backend`). `npm run dev` uses nodemon and `ts-node`. It reads `backend/.env`. `npm run dev:sec` loads the Infisical `dev` environment first. See [INFISICAL.md](INFISICAL.md).
+Both run from the repo root (`--workspace backend`). `npm run dev` uses nodemon and `ts-node`. It reads `backend/.env`; copy [`.env.example`](.env.example) and fill in the values.
 
 The API, Drizzle, migrations, and both Postgres MCP targets use `DB_*` in every environment, including development. Set `DB_SSL=disable` for a local database and `verify-full` for the remote one. `DB_LOCAL_*` are no longer read.
 
@@ -68,7 +68,6 @@ Health check: `GET http://localhost:4006/health` (or whatever `PORT` you set). T
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | Watch `src/` and run `ts-node src/server.ts` |
-| `npm run dev:sec` | Same, with Infisical `dev` secrets |
 | `npm run build` | Compile to `dist/` |
 | `npm start` | Run `node dist/server.js` |
 | `npm run typecheck` | `tsc --noEmit` |
@@ -76,8 +75,6 @@ Health check: `GET http://localhost:4006/health` (or whatever `PORT` you set). T
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run db:generate` | Generate a Drizzle migration from schema changes |
 | `npm run db:migrate` | Apply pending SQL in `drizzle/migrations` |
-
-`:sec` variants exist for `start`, `test`, `db:generate`, and `db:migrate`.
 
 ## Environment
 
@@ -217,15 +214,15 @@ Build from the repo root so the workspace lockfile is available:
 docker build -f backend/Dockerfile -t dirah-backend .
 ```
 
-The image is a two-stage build. The runtime image installs the Infisical CLI and starts through `scripts/infisical-entrypoint.sh`.
+The image is a two-stage build. The runtime image is plain Node and starts `node dist/server.js`.
 
 - `EXPOSE 4006` is the image metadata. The process listens on `PORT` (4006 in the root compose file), and the healthcheck calls `http://127.0.0.1:${PORT:-4006}/health`.
-- Set `INFISICAL_TOKEN`, `INFISICAL_ENV`, and `INFISICAL_DOMAIN` as runtime env vars when the container should pull secrets. If any of the three is missing, it runs `node dist/server.js` with the env it was given.
+- Pass configuration as normal environment variables: `docker run --env-file backend/.env`, or the Coolify environment. Nothing is fetched at build or start time.
 
 The root [docker-compose.yml](../docker-compose.yml) starts Postgres (`5433`), MinIO (`9000`, console `9001`), the API (`4006`) and the web app (`8080`).
 
 ## Related
 
 - Web app: [`frontend`](../frontend)
-- Secrets: [INFISICAL.md](INFISICAL.md)
+- Environment: [`.env.example`](.env.example)
 - Where product docs live: [docs/README.md](docs/README.md)

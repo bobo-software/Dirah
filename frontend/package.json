@@ -5,14 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:sec": "infisical run --env=dev -- npm run dev",
     "build": "tsc -b && vite build",
-    "build:sec": "infisical run --env=dev -- npm run build",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "preview": "vite preview",
-    "preview:sec": "infisical run --env=dev -- npm run preview"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.3.3",
