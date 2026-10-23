@@ -10,6 +10,7 @@
     "build:sec": "infisical run --env=dev -- npm run build",
     "lint": "eslint .",
     "test": "vitest run",
+    "typecheck": "tsc -b",
     "preview": "vite preview",
     "preview:sec": "infisical run --env=dev -- npm run preview"
   },
