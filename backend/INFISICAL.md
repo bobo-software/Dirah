@@ -17,7 +17,7 @@ infisical login
 
 Point the checkout at the project (`infisical init`, or pass `--projectId` / `--domain`). Then use the `:sec` scripts. They run `infisical run --env=dev -- …`, which loads the `dev` environment and starts the normal script.
 
-**dirah_backend**
+**backend**
 
 | Script | What it wraps |
 | --- | --- |
@@ -27,7 +27,7 @@ Point the checkout at the project (`infisical init`, or pass `--projectId` / `--
 | `npm run db:migrate:sec` | `npm run db:migrate` |
 | `npm run db:generate:sec` | `npm run db:generate` |
 
-**dirah_web**
+**frontend**
 
 | Script | What it wraps |
 | --- | --- |
@@ -39,7 +39,36 @@ Plain `npm run dev` still reads `.env` as usual. Infisical is optional locally. 
 
 The API, Drizzle, migrations, and both Postgres MCP targets (`local` and `live`) use `DB_*`, `DB_SSL`, and `DB_SSL_CA` in every environment. `DB_SSL_CA` is the CA certificate PEM (a file path is also accepted). Infisical can still inject the other secrets.
 
-## dirah_backend in Docker / Coolify
+## Production values
+
+The API and the web app are **separate Infisical projects**. Coolify holds only the three CLI vars per app; every other value lives here.
+
+| App | Key | Value | Why |
+| --- | --- | --- | --- |
+| API `prod` | `SESSION_COOKIE_DOMAIN` | `dirah.co.za` | The OAuth callback runs on `api.dirah.co.za`; the refresh cookie must also be sent by `dirah.co.za`. |
+| API `prod` | `PORT` | `4006` | Root nginx proxies `/api` to `backend:4006`. |
+| Web `prod` | `VITE_PUBLIC_API_URL` | `https://api.dirah.co.za` | MCP connector URLs shown to users. |
+| Web `prod` | `VITE_API_URL` | delete | The browser calls its own origin; setting it brings CORS back. |
+
+With the CLI logged in, from each workspace directory:
+
+```bash
+cd backend
+infisical secrets set SESSION_COOKIE_DOMAIN=dirah.co.za --env=prod
+
+cd ../frontend
+infisical secrets set VITE_PUBLIC_API_URL=https://api.dirah.co.za --env=prod
+```
+
+**Ordering matters.** `PORT=4006` and deleting `VITE_API_URL` break what is deployed today (the API listens on 4002; the current client calls the API cross-origin). Change them in the same window as the Coolify repoint. `SESSION_COOKIE_DOMAIN` and `VITE_PUBLIC_API_URL` are ignored by the old code, so they are safe to add first.
+
+```bash
+# only alongside the Coolify repo/port switch:
+cd backend && infisical secrets set PORT=4006 --env=prod
+cd ../frontend && infisical secrets delete VITE_API_URL --env=prod
+```
+
+## API in Docker / Coolify
 
 Secrets are read when the Node process starts (`dotenv` plus `process.env`). The image installs the CLI in the production stage and wraps the start command. Set these as **runtime** env vars on the container, not as build args:
 
@@ -55,7 +84,7 @@ infisical run --token="$INFISICAL_TOKEN" --domain="$INFISICAL_DOMAIN" --env="$IN
 
 Every secret in that Infisical environment becomes a `process.env` value (`DB_*`, `JWT_SECRET`, `PORT`, and the rest). If any of the three is missing, the container runs `node dist/server.js` with whatever env it was given (`--env-file .env`, Coolify env, and so on).
 
-## dirah_web in Docker / Coolify
+## Web in Docker / Coolify
 
 Vite inlines `VITE_*` at **build** time. The nginx image does not talk to Infisical at runtime. The build stage installs the CLI and uses Infisical only while `npm run build` runs.
 
@@ -76,9 +105,9 @@ Token resolution order in the Dockerfile:
 1. BuildKit secret file `/run/secrets/infisical_token`, if present
 2. Build arg `INFISICAL_TOKEN`
 
-When domain, env, and token are all set, the image runs `infisical run … -- sh ./scripts/vite-build.sh`, which checks `VITE_PUBLIC_API_URL` and then runs `npm run build`. Otherwise it prints a notice and runs that same build script with the `VITE_*` build args.
+When domain, env, and token are all set, `scripts/docker-build.sh` runs `infisical secrets get VITE_PUBLIC_API_URL --plain` and exports only that value, then runs `npm run build`. The rest of the production environment is never injected into the Vite build, which executes third-party code. A `VITE_PUBLIC_API_URL` build arg is used when Infisical has no value for it.
 
-An empty `VITE_PUBLIC_API_URL=""` (common when Infisical or Docker injects a blank value) is treated as missing, and the Docker build refuses to finish.
+An empty `VITE_PUBLIC_API_URL` (common when Infisical or Docker injects a blank value) is treated as missing, and the Docker build refuses to finish.
 
 ## What the app never does
 
