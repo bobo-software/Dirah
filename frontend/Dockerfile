@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Build from the repo root: docker build -f frontend/Dockerfile .
-# Vite/rolldown require Node 20.19+ or 22.12+
-FROM node:20-alpine AS build
+# Matches .nvmrc and the API image. Vite/rolldown need 20.19+ or 22.12+.
+FROM node:26-alpine AS build
 
 WORKDIR /app
 
