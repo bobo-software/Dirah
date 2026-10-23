@@ -1,11 +1,12 @@
-# One Coolify Service: web + API on one Docker network. Postgres and MinIO stay
-# external (the existing Coolify-managed services), so their connection details
-# come from the root .env.
+# One Coolify Application (Docker Compose build pack): web + API on one
+# network. Postgres and MinIO stay external (the existing Coolify-managed
+# services), so their connection details come from the root .env.
 #
-# Coolify: point the service at this file, put the keys from .env.example in the
-# service environment, then map the domains to the container ports:
-#   dirah.co.za      -> web:83
-#   api.dirah.co.za  -> backend:4006
+# Coolify: create an Application with the Compose build strategy, point it at
+# this file, paste the keys from .env.example into Environment Variables, then
+# add the domains with the internal port suffix:
+#   https://dirah.co.za:83       -> service web
+#   https://api.dirah.co.za:4006 -> service backend
 #
 # Local check:
 #   cp .env.example .env   # fill it in
