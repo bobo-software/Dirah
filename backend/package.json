@@ -1,6 +1,7 @@
 {
   "name": "dirah_backend",
   "version": "1.0.0",
+  "private": true,
   "description": "Dirah API",
   "type": "commonjs",
   "main": "dist/server.js",
