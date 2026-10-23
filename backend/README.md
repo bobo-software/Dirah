@@ -1,6 +1,6 @@
 # Dirah API
 
-HTTP API and MCP servers for [Dirah](https://dirah.co.za), a Postgres-backed markdown knowledge base. Pages live in workspaces as a tree of folders and markdown files. The web app is [`dirah_web`](../dira_web).
+HTTP API and MCP servers for [Dirah](https://dirah.co.za), a Postgres-backed markdown knowledge base. Pages live in workspaces as a tree of folders and markdown files. The web app is [`frontend`](../frontend).
 
 Product notes, plans, and runbooks live in the Dirah workspace itself (`folder/readme.md` or `docs/`), not under `docs/` in this repo. `docs/README.md` only points there.
 
@@ -37,19 +37,18 @@ postman/             collection fragments
 
 ## Local setup
 
-You need Node, npm, and Postgres. The compose file also starts MinIO if you want object storage.
+You need Node, npm, and Postgres. Run from the repo root; one `npm install` covers both workspaces. The compose file also starts MinIO if you want object storage.
 
 ```bash
-cd dira_backend
-npm ci
-docker compose up -d postgres
-cp .env.example .env
+npm install
+docker compose -f backend/docker-compose.yml up -d postgres
+cp backend/.env.example backend/.env
 ```
 
 Then align the database and the port with the web app:
 
 - Compose publishes Postgres on **host port 5433** as user `dirah`, password `dirah`, database `dirah`. Set `DB_LOCAL_PORT=5433`, `DB_LOCAL_USERNAME=dirah`, and `DB_LOCAL_PASSWORD=dirah`. A Postgres you already run on 5432 can keep the values in `.env.example`.
-- The API listens on `PORT`. Unset, that is **4000**, and `.env.example` sets `4000`. The web client defaults to `http://localhost:4006`. Set `PORT=4006` here, or set `VITE_API_URL=http://localhost:4000` in `dirah_web`. `CORS_ORIGIN` must be the web origin, `http://localhost:5181`.
+- The API listens on `PORT`. Unset, that is **4000**, and both `.env.example` files set **4006** so the API matches the web client default. `CORS_ORIGIN` must be the web origin, `http://localhost:5181`.
 
 Apply migrations and start:
 
@@ -58,7 +57,7 @@ npm run db:migrate
 npm run dev
 ```
 
-`npm run dev` uses nodemon and `ts-node`. It reads `.env`. `npm run dev:sec` loads the Infisical `dev` environment first. See [INFISICAL.md](INFISICAL.md).
+Both run from the repo root (`--workspace backend`). `npm run dev` uses nodemon and `ts-node`. It reads `backend/.env`. `npm run dev:sec` loads the Infisical `dev` environment first. See [INFISICAL.md](INFISICAL.md).
 
 In `NODE_ENV=development` the API connects with `DB_LOCAL_*` and TLS stays off. `DB_HOST` / `DB_SSL` / `DB_SSL_CA` are the remote database. The deployed API uses those. The Postgres MCP can reach either one.
 
@@ -220,6 +219,6 @@ Vitest covers routes with Supertest, plus SQL guards, auth rate limits, slugs, f
 
 ## Related
 
-- Web app: [`dira_web`](../dira_web)
+- Web app: [`frontend`](../frontend)
 - Secrets: [INFISICAL.md](INFISICAL.md)
 - Where product docs live: [docs/README.md](docs/README.md)
