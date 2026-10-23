@@ -1,0 +1,37 @@
+# One Coolify Service: web + API on one Docker network. Postgres and MinIO stay
+# external (the existing Coolify-managed services), so their connection details
+# come from the root .env.
+#
+# Coolify: point the service at this file, put the keys from .env.example in the
+# service environment, then map the domains to the container ports:
+#   dirah.co.za      -> web:83
+#   api.dirah.co.za  -> backend:4006
+#
+# Local check:
+#   cp .env.example .env   # fill it in
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 4006
+    expose:
+      - '4006'
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_PUBLIC_API_URL: ${VITE_PUBLIC_API_URL:?set VITE_PUBLIC_API_URL in .env}
+    expose:
+      - '83'
+    depends_on:
+      - backend
+    restart: unless-stopped

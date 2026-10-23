@@ -41,14 +41,14 @@ You need Node, npm, and Postgres. Run from the repo root; one `npm install` cove
 
 ```bash
 npm install
-docker compose -f backend/docker-compose.yml up -d postgres
-cp backend/.env.example backend/.env
+docker compose up -d postgres
+cp .env.example .env
 ```
 
 Then align the database and the port with the web app:
 
-- Compose publishes Postgres on **host port 5433** as user `dirah`, password `dirah`, database `dirah`. Set `DB_LOCAL_PORT=5433`, `DB_LOCAL_USERNAME=dirah`, and `DB_LOCAL_PASSWORD=dirah`. A Postgres you already run on 5432 can keep the values in `.env.example`.
-- The API listens on `PORT`. Unset, that is **4000**, and both `.env.example` files set **4006** so the API matches the web client default. `CORS_ORIGIN` must be the web origin, `http://localhost:5181`.
+- Compose publishes Postgres on **host port 5433** as user `dirah`, password `dirah`, database `dirah`. Set `DB_PORT=5433` in the root `.env`; a Postgres you already run on 5432 can keep the defaults.
+- The API listens on `PORT`. Unset, that is **4000**, and the root `.env.example` sets **4006** so the API matches the web client default. `CORS_ORIGIN` must be the web origin, `http://localhost:5181`.
 
 Apply migrations and start:
 
@@ -57,7 +57,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Both run from the repo root (`--workspace backend`). `npm run dev` uses nodemon and `ts-node`. It reads `backend/.env`; copy [`.env.example`](.env.example) and fill in the values.
+Both run from the repo root (`--workspace backend`). `npm run dev` uses nodemon and `ts-node`. It reads the root `.env`; copy [`../.env.example`](../.env.example) to the repo root and fill in the values.
 
 The API, Drizzle, migrations, and both Postgres MCP targets use `DB_*` in every environment, including development. Set `DB_SSL=disable` for a local database and `verify-full` for the remote one. `DB_LOCAL_*` are no longer read.
 
@@ -78,14 +78,14 @@ Health check: `GET http://localhost:4006/health` (or whatever `PORT` you set). T
 
 ## Environment
 
-Copy `.env.example`. Groups:
+Copy [`../.env.example`](../.env.example) to `.env` at the repo root. Groups:
 
 | Group | Variables | Notes |
 | --- | --- | --- |
 | Server | `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `APP_PUBLIC_URL`, `API_PUBLIC_URL` | `APP_PUBLIC_URL` is the web origin used in invite links. `API_PUBLIC_URL` is this API, used in OAuth callbacks and MCP metadata. |
 | Auth | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Dev defaults exist. Production refuses to boot unless both are unique and at least 32 characters. |
 | System admin | `SYSTEM_ADMIN_EMAIL`, `SYSTEM_ADMIN_PASSWORD` | Creates the first row in `system_admins` when that table is empty. Leave blank to skip. |
-| Postgres | `DB_*`, `DB_LOCAL_*`, `DB_SSL`, `DB_SSL_CA` | Development uses `DB_LOCAL_*`. Otherwise `DB_*`. `DB_SSL` is `disable` or `verify-full`. `DB_SSL_CA` is a PEM or a path to one. |
+| Postgres | `DB_*`, `DB_SSL`, `DB_SSL_CA` | `DB_*` is used in every environment. `DB_SSL` is `disable` or `verify-full`. `DB_SSL_CA` is a PEM or a path to one. |
 | Mail | `SMTP_*` | Empty `SMTP_HOST` skips sending. Invite responses then include a copyable `inviteUrl`. |
 | Blobs | `BLOB_DIR` or `MINIO_*` | Empty `MINIO_ENDPOINT` stores files under `BLOB_DIR` (default `uploads/`). |
 | Copilot | `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` | Empty key disables Ask. Editing still works. OpenAI-compatible. |
@@ -217,12 +217,12 @@ docker build -f backend/Dockerfile -t dirah-backend .
 The image is a two-stage build. The runtime image is plain Node and starts `node dist/server.js`.
 
 - `EXPOSE 4006` is the image metadata. The process listens on `PORT` (4006 in the root compose file), and the healthcheck calls `http://127.0.0.1:${PORT:-4006}/health`.
-- Pass configuration as normal environment variables: `docker run --env-file backend/.env`, or the Coolify environment. Nothing is fetched at build or start time.
+- Pass configuration as normal environment variables: `docker run --env-file .env`, or the Coolify environment. Nothing is fetched at build or start time.
 
 The root [docker-compose.yml](../docker-compose.yml) starts Postgres (`5433`), MinIO (`9000`, console `9001`), the API (`4006`) and the web app (`8080`).
 
 ## Related
 
 - Web app: [`frontend`](../frontend)
-- Environment: [`.env.example`](.env.example)
+- Environment: [`../.env.example`](../.env.example)
 - Where product docs live: [docs/README.md](docs/README.md)
