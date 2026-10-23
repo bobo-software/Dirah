@@ -42,20 +42,25 @@ stack. Set `VITE_PUBLIC_API_URL` when building the web image for a real host.
 
 ## Deploy (Coolify)
 
-One **Service** (Docker Compose) runs the web and API from
-`docker-compose.prod.yml`. Postgres and MinIO stay external, as the existing
-Coolify-managed services.
+One **Application** with the **Docker Compose** build pack runs the web and API
+from `docker-compose.prod.yml`. Postgres and MinIO stay external, as the
+existing Coolify-managed services.
 
-| Container | Exposed port | Domain |
+| Container | Internal port | Domain |
 | --- | --- | --- |
 | `web` | 83 | `dirah.co.za` |
 | `backend` | 4006 | `api.dirah.co.za` |
 
-- Point the Service at `/docker-compose.prod.yml`; branch `monorepo` until the
-  merge lands on `master`.
-- Put every key from [`.env.example`](.env.example) in the Service environment.
-  Coolify writes them to `.env` for the compose stack; the API container reads
-  them through `env_file`.
+- `+ New` → the repo → Build strategy **Compose**; Base Directory `/`; Docker
+  Compose Location `docker-compose.prod.yml`; branch `monorepo` until the merge
+  lands on `master`.
+- Add the domains with the internal port suffix: `https://dirah.co.za:83` on
+  service `web` and `https://api.dirah.co.za:4006` on service `backend`.
+- Leave **Compose deployment** at the default (not **Raw**), so Coolify can add
+  the proxy labels for those domains.
+- Put every key from [`.env.example`](.env.example) in Environment Variables
+  (Developer view). Coolify writes them to `.env`; the API container reads them
+  through `env_file`.
 - The non-obvious values: `NODE_ENV=production`, `PORT=4006`,
   `SESSION_COOKIE_DOMAIN=dirah.co.za`, and
   `VITE_PUBLIC_API_URL=https://api.dirah.co.za`.
