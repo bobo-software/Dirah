@@ -8,13 +8,20 @@ elif [ -n "${INFISICAL_TOKEN:-}" ]; then
   token=$INFISICAL_TOKEN
 fi
 
+# A Vite build executes third-party code, so fetch only the one public value it
+# needs instead of injecting every prod secret into the build. A build arg still
+# wins when Infisical has nothing for the key.
 if [ -n "$token" ] && [ -n "${INFISICAL_DOMAIN:-}" ] && [ -n "${INFISICAL_ENV:-}" ]; then
-  exec infisical run \
+  from_infisical=$(infisical secrets get VITE_PUBLIC_API_URL \
     --token="$token" \
     --domain="$INFISICAL_DOMAIN" \
     --env="$INFISICAL_ENV" \
-    -- sh ./scripts/vite-build.sh
+    --plain \
+    --silent)
+  if [ -n "$from_infisical" ]; then
+    VITE_PUBLIC_API_URL=$from_infisical
+    export VITE_PUBLIC_API_URL
+  fi
 fi
 
-echo "Infisical not configured; building with VITE_* build args."
 exec sh ./scripts/vite-build.sh

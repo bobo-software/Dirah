@@ -53,8 +53,12 @@ Both applications point at this repo and build from the repo root:
   and API hosts differ, so the OAuth callback on the API host needs the shared
   domain to set a refresh cookie the web origin sends. The API refuses to boot
   in production without it.
-- Web build: `VITE_PUBLIC_API_URL=https://api.dirah.co.za` (from Infisical
-  `prod` or the app's build args). Leave `VITE_API_URL` unset.
+- Web build: `VITE_PUBLIC_API_URL=https://api.dirah.co.za`. Delete
+  `VITE_API_URL` from that environment: the browser calls its own origin and
+  setting it brings CORS back.
+- Both values come from each app's Infisical `prod` environment; Coolify holds
+  only the three `INFISICAL_*` keys. [backend/INFISICAL.md](backend/INFISICAL.md)
+  lists the keys and the order to change them in.
 - Both containers must share a Docker network, and the API needs the network
   alias `backend`: nginx proxies to `http://backend:4006`.
 - Migrations are an explicit step from a checkout (`npm run db:migrate:sec`).
