@@ -1,5 +1,5 @@
 export type NodeKind = 'folder' | 'markdown' | 'asset';
-export type AssetMedia = 'image' | 'video' | 'audio';
+export type AssetMedia = 'image' | 'video' | 'audio' | 'model';
 
 export function pageKind(page: { kind?: string | null }): NodeKind {
   if (page.kind === 'folder') return 'folder';
@@ -9,12 +9,14 @@ export function pageKind(page: { kind?: string | null }): NodeKind {
 
 const VIDEO_EXT = new Set(['mp4', 'mov', 'webm', 'mkv']);
 const AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'ogg', 'flac', 'aac']);
+const MODEL_EXT = new Set(['glb', 'fbx', 'obj', 'blend']);
 
 /** An asset's media type from the extension its slug ends in (hero.png, clip.mp4). */
 export function assetMedia(page: { slug?: string | null }): AssetMedia {
   const ext = /\.([a-z0-9]+)$/.exec(page.slug ?? '')?.[1] ?? '';
   if (VIDEO_EXT.has(ext)) return 'video';
   if (AUDIO_EXT.has(ext)) return 'audio';
+  if (MODEL_EXT.has(ext)) return 'model';
   return 'image';
 }
 
@@ -26,7 +28,7 @@ export function kindGlyph(kind: NodeKind, page?: { slug?: string | null }): stri
   if (kind === 'folder') return '📁';
   if (kind === 'asset') {
     const media = assetMedia(page ?? {});
-    return media === 'video' ? '🎬' : media === 'audio' ? '🎵' : '🖼';
+    return media === 'video' ? '🎬' : media === 'audio' ? '🎵' : media === 'model' ? '🧊' : '🖼';
   }
   return 'MD';
 }

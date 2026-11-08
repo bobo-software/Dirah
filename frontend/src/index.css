@@ -10181,3 +10181,11 @@ label.ticket-menu-row {
     gap: 0.6rem;
   }
 }
+
+.asset-model-viewer {
+  display: block;
+  width: 100%;
+  height: min(70vh, 560px);
+  background: var(--input-bg);
+  border-radius: 6px;
+}

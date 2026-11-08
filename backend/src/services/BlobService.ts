@@ -123,17 +123,19 @@ export class BlobService {
     source: AsyncIterable<Buffer | Uint8Array | string>;
     maxBytes: number;
     headBytes: number;
-    sniff: (head: Buffer) => T | null;
+    sniff: (head: Buffer, filename?: string | null) => T | null;
+    /** Original file name, a hint for formats without magic bytes. */
+    filename?: string | null;
   }): Promise<{ blob: PublicBlob; sniffed: T }> {
     const metered = await meterStream(input.source, { headBytes: input.headBytes, maxBytes: input.maxBytes });
     if (!metered.head.length) {
       throw new HttpError('Empty blob', 400, 'EMPTY_BLOB');
     }
-    const sniffed = input.sniff(metered.head);
+    const sniffed = input.sniff(metered.head, input.filename);
     if (!sniffed) {
       metered.stream.destroy();
       throw new HttpError(
-        'Only image (PNG, JPEG, GIF, WebP, HEIC, AVIF), video (MP4, MOV, WebM, MKV) or audio (MP3, WAV, M4A, OGG, FLAC, AAC) files can be uploaded',
+        'Only image (PNG, JPEG, GIF, WebP, HEIC, AVIF), video (MP4, MOV, WebM, MKV), audio (MP3, WAV, M4A, OGG, FLAC, AAC) or 3D model (GLB, FBX, OBJ, .blend) files can be uploaded',
         415,
         'UNSUPPORTED_MEDIA_TYPE'
       );

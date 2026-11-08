@@ -15,6 +15,7 @@
     "@codemirror/lang-markdown": "^6.3.3",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.1",
+    "@google/model-viewer": "^4.4.0",
     "@tiptap/core": "^3.31.4",
     "@tiptap/extension-list": "^3.31.4",
     "@tiptap/extension-table": "^3.31.4",

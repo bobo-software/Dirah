@@ -17,7 +17,7 @@ export type AssetRole = (typeof ASSET_ROLES)[number];
 export const MAX_ASSET_BYTES = 500 * 1024 * 1024;
 
 /** File types the media library accepts; the API checks the bytes too. */
-export const ASSET_ACCEPT = 'image/*,video/*,audio/*,.heic,.mkv';
+export const ASSET_ACCEPT = 'image/*,video/*,audio/*,.heic,.mkv,.glb,.fbx,.obj,.blend';
 
 export type SignedLink = { url: string; expiresAt: string };
 
@@ -34,7 +34,7 @@ export type MediaAsset = {
   title: string;
   slug: string | null;
   parentId: string | null;
-  mediaType: 'image' | 'video' | 'audio';
+  mediaType: 'image' | 'video' | 'audio' | 'model';
   mime: string;
   ext: string;
   byteSize: number;
@@ -43,6 +43,11 @@ export type MediaAsset = {
   durationMs: number | null;
   fps: number | null;
   hasAudio: boolean | null;
+  vertexCount: number | null;
+  triangleCount: number | null;
+  /** Model size in metres. */
+  bbox: { x: number; y: number; z: number } | null;
+  modelInfo: { objects?: number; rigged?: boolean; animations?: string[]; materials?: number } | null;
   role: AssetRole;
   tags: string[];
   description: string;

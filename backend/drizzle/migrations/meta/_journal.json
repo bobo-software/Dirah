@@ -246,6 +246,13 @@
       "when": 1756539400000,
       "tag": "0034_media_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1756539500000,
+      "tag": "0035_model_assets_and_uploads",
+      "breakpoints": true
     }
   ]
 }

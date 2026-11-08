@@ -37,6 +37,24 @@ function makeClip(): Buffer {
   return body;
 }
 
+function hasBlender(): boolean {
+  try {
+    execFileSync('blender', ['--version'], { stdio: 'ignore', timeout: 60_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Runs a Blender Python snippet in the background (a clean factory scene). */
+function blenderPy(code: string): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dirah-blender-test-'));
+  const script = path.join(dir, 'make.py');
+  fs.writeFileSync(script, code);
+  execFileSync('blender', ['-b', '--factory-startup', '-P', script], { stdio: 'ignore', timeout: 120_000 });
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 function parseMcpBody(body: unknown): Record<string, unknown> {
   if (typeof body === 'object' && body !== null) return body as Record<string, unknown>;
   const text = String(body);
@@ -66,8 +84,8 @@ describe('media assets API', () => {
     workspaceId = res.body.data.workspace.id;
   });
 
-  async function waitReady(id: string) {
-    for (let i = 0; i < 100; i += 1) {
+  async function waitReady(id: string, attempts = 100) {
+    for (let i = 0; i < attempts; i += 1) {
       const res = await request(app).get(`/api/assets/${id}`).set(auth());
       if (res.body.data.asset.status !== 'processing') return res.body.data.asset;
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -192,5 +210,122 @@ describe('media assets API', () => {
 
     const readFile = parseMcpBody((await mcp('read_file', { path: 'test-pattern.mp4' })).text);
     expect((readFile.result as { content: Array<{ text: string }> }).content[0].text).toContain('IS_ASSET');
+  });
+  describe('MCP uploads and 3D models', () => {
+    let secret: string;
+    const mcpCall = (name: string, args: Record<string, unknown>) =>
+      request(app)
+        .post('/mcp')
+        .set('Content-Type', 'application/json')
+        .set('Accept', 'application/json, text/event-stream')
+        .set('Authorization', `Bearer ${secret}`)
+        .send({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+    const toolData = async (name: string, args: Record<string, unknown>) => {
+      const body = parseMcpBody((await mcpCall(name, args)).text);
+      const result = body.result as { content: Array<{ type: string; text?: string; mimeType?: string }>; isError?: boolean };
+      return { payload: JSON.parse(result.content[0].text!), content: result.content };
+    };
+
+    beforeAll(async () => {
+      if (!dbReady) return;
+      const tokenRes = await request(app).post('/api/mcp/tokens').set(auth()).send({ name: 'upload-agent' });
+      secret = tokenRes.body.data.token.secret;
+      await request(app)
+        .put(`/api/mcp/tokens/${tokenRes.body.data.token.id}/access`)
+        .set(auth())
+        .send({ workspaces: [{ workspaceId, canWrite: true }] });
+    });
+
+    it('upload_asset stores an inline base64 file into a new folder', async () => {
+      if (!dbReady) return;
+      const png = await sharp({ create: { width: 320, height: 200, channels: 3, background: '#33aa66' } }).png().toBuffer();
+      const { payload } = await toolData('upload_asset', {
+        filename: 'Green Card.png',
+        data: png.toString('base64'),
+        folder: 'uploads/inline',
+        role: 'style',
+        tags: ['inline'],
+      });
+      expect(payload.success).toBe(true);
+      expect(payload.data).toMatchObject({ path: 'uploads/inline/green-card.png', mediaType: 'image', role: 'style' });
+      const ready = await waitReady(payload.data.id);
+      expect(ready).toMatchObject({ status: 'ready', width: 320, height: 200 });
+    });
+
+    it('upload_asset refuses payloads over the inline limit', async () => {
+      if (!dbReady) return;
+      const big = Buffer.alloc(11 * 1024 * 1024, 1).toString('base64');
+      const { payload } = await toolData('upload_asset', { filename: 'big.png', data: big });
+      expect(payload).toMatchObject({ success: false, error: 'INLINE_TOO_LARGE' });
+    });
+
+    it('create_asset_upload gives a single-use link that streams a raw file', async () => {
+      if (!dbReady) return;
+      const { payload } = await toolData('create_asset_upload', { filename: 'raw.png', folder: 'uploads/big', tags: ['link'] });
+      expect(payload.data.method).toBe('PUT');
+      const link = new URL(payload.data.uploadUrl);
+      const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#aa3366' } }).png().toBuffer();
+      const put = await request(app).put(link.pathname).set('Content-Type', 'application/octet-stream').send(png);
+      expect(put.status).toBe(201);
+      expect(put.body.data.asset).toMatchObject({ path: 'uploads/big/raw.png', tags: ['link'] });
+      const again = await request(app).put(link.pathname).set('Content-Type', 'application/octet-stream').send(png);
+      expect(again.status).toBe(410);
+      const forged = await request(app).put(link.pathname.replace(/.$/, 'A')).send(png);
+      expect(forged.status).toBe(403);
+    });
+
+    it.skipIf(!hasBlender())('renders a turnaround for an uploaded GLB and reports its geometry', async () => {
+      if (!dbReady) return;
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dirah-glb-'));
+      const glb = path.join(dir, 'crate.glb');
+      blenderPy(`import bpy
+for o in list(bpy.data.objects): bpy.data.objects.remove(o)
+bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.5))
+bpy.ops.export_scene.gltf(filepath=${JSON.stringify(glb)}, export_format='GLB')
+`);
+      const { payload } = await toolData('upload_asset', {
+        filename: 'crate.glb',
+        data: fs.readFileSync(glb).toString('base64'),
+        folder: 'uploads/models',
+        role: 'prop',
+      });
+      fs.rmSync(dir, { recursive: true, force: true });
+      expect(payload.data.mediaType).toBe('model');
+      const ready = await waitReady(payload.data.id, 1200);
+      expect(ready).toMatchObject({ status: 'ready', mediaType: 'model', triangleCount: 12 });
+      expect(ready.bbox.z).toBeCloseTo(1, 2);
+
+      const got = await toolData('get_asset', { path: 'uploads/models/crate.glb' });
+      expect(got.payload.data.preview.kind).toBe('turnaround');
+      expect(got.payload.data.turnaroundUrl).toContain('/api/media/');
+      expect(got.content[1]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
+      const urls = await toolData('get_asset_urls', { assets: [{ path: 'uploads/models/crate.glb' }] });
+      expect(new URL(urls.payload.data.assets[0].referenceUrl).pathname).toBe(new URL(got.payload.data.turnaroundUrl).pathname);
+    }, 180_000);
+
+    it.skipIf(!hasBlender())('never runs Python embedded in an uploaded .blend', async () => {
+      if (!dbReady) return;
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dirah-blend-'));
+      const blend = path.join(dir, 'trap.blend');
+      const marker = path.join(dir, 'PWNED');
+      blenderPy(`import bpy
+for o in list(bpy.data.objects): bpy.data.objects.remove(o)
+bpy.ops.mesh.primitive_monkey_add()
+t = bpy.data.texts.new('autorun.py')
+t.write("open('${marker}', 'w').write('ran')\\n")
+t.use_module = True
+bpy.ops.wm.save_as_mainfile(filepath=${JSON.stringify(blend)})
+`);
+      const { payload } = await toolData('upload_asset', {
+        filename: 'trap.blend',
+        data: fs.readFileSync(blend).toString('base64'),
+        folder: 'uploads/models',
+      });
+      const ready = await waitReady(payload.data.id, 1200);
+      expect(ready.status).toBe('ready');
+      expect(ready.triangleCount).toBeGreaterThan(900);
+      expect(fs.existsSync(marker)).toBe(false);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }, 180_000);
   });
 });

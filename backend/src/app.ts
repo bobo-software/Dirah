@@ -85,7 +85,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   });
   // OAuth discovery/registration/token endpoints get their own open CORS policy (mcpOAuth.routes).
   app.use((req, res, next) => (MCP_OAUTH_PUBLIC_PATHS.test(req.path) ? next() : appCors(req, res, next)));
-  app.use(express.json({ limit: '1.5mb' }));
+  // /mcp gets its own, larger JSON limit (inline base64 uploads); everything else stays small.
+  const appJson = express.json({ limit: '1.5mb' });
+  app.use((req, res, next) => (req.path === '/mcp' ? next() : appJson(req, res, next)));
   app.use(express.urlencoded({ extended: true }));
   app.use(requestTiming);
 
@@ -130,7 +132,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   const mediaProcessingService = new MediaProcessingService(
     db,
     blobService,
-    { ffmpeg: env.media.ffmpegPath, ffprobe: env.media.ffprobePath },
+    {
+      ffmpeg: env.media.ffmpegPath,
+      ffprobe: env.media.ffprobePath,
+      blender: env.media.blenderPath,
+      modelConcurrency: env.media.modelConcurrency,
+    },
     env.media.processingConcurrency
   );
   const assetService = new AssetService(
@@ -143,9 +150,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
     { maxBytes: env.media.maxBytes }
   );
   const blobsMcpService = new BlobsMcpService(blobService, docsMcpService, assetService);
-  const assetsMcpService = new AssetsMcpService(assetService, docsMcpService);
+  const assetsMcpService = new AssetsMcpService(assetService, docsMcpService, mediaUrlService, {
+    inlineMaxBytes: env.media.inlineMaxBytes,
+    uploadLinkTtlSeconds: env.media.uploadLinkTtlSeconds,
+  });
   if (env.nodeEnv !== 'test') {
     void mediaProcessingService.resumePending().catch((error) => console.warn('Media processing resume skipped', error));
+    // Spent and expired MCP upload links.
+    setInterval(() => void assetService.purgeUploadIntents().catch(() => undefined), 3600_000).unref();
   }
   const apiPublicUrl = env.apiPublicUrl;
   const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl, mcpTokenService);
@@ -187,7 +199,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       noteService,
       taskListService,
       ticketService,
-      { assets: assetService, urls: mediaUrlService }
+      { assets: assetService, urls: mediaUrlService, mcp: assetsMcpService }
     )
   );
 
@@ -225,6 +237,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   );
   app.all(
     '/mcp',
+    express.json({ limit: env.mcpMaxBody }),
     createDocsMcpAuthMiddleware({
       tokens: mcpTokenService,
       apiPublicUrl,

@@ -102,11 +102,11 @@ export function registerAssetTools(server: PgMcpServerHost, service: AssetsMcpSe
     {
       title: 'Search media assets',
       description:
-        'Find reference media (images, video, audio) for generation. Matches title, description, tags, prompt hints and generation prompts. Filter by mediaType, role (character, style, location, prop, motion, audio, storyboard, generated, other), tags (all must match) and folder (path prefix; includes subfolders). Returns paths to pass to get_asset or get_asset_urls.',
+        'Find reference media (images, video, audio, 3D models) for generation. Matches title, description, tags, prompt hints and generation prompts. Filter by mediaType, role (character, style, location, prop, motion, audio, storyboard, generated, other), tags (all must match) and folder (path prefix; includes subfolders). Returns paths to pass to get_asset or get_asset_urls.',
       inputSchema: z.object({
         ...workspaceFields,
         query: z.string().max(500).optional(),
-        mediaType: z.enum(['image', 'video', 'audio']).optional(),
+        mediaType: z.enum(['image', 'video', 'audio', 'model']).optional(),
         role: z.enum(ASSET_ROLES).optional(),
         tags: z.array(z.string().max(100)).max(16).optional(),
         folder: z.string().max(1_000).optional(),
@@ -175,7 +175,7 @@ export function registerAssetTools(server: PgMcpServerHost, service: AssetsMcpSe
     {
       title: 'Import media asset',
       description:
-        'Save an image, video or audio file from a public https URL into the workspace, typically a generator\'s output. Creates missing folders in folder (e.g. generated/scene-03). Record provenance in generation (model, prompt, sourceAssetIds of the references used). Thumbnails and previews are made in the background.',
+        'Save an image, video, audio or 3D model file from a public https URL into the workspace, typically a generator\'s output. For a file on your own machine use upload_asset (up to 10 MB) or create_asset_upload (any size). Creates missing folders in folder (e.g. generated/scene-03). Record provenance in generation (model, prompt, sourceAssetIds of the references used). Thumbnails and previews are made in the background.',
       inputSchema: z.object({
         ...workspaceFields,
         url: z.string().url().max(2_000),
@@ -193,6 +193,50 @@ export function registerAssetTools(server: PgMcpServerHost, service: AssetsMcpSe
           title,
           metadata: { ...metadata, role: (metadata.role as string | undefined) ?? 'generated' },
         });
+      })) as never
+  );
+
+  server.registerTool(
+    'upload_asset',
+    {
+      title: 'Upload media asset (inline)',
+      description:
+        'Store a local file you have as bytes: image, video, audio or 3D model (GLB, FBX, OBJ, .blend). Send it base64-encoded in data, up to 10 MB decoded. For bigger files (most video), call create_asset_upload instead and PUT the file to the link. Creates missing folders in folder. Previews (including a 3D turnaround) are made in the background.',
+      inputSchema: z.object({
+        ...workspaceFields,
+        filename: z.string().min(1).max(200).describe('Original file name with extension, e.g. sbu-turnaround.png or sbu.glb'),
+        data: z.string().min(1).describe('File contents, base64 (a data: URL prefix is allowed)'),
+        folder: z.string().max(1_000).optional().describe('Folder path, e.g. corner-stories/characters/sbu; omit for the root'),
+        ...metadataFields,
+      }),
+    },
+    (async (args: { workspaceId?: string; workspace?: string; filename: string; data: string; folder?: string; title?: string } & Record<string, unknown>) =>
+      inWorkspace('upload_asset', args, (workspaceId) => {
+        const auth = currentDocsAuth();
+        const { filename, data, folder, title, workspaceId: _w, workspace: _ws, ...metadata } = args;
+        return service.uploadInline(auth.userId, auth.tokenId, workspaceId, { filename, data, folder, title, metadata });
+      })) as never
+  );
+
+  server.registerTool(
+    'create_asset_upload',
+    {
+      title: 'Create media upload link',
+      description:
+        'Get a single-use https link to upload a local file of any size (video, large 3D models) without base64. Then send the raw bytes with PUT, e.g. the returned curl command: curl --fail -T file.mp4 \'<uploadUrl>\'. The PUT response is the stored asset. The link expires in 15 minutes and works once.',
+      inputSchema: z.object({
+        ...workspaceFields,
+        filename: z.string().min(1).max(200).describe('File name with extension, e.g. scene-03.mp4'),
+        folder: z.string().max(1_000).optional(),
+        byteSize: z.number().int().min(1).optional().describe('File size, to fail early when it is too large'),
+        ...metadataFields,
+      }),
+    },
+    (async (args: { workspaceId?: string; workspace?: string; filename: string; folder?: string; title?: string; byteSize?: number } & Record<string, unknown>) =>
+      inWorkspace('create_asset_upload', args, (workspaceId) => {
+        const auth = currentDocsAuth();
+        const { filename, folder, title, byteSize, workspaceId: _w, workspace: _ws, ...metadata } = args;
+        return service.createUpload(auth.userId, auth.tokenId, workspaceId, { filename, folder, title, byteSize, metadata });
       })) as never
   );
 

@@ -13,6 +13,7 @@ import {
 import type { PublicPage } from '../api/client';
 import { EMPTY_PAGES, useAuthStore, usePageStore } from '../stores/StoresIndex';
 import { Button } from '../components/buttons/Button';
+import { ModelViewer } from '../components/assets/ModelViewer';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 
 /** The path agents use for a node: folder slugs, then the asset's slug (refs/characters/hero.png). */
@@ -142,9 +143,14 @@ export function AssetPage() {
     setAsset(await reprocessAsset(accessToken, asset.id));
   }
 
+  const isModel = asset.mediaType === 'model';
   const facts = [
-    asset.mediaType,
-    asset.width && asset.height ? `${asset.width}×${asset.height}` : null,
+    isModel ? '3D model' : asset.mediaType,
+    !isModel && asset.width && asset.height ? `${asset.width}×${asset.height}` : null,
+    isModel && asset.triangleCount != null ? `${asset.triangleCount.toLocaleString()} triangles` : null,
+    isModel && asset.bbox ? `${asset.bbox.x.toFixed(2)}×${asset.bbox.y.toFixed(2)}×${asset.bbox.z.toFixed(2)} m` : null,
+    isModel && asset.modelInfo?.rigged ? 'rigged' : null,
+    isModel && asset.modelInfo?.animations?.length ? `${asset.modelInfo.animations.length} animations` : null,
     asset.durationMs ? formatDuration(asset.durationMs) : null,
     asset.fps ? `${asset.fps} fps` : null,
     asset.mediaType === 'video' && asset.hasAudio === false ? 'no audio' : null,
@@ -169,6 +175,14 @@ export function AssetPage() {
           <a href={asset.links.url.url} target="_blank" rel="noreferrer">
             <img src={asset.links.previewUrl?.url ?? asset.links.url.url} alt={asset.description || asset.title} />
           </a>
+        ) : asset.mediaType === 'model' ? (
+          asset.ext === 'glb' ? (
+            <ModelViewer src={asset.links.url.url} poster={asset.links.thumbnailUrl?.url} alt={asset.description || asset.title} />
+          ) : asset.links.previewUrl ? (
+            <img src={asset.links.previewUrl.url} alt={`${asset.title} turnaround`} />
+          ) : (
+            <p className="muted">No preview yet for this {asset.ext.toUpperCase()} file.</p>
+          )
         ) : asset.mediaType === 'video' ? (
           <video controls preload="metadata" poster={asset.links.thumbnailUrl?.url} src={asset.links.url.url} />
         ) : (
@@ -178,6 +192,8 @@ export function AssetPage() {
           </>
         )}
       </div>
+
+      {asset.status === 'ready' && asset.error ? <p className="muted asset-failed">{asset.error}</p> : null}
 
       {asset.status === 'failed' ? (
         <p className="error asset-failed">
@@ -197,6 +213,14 @@ export function AssetPage() {
         <Button type="button" variant="link" onClick={() => copy('link', asset.links.url.url)} title={`Expires ${new Date(asset.links.url.expiresAt).toLocaleTimeString()}`}>
           {copied === 'link' ? 'Copied' : 'Copy temporary link'}
         </Button>
+        <a className="linkish" href={asset.links.url.url} download={asset.slug ?? undefined}>
+          Download
+        </a>
+        {asset.mediaType === 'model' && asset.ext === 'glb' && asset.links.previewUrl ? (
+          <a className="linkish" href={asset.links.previewUrl.url} target="_blank" rel="noreferrer">
+            Turnaround sheet
+          </a>
+        ) : null}
         {asset.mediaType === 'video' && asset.links.previewUrl ? (
           <a className="linkish" href={asset.links.previewUrl.url} target="_blank" rel="noreferrer">
             Contact sheet

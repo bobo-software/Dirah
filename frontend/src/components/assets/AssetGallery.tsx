@@ -9,6 +9,7 @@ function MediaBadge({ asset }: { asset: MediaAsset }) {
   if (asset.status === 'failed') return <span className="asset-badge error">No preview</span>;
   if (asset.mediaType === 'video') return <span className="asset-badge">▶ {formatDuration(asset.durationMs)}</span>;
   if (asset.mediaType === 'audio') return <span className="asset-badge">♪ {formatDuration(asset.durationMs)}</span>;
+  if (asset.mediaType === 'model') return <span className="asset-badge">3D · {asset.ext.toUpperCase()}</span>;
   return null;
 }
 
@@ -106,7 +107,7 @@ export function AssetGallery({
                     <img src={asset.links.thumbnailUrl.url} alt="" loading="lazy" />
                   ) : (
                     <span className="asset-thumb-glyph" aria-hidden="true">
-                      {asset.mediaType === 'video' ? '🎬' : asset.mediaType === 'audio' ? '🎵' : '🖼'}
+                      {asset.mediaType === 'video' ? '🎬' : asset.mediaType === 'audio' ? '🎵' : asset.mediaType === 'model' ? '🧊' : '🖼'}
                     </span>
                   )}
                   <MediaBadge asset={asset} />
