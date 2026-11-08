@@ -20,13 +20,14 @@ function toContent(image: McpImage) {
     mimeType: image.mimeType,
     byteSize: image.byteSize,
     viewable,
+    ...(image.previewMimeType ? { preview: 'Shown as a resized JPEG preview of the original.' } : {}),
     ...(image.reason ? { reason: image.reason, message: REASON_TEXT[image.reason] } : {}),
   };
   const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
     { type: 'text', text: JSON.stringify({ success: true, data }, null, 2) },
   ];
   if (image.body) {
-    content.push({ type: 'image', data: image.body.toString('base64'), mimeType: image.mimeType });
+    content.push({ type: 'image', data: image.body.toString('base64'), mimeType: image.previewMimeType ?? image.mimeType });
   }
   return { content };
 }

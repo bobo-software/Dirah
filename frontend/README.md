@@ -49,6 +49,7 @@ There is no test script in this package. API behaviour is covered by Vitest in `
 | --- | --- | --- |
 | `VITE_PUBLIC_API_URL` | Optional | API origin used in MCP connector URLs, e.g. `https://api.dirah.co.za`. Unset means the page origin (same-origin installs). |
 | `VITE_API_URL` | Rarely | Override when the API is on another origin. Unset means this origin. |
+| `VITE_SITE_URL` | Optional | Public address of the web app, used for the canonical link and the preview image in the generated head. Unset keeps those relative, and the app rewrites them to the origin the browser is on. |
 
 That is the only client env var. Auth, OAuth, SMTP, and AI keys stay on the API.
 
@@ -88,6 +89,7 @@ src/
   pages/          route screens, editor, admin, legal
   components/     sidebar, modals, tables, chrome
   layout/         AppFrame and AdminShell
+  seo/            page titles, descriptions, canonical links and social tags
   stores/data/    Zustand: auth, workspaces, pages, markdown, members, MCP, AI
   stores/state/   editor view (split, preview)
   crypto/         workspace encryption in the browser
@@ -118,13 +120,31 @@ User register and login: `POST /api/auth/register` and `/login`. Session refresh
 
 OAuth start URLs come from `GET /api/auth/oauth/status`. The API redirects back to `/oauth` on this origin.
 
+## Search engines and link previews
+
+Every page has a title, a description, a canonical link and the Open Graph and Twitter card tags. They live in `src/seo/`:
+
+- `copy.ts` holds the wording. The API renders the same wording for crawlers that do not run JavaScript: keep the two in step.
+- `routes.ts` holds the title, description and canonical path of each public page.
+- `Seo.tsx` writes the tags of the route being viewed. A page puts `<Seo {...ROUTE_META['/privacy']} />` in it. Pages behind the sign-in wall use `APP_META`, which keeps them out of the index.
+
+The head of `index.html` is generated at build time (`plugins/seoHead.ts`) so a crawler that does not run JavaScript still sees the site name, the description and the preview image.
+
+A link pasted into a chat is fetched by a crawler that never runs JavaScript, so the API renders the public pages (`/`, the legal pages and a shared `/s/:token` link) with the tags of the page they point at. nginx sends those paths to the API; everything behind the sign-in wall stays the static shell. The API also serves `robots.txt` and `sitemap.xml`, both built from the request origin so they are right on any install.
+
+`public/og.png` is the preview image (1200x630). Rebuild it after changing the wordmark or the palette:
+
+```bash
+sh scripts/make-og-image.sh
+```
+
 ## Docker
 
 `Dockerfile` builds static files, then nginx serves them. Build from the repo root so the workspace lockfile is available.
 
 - Build arg `VITE_PUBLIC_API_URL` is optional. If set, it is the API origin shown to users (MCP connectors); if unset, the client uses the page origin at runtime, which is what a same-origin self-hosted install wants. The hosted build sets it explicitly. The browser itself calls its own origin; nginx proxies `/api`, `/mcp` and the OAuth discovery paths to `backend:4006` on the compose network.
 - nginx listens on **port 83**. The healthcheck is `GET http://127.0.0.1:83/health` and returns `ok`.
-- `nginx.conf` is an SPA: unknown paths fall through to `index.html`. Static assets (css, js, images, fonts) are cached for six months. `index.html` is sent with `Cache-Control: no-cache`.
+- `nginx.conf` is an SPA: unknown paths fall through to `index.html`. Static assets (css, js, images, fonts) are cached for six months. `index.html` is sent with `Cache-Control: no-cache`. The public pages, the shared links, `robots.txt` and `sitemap.xml` are rendered by the API on `backend:4006` so a crawler sees the tags of the page; if the API is down, nginx serves the static shell instead.
 
 ```bash
 docker build -f frontend/Dockerfile \

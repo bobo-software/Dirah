@@ -98,6 +98,19 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/** Origin of a service the API calls over the internal network, such as the
+    web container. Plain HTTP is allowed here: the hop never leaves the host. */
+function internalOrigin(raw: string | undefined): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return '';
+  try {
+    const url = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`);
+    return url.origin;
+  } catch {
+    return '';
+  }
+}
+
 export function assertProductionSecurity(config: ProductionSecurityConfig): void {
   if (config.nodeEnv !== 'production') return;
 
@@ -202,6 +215,9 @@ const apiPublicUrl =
   publicOrigin(apiPublicRaw, allowInsecureHttp) ??
   (apiPublicRaw || `http://localhost:${port}`);
 const sessionCookieDomain = (process.env.SESSION_COOKIE_DOMAIN ?? '').trim().replace(/^\./, '');
+/** Where the API fetches the built web app from when it renders a page for a
+    crawler. Falls back to APP_PUBLIC_URL when it is not set. */
+const webInternalUrl = internalOrigin(process.env.WEB_INTERNAL_URL);
 const secureCookies = nodeEnv === 'production' && isHttpsUrl(apiPublicUrl);
 const database = resolveDatabaseConfig(nodeEnv, process.env);
 const liveDatabase = resolveLiveDatabaseConfig(process.env);
@@ -216,6 +232,7 @@ export const env = {
   appPublicUrl,
   apiPublicUrl,
   sessionCookieDomain,
+  webInternalUrl,
   smtp: {
     host: (process.env.SMTP_HOST ?? '').trim(),
     port: Number(process.env.SMTP_PORT ?? 465),
@@ -230,6 +247,19 @@ export const env = {
   systemAdminEmail: (dotenvValues.SYSTEM_ADMIN_EMAIL ?? process.env.SYSTEM_ADMIN_EMAIL ?? '').trim(),
   systemAdminPassword: dotenvValues.SYSTEM_ADMIN_PASSWORD || process.env.SYSTEM_ADMIN_PASSWORD || '',
   blobDir: path.resolve(process.env.BLOB_DIR ?? 'uploads'),
+  media: {
+    /** Largest media asset upload or import, in bytes. */
+    maxBytes: positiveInt(process.env.MEDIA_MAX_BYTES, 500 * 1024 * 1024),
+    /** Signs temporary /api/media links. Derived from JWT_SECRET when unset. */
+    urlSecret: (process.env.MEDIA_URL_SECRET ?? '').trim(),
+    /** Default and longest lifetime of a temporary media link, in seconds. */
+    urlTtlSeconds: positiveInt(process.env.MEDIA_URL_TTL_SECONDS, 3600),
+    urlMaxTtlSeconds: positiveInt(process.env.MEDIA_URL_MAX_TTL_SECONDS, 24 * 3600),
+    /** Concurrent thumbnail/preview jobs. */
+    processingConcurrency: positiveInt(process.env.MEDIA_PROCESSING_CONCURRENCY, 2),
+    ffmpegPath: (process.env.FFMPEG_PATH ?? 'ffmpeg').trim(),
+    ffprobePath: (process.env.FFPROBE_PATH ?? 'ffprobe').trim(),
+  },
   ai: {
     apiKey: process.env.AI_API_KEY ?? '',
     baseUrl: (process.env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, ''),

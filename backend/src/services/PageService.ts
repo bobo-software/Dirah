@@ -16,7 +16,7 @@ import { type AuthService, type Database } from './AuthService';
 export const PAGE_STATUSES = ['', 'todo', 'doing', 'done'] as const;
 export type PageStatus = (typeof PAGE_STATUSES)[number];
 
-export const PAGE_KINDS = ['folder', 'markdown'] as const;
+export const PAGE_KINDS = ['folder', 'markdown', 'asset'] as const;
 export type PageKind = (typeof PAGE_KINDS)[number];
 
 export const MAX_MARKDOWN_BYTES = 1_000_000;
@@ -44,6 +44,8 @@ export interface PublicPage {
   slug: string | null;
   favorited: boolean;
   createdAt: Date;
+  /** Last change to the page. Only set where it is read. */
+  updatedAt?: Date;
   excerpt: string;
 }
 
@@ -99,15 +101,30 @@ function asKind(value: string): PageKind {
   return PAGE_KINDS.includes(value as PageKind) ? (value as PageKind) : 'markdown';
 }
 
+/** An asset's slug carries its file extension: `hero-shot.png`. */
+function assetSlugParts(slug: string | null): { base: string; ext: string | undefined } {
+  const match = /^(.*)\.([a-z0-9]{1,5})$/.exec(slug ?? '');
+  return match ? { base: match[1], ext: match[2] } : { base: slug ?? '', ext: undefined };
+}
+
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
 }
 
+type PurgeListener = (pageIds: string[]) => Promise<void>;
+
 export class PageService {
+  private readonly purgeListeners: PurgeListener[] = [];
+
   constructor(
     private readonly database: Database,
     private readonly auth: AuthService
   ) {}
+
+  /** Runs before pages are permanently deleted, while their rows (and dependants) still exist. */
+  onBeforePurge(listener: PurgeListener): void {
+    this.purgeListeners.push(listener);
+  }
 
   async isWorkspaceEncrypted(workspaceId: string): Promise<boolean> {
     const [row] = await this.database
@@ -212,7 +229,8 @@ export class PageService {
   ): Promise<PublicPage> {
     await this.auth.requireEditor(userId, workspaceId);
     const title = (input.title ?? 'Untitled').trim() || 'Untitled';
-    if (input.kind === 'page') {
+    if (input.kind === 'page' || input.kind === 'asset') {
+      // Asset pages are only made by createAsset, together with their media row.
       throw new HttpError('Invalid page kind', 400, 'INVALID_KIND');
     }
     const kind = input.kind ?? 'markdown';
@@ -269,6 +287,40 @@ export class PageService {
     }
   }
 
+  /**
+   * Creates an asset page (a media file in the tree) and, in the same
+   * transaction, its media row through `insertAsset`. The caller has checked
+   * that `userId` can edit the workspace.
+   */
+  async createAsset(
+    userId: string,
+    workspaceId: string,
+    input: { title: string; parentId?: string | null; ext: string },
+    insertAsset: (tx: Parameters<Parameters<Database['transaction']>[0]>[0], pageId: string) => Promise<void>
+  ): Promise<PublicPage> {
+    await this.auth.requireEditor(userId, workspaceId);
+    const title = input.title.trim() || 'Untitled';
+    await this.assertParentInWorkspace(workspaceId, input.parentId);
+    const position = await this.nextPosition(workspaceId, input.parentId ?? null);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const slug = await this.allocateSlug(workspaceId, input.parentId ?? null, title, undefined, input.ext);
+      try {
+        const page = await this.database.transaction(async (tx) => {
+          const [created] = await tx
+            .insert(pages)
+            .values({ workspaceId, title, parentId: input.parentId ?? null, position, kind: 'asset', slug })
+            .returning(pageColumns);
+          await insertAsset(tx, created.id);
+          return created;
+        });
+        return this.toPublic(page, false);
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
+    }
+    throw new HttpError('A sibling already uses that slug', 409, 'SLUG_TAKEN');
+  }
+
   async patch(
     userId: string,
     pageId: string,
@@ -298,11 +350,14 @@ export class PageService {
     const status = input.status === undefined ? page.status : input.status;
     let slug = page.slug;
     if (input.slug !== undefined || parentChanged) {
+      const ext = page.kind === 'asset' ? assetSlugParts(page.slug).ext : undefined;
+      const desired = ext && input.slug ? input.slug.replace(new RegExp(`\\.${ext}$`, 'i'), '') : input.slug;
       slug = await this.allocateSlug(
         page.workspaceId,
         parentId,
-        input.slug || title,
-        pageId
+        desired || (input.slug === undefined && ext ? assetSlugParts(page.slug).base : title),
+        pageId,
+        ext
       );
     }
     try {
@@ -349,7 +404,14 @@ export class PageService {
         parentId = null;
       }
     }
-    const slug = await this.allocateSlug(page.workspaceId, parentId, page.slug || page.title, pageId);
+    const ext = page.kind === 'asset' ? assetSlugParts(page.slug).ext : undefined;
+    const slug = await this.allocateSlug(
+      page.workspaceId,
+      parentId,
+      (ext ? assetSlugParts(page.slug).base : page.slug) || page.title,
+      pageId,
+      ext
+    );
     const [restored] = await this.database
       .update(pages)
       .set({ deletedAt: null, parentId, slug, updatedAt: new Date() })
@@ -364,6 +426,7 @@ export class PageService {
       throw new HttpError('Trash the page before permanently deleting it', 400, 'NOT_TRASHED');
     }
     const ids = await this.descendantIds(page.workspaceId, pageId, true);
+    for (const listener of this.purgeListeners) await listener(ids);
     await this.database.delete(pages).where(inArray(pages.id, ids));
     return ids;
   }
@@ -618,8 +681,8 @@ export class PageService {
     if (!parent || parent.workspaceId !== workspaceId || parent.deletedAt) {
       throw new HttpError('Parent page not found', 400, 'INVALID_PARENT');
     }
-    if (asKind(parent.kind) === 'markdown') {
-      throw new HttpError('Markdown documents cannot have children', 400, 'INVALID_PARENT');
+    if (asKind(parent.kind) !== 'folder') {
+      throw new HttpError('Only folders can have children', 400, 'INVALID_PARENT');
     }
   }
 
@@ -627,9 +690,13 @@ export class PageService {
     workspaceId: string,
     parentId: string | null,
     desiredRaw: string,
-    excludeId?: string
+    excludeId?: string,
+    /** Asset file extension; the slug becomes `base.ext`. */
+    ext?: string
   ): Promise<string> {
-    const base = slugify(desiredRaw);
+    const stem = slugify(desiredRaw);
+    const withExt = (value: string) => (ext ? `${value}.${ext}` : value);
+    const base = withExt(stem);
     const siblings = await this.database
       .select({ id: pages.id, slug: pages.slug })
       .from(pages)
@@ -645,7 +712,7 @@ export class PageService {
     );
     if (!taken.has(base)) return base;
     for (let i = 2; i < 500; i += 1) {
-      const candidate = `${base.slice(0, Math.max(1, 80 - String(i).length - 1))}-${i}`;
+      const candidate = withExt(`${stem.slice(0, Math.max(1, 80 - String(i).length - 1))}-${i}`);
       if (!taken.has(candidate)) return candidate;
     }
     throw new HttpError('Could not allocate a unique slug', 409, 'SLUG_TAKEN');

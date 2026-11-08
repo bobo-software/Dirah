@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/StoresIndex';
 import { readReturnTo } from '../utils/returnTo';
 import { BrandLink, OAuthButtons, PasswordField, ThemeToggle } from '../components/ComponentsIndex';
 import { Button } from '../components/buttons/Button';
+import { ROUTE_META, Seo } from '../seo/index';
 
 export function LoginPage() {
   const user = useAuthStore((state) => state.user);
@@ -51,6 +52,7 @@ export function LoginPage() {
 
   return (
     <div className="auth-shell">
+      <Seo {...ROUTE_META['/login']} />
       <main className="auth-card login-card">
         <div className="auth-card-corner">
           <ThemeToggle />

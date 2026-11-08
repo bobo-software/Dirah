@@ -2,6 +2,7 @@ import { useOutletContext, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore } from '../stores/StoresIndex';
 import { MarkdownEditorPage } from './MarkdownEditorPage';
 import { FolderLandingPage } from './FolderLandingPage';
+import { AssetPage } from './AssetPage';
 import { pageKind } from '../components/ComponentsIndex';
 import type { WorkspaceOutlet } from './workspaceContext';
 
@@ -16,6 +17,9 @@ export function WorkspaceNodePage() {
   const kind = pageKind(page);
   if (kind === 'folder') {
     return <FolderLandingPage onCreate={onCreateNode} />;
+  }
+  if (kind === 'asset') {
+    return <AssetPage key={page.id} />;
   }
   return <MarkdownEditorPage />;
 }

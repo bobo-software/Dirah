@@ -7,6 +7,9 @@ import { sniffImageMime } from '../utils/imageType';
 import { type AuthService, type Database } from './AuthService';
 import type { BlobStore } from '../blobs/blobStore';
 import { blobObjectKey } from '../blobs/objectKey';
+import type { ByteRange } from '../blobs/blobStore';
+import type { Readable } from 'node:stream';
+import { meterStream } from '../utils/streams';
 
 export interface PublicBlob {
   id: string;
@@ -16,6 +19,11 @@ export interface PublicBlob {
 }
 
 const MAX_BLOB_BYTES = 12 * 1024 * 1024;
+
+export interface BlobStreamInfo {
+  meta: PublicBlob;
+  storageKey: string;
+}
 
 export class BlobService {
   constructor(
@@ -103,6 +111,112 @@ export class BlobService {
     return found;
   }
 
+  /**
+   * Streams a large upload into the store without holding it in memory. The
+   * caller has checked access. `sniff` names the type from the leading bytes,
+   * or returns null to refuse the file. Never de-duplicated: the blob belongs to
+   * one asset, so removing that asset can remove the blob.
+   */
+  async uploadStream<T extends { mime: string }>(input: {
+    userId: string;
+    workspaceId: string;
+    source: AsyncIterable<Buffer | Uint8Array | string>;
+    maxBytes: number;
+    headBytes: number;
+    sniff: (head: Buffer) => T | null;
+  }): Promise<{ blob: PublicBlob; sniffed: T }> {
+    const metered = await meterStream(input.source, { headBytes: input.headBytes, maxBytes: input.maxBytes });
+    if (!metered.head.length) {
+      throw new HttpError('Empty blob', 400, 'EMPTY_BLOB');
+    }
+    const sniffed = input.sniff(metered.head);
+    if (!sniffed) {
+      metered.stream.destroy();
+      throw new HttpError(
+        'Only image (PNG, JPEG, GIF, WebP, HEIC, AVIF), video (MP4, MOV, WebM, MKV) or audio (MP3, WAV, M4A, OGG, FLAC, AAC) files can be uploaded',
+        415,
+        'UNSUPPORTED_MEDIA_TYPE'
+      );
+    }
+    const blobId = crypto.randomUUID();
+    const storageKey = blobObjectKey({
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      mime: sniffed.mime,
+      blobId,
+    });
+    try {
+      await this.store.putStream(storageKey, metered.stream, sniffed.mime);
+    } catch (error) {
+      await this.store.remove(storageKey);
+      throw error;
+    }
+    const { byteSize, contentHash } = metered.result();
+    const [row] = await this.database
+      .insert(blobs)
+      .values({ id: blobId, workspaceId: input.workspaceId, contentHash, mime: sniffed.mime, byteSize, storageKey })
+      .returning({ id: blobs.id, workspaceId: blobs.workspaceId, mime: blobs.mime, byteSize: blobs.byteSize });
+    return { blob: row, sniffed };
+  }
+
+  /** Stores bytes the server made (thumbnails, previews). The caller has checked access. */
+  async storeDerived(userId: string, workspaceId: string, body: Buffer, mime: string): Promise<PublicBlob> {
+    const contentHash = crypto.createHash('sha256').update(body).digest('hex');
+    return this.write({ userId, workspaceId, body, contentHash, mime });
+  }
+
+  /** Metadata and storage key, after the same access checks as get(), without reading the bytes. */
+  async info(userId: string, blobId: string): Promise<BlobStreamInfo> {
+    const found = await this.lookupMeta(blobId);
+    await this.auth.requireMember(userId, found.meta.workspaceId);
+    const access = await this.noteAccess(userId, blobId);
+    if (access.linked && !access.visible) {
+      throw new HttpError('Blob not found', 404, 'BLOB_NOT_FOUND');
+    }
+    return found;
+  }
+
+  /** Metadata with no access check, for signed links and server jobs. Refuses note images. */
+  async infoUnchecked(blobId: string): Promise<BlobStreamInfo> {
+    const found = await this.lookupMeta(blobId);
+    if ((await this.noteAccess(null, blobId)).linked) {
+      throw new HttpError('Blob not found', 404, 'BLOB_NOT_FOUND');
+    }
+    return found;
+  }
+
+  /** The stored bytes, or an inclusive range of them, as a stream. */
+  async openStream(info: BlobStreamInfo, range?: ByteRange): Promise<Readable> {
+    try {
+      return await this.store.getStream(info.storageKey, range);
+    } catch {
+      throw new HttpError('Blob not found', 404, 'BLOB_NOT_FOUND');
+    }
+  }
+
+  /** The stored bytes in full. For small derived files and server jobs. */
+  async readUnchecked(blobId: string): Promise<{ meta: PublicBlob; body: Buffer }> {
+    return this.lookup(blobId);
+  }
+
+  /** Deletes blobs whose owner (an asset) is already gone. The caller has checked access. */
+  async removeUnchecked(blobIds: string[]): Promise<void> {
+    for (const blobId of new Set(blobIds.filter(Boolean))) {
+      const [row] = await this.database
+        .select({ storageKey: blobs.storageKey })
+        .from(blobs)
+        .where(eq(blobs.id, blobId))
+        .limit(1);
+      if (!row) continue;
+      try {
+        await this.database.delete(blobs).where(eq(blobs.id, blobId));
+      } catch {
+        continue; // still referenced elsewhere (e.g. another asset); keep it
+      }
+      await this.store.remove(row.storageKey);
+    }
+  }
+
   async list(userId: string, workspaceId: string): Promise<string[]> {
     await this.auth.requireMember(userId, workspaceId);
     const rows = await this.database
@@ -132,7 +246,14 @@ export class BlobService {
     } else {
       await this.auth.requireEditor(userId, row.workspaceId);
     }
-    await this.database.delete(blobs).where(eq(blobs.id, blobId));
+    try {
+      await this.database.delete(blobs).where(eq(blobs.id, blobId));
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && (error.code === '23503' || error.code === '23001')) {
+        throw new HttpError('This file belongs to a media asset; delete the asset instead', 409, 'BLOB_IN_USE');
+      }
+      throw error;
+    }
     await this.store.remove(row.storageKey);
   }
 
@@ -212,7 +333,7 @@ export class BlobService {
     };
   }
 
-  private async lookup(blobId: string): Promise<{ meta: PublicBlob; body: Buffer }> {
+  private async lookupMeta(blobId: string): Promise<BlobStreamInfo> {
     const [row] = await this.database
       .select({
         id: blobs.id,
@@ -227,20 +348,18 @@ export class BlobService {
     if (!row) {
       throw new HttpError('Blob not found', 404, 'BLOB_NOT_FOUND');
     }
+    const { storageKey, ...meta } = row;
+    return { meta, storageKey };
+  }
+
+  private async lookup(blobId: string): Promise<{ meta: PublicBlob; body: Buffer }> {
+    const { meta, storageKey } = await this.lookupMeta(blobId);
     let body: Buffer;
     try {
-      body = await this.store.get(row.storageKey);
+      body = await this.store.get(storageKey);
     } catch {
       throw new HttpError('Blob not found', 404, 'BLOB_NOT_FOUND');
     }
-    return {
-      meta: {
-        id: row.id,
-        workspaceId: row.workspaceId,
-        mime: row.mime,
-        byteSize: row.byteSize,
-      },
-      body,
-    };
+    return { meta, body };
   }
 }

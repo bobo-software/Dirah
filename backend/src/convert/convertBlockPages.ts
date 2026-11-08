@@ -146,7 +146,7 @@ export async function dropYjsSchema(queryable: Queryable): Promise<boolean> {
   if (!hasUpdates && !(await tableExists(queryable, 'doc_snapshots'))) {
     await queryable.query(`ALTER TABLE pages DROP CONSTRAINT IF EXISTS pages_kind_check`);
     await queryable.query(
-      `ALTER TABLE pages ADD CONSTRAINT pages_kind_check CHECK (kind IN ('folder', 'markdown'))`
+      `ALTER TABLE pages ADD CONSTRAINT pages_kind_check CHECK (kind IN ('folder', 'markdown', 'asset'))`
     );
     return false;
   }
@@ -155,7 +155,7 @@ export async function dropYjsSchema(queryable: Queryable): Promise<boolean> {
   await queryable.query(`DROP TABLE IF EXISTS doc_snapshots`);
   await queryable.query(`ALTER TABLE pages DROP CONSTRAINT IF EXISTS pages_kind_check`);
   await queryable.query(
-    `ALTER TABLE pages ADD CONSTRAINT pages_kind_check CHECK (kind IN ('folder', 'markdown'))`
+    `ALTER TABLE pages ADD CONSTRAINT pages_kind_check CHECK (kind IN ('folder', 'markdown', 'asset'))`
   );
   return true;
 }

@@ -132,12 +132,12 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     {
       title: 'List docs tree',
       description:
-        'List markdown files and folders, sorted by path with titles/headings. Optional prefix (e.g. docs/api), depth (default 2), and kind filter (markdown or folder). Omit workspace when the token has one workspace.',
+        'List markdown files, media assets and folders, sorted by path with titles/headings. Optional prefix (e.g. docs/api), depth (default 2), and kind filter (markdown, folder or asset). Assets are images, video and audio (open them with get_asset). Omit workspace when the token has one workspace.',
       inputSchema: z.object({
         ...workspaceFields,
         prefix: z.string().optional(),
         depth: z.number().int().min(1).optional(),
-        kind: z.enum(['markdown', 'folder']).optional(),
+        kind: z.enum(['markdown', 'folder', 'asset']).optional(),
       }),
     },
     (async (args: {
@@ -145,7 +145,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       workspace?: string;
       prefix?: string;
       depth?: number;
-      kind?: 'markdown' | 'folder';
+      kind?: 'markdown' | 'folder' | 'asset';
     }) =>
       inWorkspace('list_tree', args, (workspaceId) =>
         service.listTree(currentDocsAuth().userId, currentDocsAuth().tokenId, workspaceId, {
@@ -160,7 +160,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'get_node',
     {
       title: 'Get docs node',
-      description: 'Get a folder or markdown node by id.',
+      description: 'Get a folder, markdown or media asset node by id.',
       inputSchema: z.object({ ...workspaceFields, nodeId: z.string().uuid() }),
     },
     (async (args: { workspaceId?: string; workspace?: string; nodeId: string }) =>
@@ -288,7 +288,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'rename',
     {
       title: 'Rename docs node',
-      description: 'Rename a folder or markdown file (title and/or slug).',
+      description: 'Rename a folder, markdown file or media asset (title and/or slug; an asset keeps its file extension).',
       inputSchema: z.object({
         ...workspaceFields,
         path: z.string().optional(),
@@ -346,7 +346,7 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'delete',
     {
       title: 'Trash docs node',
-      description: 'Soft-delete a markdown file or folder (and nested docs) into workspace trash.',
+      description: 'Soft-delete a markdown file, media asset or folder (and everything inside) into workspace trash.',
       inputSchema: z.object({
         ...workspaceFields,
         path: z.string().optional(),

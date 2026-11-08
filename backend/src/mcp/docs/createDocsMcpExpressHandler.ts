@@ -4,6 +4,8 @@ import type { NotesMcpService } from '../../services/NotesMcpService';
 import type { TicketsMcpService } from '../../services/TicketsMcpService';
 import type { BlobsMcpService } from '../../services/BlobsMcpService';
 import { registerBlobTools } from './registerBlobTools';
+import { registerAssetTools } from './registerAssetTools';
+import type { AssetsMcpService } from '../../services/AssetsMcpService';
 import { registerDocsTools } from './registerDocsTools';
 import { registerNotesTools } from './registerNotesTools';
 import { registerTicketsTools } from './registerTicketsTools';
@@ -16,7 +18,8 @@ export async function createDocsMcpExpressHandler(
   service: DocsMcpService,
   notes: NotesMcpService,
   tickets: TicketsMcpService,
-  blobs: BlobsMcpService
+  blobs: BlobsMcpService,
+  assets?: AssetsMcpService
 ): Promise<RequestHandler> {
   const [{ createMcpHandler, McpServer, ResourceTemplate }, { toNodeHandler }] = await Promise.all([
     import('@modelcontextprotocol/server'),
@@ -35,6 +38,7 @@ export async function createDocsMcpExpressHandler(
       registerNotesTools(server as unknown as PgMcpServerHost, notes);
       registerTicketsTools(server as unknown as PgMcpServerHost, tickets);
       registerBlobTools(server as unknown as PgMcpServerHost, blobs);
+      if (assets) registerAssetTools(server as unknown as PgMcpServerHost, assets);
       registerDocsResources(server as unknown as PgMcpServerHost, service, ResourceTemplate as never);
       return server;
     },

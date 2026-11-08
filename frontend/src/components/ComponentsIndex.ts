@@ -93,3 +93,6 @@ export { clearLastWorkspaceId, getLastWorkspaceId, pickDefaultWorkspaceId, setLa
 export { default as MembersPanel } from './workspace/MembersPanel';
 export { WorkspaceDescriptionEditor } from './workspace/WorkspaceDescriptionEditor';
 export { default as WorkspacesModal } from './workspace/WorkspacesModal';
+export { UploadTray } from './assets/UploadTray';
+export { dragHasFiles } from './assets/dragFiles';
+export { assetMedia } from './docs/pageKind';

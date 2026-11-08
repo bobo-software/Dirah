@@ -35,6 +35,9 @@ import {
 import type { TicketService } from '../services/TicketService';
 import { createMcpSettingsRouter } from './mcpSettings.routes';
 import { createMcpOAuthApproveRouter } from './mcpOAuth.routes';
+import { createAssetRouter, createMediaRouter, createWorkspaceAssetRouter } from './asset.routes';
+import type { AssetService } from '../services/AssetService';
+import type { MediaUrlService } from '../services/MediaUrlService';
 
 export function createApiRouter(
   authService: AuthService,
@@ -51,11 +54,17 @@ export function createApiRouter(
   adminService: AdminService,
   noteService: NoteService,
   taskListService: TaskListService,
-  ticketService: TicketService
+  ticketService: TicketService,
+  media?: { assets: AssetService; urls: MediaUrlService }
 ): Router {
   const router = Router();
   router.use('/health', healthRouter);
   router.use('/auth', createAuthRouter(authService, cryptoService, oauthService));
+  if (media) {
+    router.use('/workspaces/:id/assets', createWorkspaceAssetRouter(media.assets, blobService, media.urls));
+    router.use('/assets', createAssetRouter(media.assets, blobService, media.urls));
+    router.use('/media', createMediaRouter(media.assets, blobService, media.urls));
+  }
   router.use('/workspaces', createWorkspaceRouter(authService, pageService, blobService, memberService, cryptoService, noteService, taskListService, ticketService, mcpTokenService));
   router.use('/pages', createPageRouter(pageService, shareService));
   router.use('/notes', createNoteRouter(noteService, blobService));

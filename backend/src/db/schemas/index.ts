@@ -17,6 +17,7 @@ export {
   ticketActivity,
 } from './tickets';
 export { blobs } from './docs';
+export { assets, type AssetGeneration } from './assets';
 export { shareLinks } from './shareLinks';
 export { workspaceInvites } from './invites';
 export { oauthAccounts, oauthMobileCodes } from './oauth';

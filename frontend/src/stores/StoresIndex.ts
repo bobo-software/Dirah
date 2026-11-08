@@ -11,3 +11,5 @@ export { useMcpStore } from './data/mcpStore';
 export { useInviteStore } from './data/inviteStore';
 export { useAiStatusStore } from './data/aiStatusStore';
 export { useEditorViewStore } from './state/editorViewStore';
+export { useAssetUploadStore } from './data/assetUploadStore';
+export type { AssetUpload } from './data/assetUploadStore';

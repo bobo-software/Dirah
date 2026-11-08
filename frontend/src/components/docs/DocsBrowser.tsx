@@ -20,7 +20,7 @@ export function DocsBrowser({ workspaceId, title }: { workspaceId: string; title
   }
 
   const documents = useMemo(
-    () => pages.filter((page) => page.kind !== 'folder'),
+    () => pages.filter((page) => page.kind === 'markdown'),
     [pages]
   );
 

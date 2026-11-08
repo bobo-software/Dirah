@@ -5,6 +5,8 @@ export type WorkspaceOutlet = {
   pageTitle?: string;
   workspaceId: string;
   onCreateNode: (kind: PageKind, parentId?: string | null) => void;
+  /** Uploads media into a folder (null for the root); opens a file picker when no files are given. */
+  onUploadFiles: (parentId: string | null, files?: File[]) => void;
 };
 
 export function canEdit(role: string): boolean {
