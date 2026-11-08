@@ -1,9 +1,13 @@
 # Build from the repo root: docker build -f backend/Dockerfile .
 # Stage 1: build
-FROM node:26-alpine AS builder
+# Debian (glibc) rather than Alpine: Blender, which renders 3D model previews, needs glibc.
+# Builder and runtime share the base so native modules (bcrypt, sharp) match.
+FROM node:26-trixie-slim AS builder
 
 # Native modules (bcrypt) need a toolchain.
-RUN apk add --no-cache python3 g++ make
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 g++ make \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -20,11 +24,15 @@ RUN npm run build --workspace backend
 RUN npm prune --omit=dev --workspace backend && mkdir -p backend/node_modules
 
 # Stage 2: runtime
-FROM node:26-alpine
+FROM node:26-trixie-slim
 
 # curl is what the Coolify/Docker healthcheck runs inside the container.
-# ffmpeg makes video/audio previews for media assets.
-RUN apk add --no-cache curl ffmpeg
+# ffmpeg makes video/audio previews for media assets; Blender renders 3D model
+# turnarounds on the CPU (Cycles). Blender adds roughly 400 MB to the image.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ffmpeg blender python3-numpy \
+  && rm -rf /var/lib/apt/lists/* \
+  && blender --version | head -1
 
 WORKDIR /app/backend
 
@@ -35,6 +43,8 @@ COPY --from=builder /app/backend/node_modules ./node_modules
 COPY --from=builder /app/backend/dist ./dist
 # Migrations and other runtime assets that live outside dist
 COPY --from=builder /app/backend/drizzle ./drizzle
+# Blender script for 3D model previews (resolved relative to dist/services)
+COPY --from=builder /app/backend/blender ./blender
 
 EXPOSE 4006
 

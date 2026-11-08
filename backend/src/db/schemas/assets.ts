@@ -12,6 +12,33 @@ export type AssetGeneration = {
   params?: Record<string, unknown>;
 };
 
+export type AssetModelInfo = {
+  objects?: number;
+  rigged?: boolean;
+  animations?: string[];
+  materials?: number;
+};
+
+/** A single-use link an MCP agent PUTs a large file to. */
+export const assetUploadIntents = pgTable('asset_upload_intents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  tokenId: uuid('token_id'),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  parentId: uuid('parent_id').references(() => pages.id, { onDelete: 'set null' }),
+  filename: text('filename').notNull(),
+  title: text('title'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  assetPageId: uuid('asset_page_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** A media file kept in the docs tree. The page row (kind 'asset') holds its title, slug and place. */
 export const assets = pgTable(
   'assets',
@@ -43,6 +70,12 @@ export const assets = pgTable(
     sourceUrl: text('source_url'),
     license: text('license'),
     generation: jsonb('generation').$type<AssetGeneration>(),
+    vertexCount: integer('vertex_count'),
+    triangleCount: integer('triangle_count'),
+    /** Model size in metres: { x, y, z }. */
+    bbox: jsonb('bbox').$type<{ x: number; y: number; z: number }>(),
+    /** Rig and animation details read by the renderer. */
+    modelInfo: jsonb('model_info').$type<AssetModelInfo>(),
     status: text('status').notNull().default('processing'),
     error: text('error'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),

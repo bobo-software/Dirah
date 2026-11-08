@@ -1,5 +1,5 @@
-import { and, arrayContains, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
-import { assets, blobs, pages, workspaces, type AssetGeneration } from '../db/schemas';
+import { and, arrayContains, desc, eq, gt, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { assets, assetUploadIntents, blobs, pages, workspaces, type AssetGeneration, type AssetModelInfo } from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { displayName, MEDIA_SNIFF_BYTES, sniffMedia, type MediaKind } from '../utils/mediaType';
 import { safeFetch } from '../utils/safeFetch';
@@ -43,6 +43,10 @@ export interface AssetView {
   durationMs: number | null;
   fps: number | null;
   hasAudio: boolean | null;
+  vertexCount: number | null;
+  triangleCount: number | null;
+  bbox: { x: number; y: number; z: number } | null;
+  modelInfo: AssetModelInfo | null;
   role: AssetRole;
   tags: string[];
   description: string;
@@ -106,6 +110,10 @@ const assetColumns = {
   durationMs: assets.durationMs,
   fps: assets.fps,
   hasAudio: assets.hasAudio,
+  vertexCount: assets.vertexCount,
+  triangleCount: assets.triangleCount,
+  bbox: assets.bbox,
+  modelInfo: assets.modelInfo,
   role: assets.role,
   tags: assets.tags,
   description: assets.description,
@@ -222,6 +230,7 @@ export class AssetService {
       maxBytes: this.options.maxBytes,
       headBytes: MEDIA_SNIFF_BYTES,
       sniff: sniffMedia,
+      filename: input.filename,
     });
     const title = (input.title ?? input.metadata?.title ?? '').trim() || displayName(input.filename, sniffed.ext);
     const description = input.metadata?.description?.trim().slice(0, 10_000) ?? '';
@@ -328,6 +337,70 @@ export class AssetService {
     const view = await this.requireView(pageId);
     await this.pages.setSearchText(pageId, assetSearchText(view));
     return view;
+  }
+
+  /** Records what a later PUT to a single-use upload link should create. The caller has checked write access. */
+  async createUploadIntent(input: {
+    userId: string;
+    tokenId: string | null;
+    workspaceId: string;
+    parentId: string | null;
+    filename: string;
+    title?: string;
+    metadata: AssetMetadataInput;
+    ttlSeconds: number;
+  }): Promise<{ id: string; expiresAt: Date }> {
+    await this.auth.requireEditor(input.userId, input.workspaceId);
+    if (await this.pages.isWorkspaceEncrypted(input.workspaceId)) {
+      throw new HttpError('Media assets are not available in end-to-end encrypted workspaces', 400, 'E2E_NO_ASSETS');
+    }
+    normalizeRole(input.metadata.role); // fail now, not after a large upload
+    const [row] = await this.database
+      .insert(assetUploadIntents)
+      .values({
+        userId: input.userId,
+        tokenId: input.tokenId,
+        workspaceId: input.workspaceId,
+        parentId: input.parentId,
+        filename: input.filename.slice(0, 200),
+        title: input.title?.slice(0, 300) ?? null,
+        metadata: input.metadata as Record<string, unknown>,
+        expiresAt: new Date(Date.now() + input.ttlSeconds * 1000),
+      })
+      .returning({ id: assetUploadIntents.id, expiresAt: assetUploadIntents.expiresAt });
+    return row;
+  }
+
+  /** Marks an unexpired, unused upload intent as used and returns it; null when it is spent, expired or missing. */
+  async claimUploadIntent(intentId: string) {
+    const [row] = await this.database
+      .update(assetUploadIntents)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(assetUploadIntents.id, intentId),
+          isNull(assetUploadIntents.usedAt),
+          gt(assetUploadIntents.expiresAt, new Date())
+        )
+      )
+      .returning();
+    return row ?? null;
+  }
+
+  async recordUploadResult(intentId: string, assetPageId: string): Promise<void> {
+    await this.database
+      .update(assetUploadIntents)
+      .set({ assetPageId })
+      .where(eq(assetUploadIntents.id, intentId));
+  }
+
+  /** Deletes upload intents that expired an hour ago or more (used ones too). */
+  async purgeUploadIntents(): Promise<number> {
+    const removed = await this.database
+      .delete(assetUploadIntents)
+      .where(lt(assetUploadIntents.expiresAt, new Date(Date.now() - 3600_000)))
+      .returning({ id: assetUploadIntents.id });
+    return removed.length;
   }
 
   /** Re-runs thumbnail/preview generation, e.g. after a failure. */

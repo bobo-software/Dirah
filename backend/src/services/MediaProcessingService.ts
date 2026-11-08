@@ -22,7 +22,29 @@ const CONTACT_FRAME_WIDTH = 512;
 export interface MediaToolPaths {
   ffmpeg: string;
   ffprobe: string;
+  /** Blender, for 3D model turnarounds. Missing Blender leaves models without a preview. */
+  blender?: string;
+  /** render_model.py; defaults to backend/blender/render_model.py. */
+  blenderScript?: string;
+  /** Concurrent Blender renders (each uses every CPU core). */
+  modelConcurrency?: number;
 }
+
+/** Order of the views in a model turnaround sheet: left to right, top to bottom. */
+export const TURNAROUND_VIEWS = ['front', '3/4', 'side', 'back'] as const;
+
+interface ModelStats {
+  vertices?: number;
+  triangles?: number;
+  bbox?: { x: number; y: number; z: number };
+  objects?: number;
+  rigged?: boolean;
+  animations?: string[];
+  materials?: number;
+  error?: string;
+}
+
+const DEFAULT_BLENDER_SCRIPT = path.resolve(__dirname, '../../blender/render_model.py');
 
 interface ProbeResult {
   durationMs: number | null;
@@ -34,7 +56,13 @@ interface ProbeResult {
 }
 
 interface ProcessedMedia {
-  mediaType?: 'image' | 'video' | 'audio';
+  mediaType?: 'image' | 'video' | 'audio' | 'model';
+  vertexCount?: number | null;
+  triangleCount?: number | null;
+  bbox?: { x: number; y: number; z: number } | null;
+  modelInfo?: { objects?: number; rigged?: boolean; animations?: string[]; materials?: number } | null;
+  /** Ready, with this note in `error` (e.g. no preview renderer). */
+  note?: string;
   mime?: string;
   width?: number | null;
   height?: number | null;
@@ -94,12 +122,30 @@ export class MediaProcessingService {
   private active = 0;
   private idleWaiters: Array<() => void> = [];
 
+  private modelSlots: number;
+  private modelWaiters: Array<() => void> = [];
+
   constructor(
     private readonly database: Database,
     private readonly blobs: BlobService,
     private readonly tools: MediaToolPaths,
     private readonly concurrency = 2
-  ) {}
+  ) {
+    this.modelSlots = Math.max(1, tools.modelConcurrency ?? 1);
+  }
+
+  /** Runs `fn` once a Blender slot is free, so renders don't starve image and video jobs of CPU. */
+  private async withModelSlot<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.modelSlots === 0) await new Promise<void>((resolve) => this.modelWaiters.push(resolve));
+    else this.modelSlots -= 1;
+    try {
+      return await fn();
+    } finally {
+      const next = this.modelWaiters.shift();
+      if (next) next();
+      else this.modelSlots += 1;
+    }
+  }
 
   enqueue(pageId: string): void {
     if (this.queued.has(pageId)) return;
@@ -153,7 +199,9 @@ export class MediaProcessingService {
       const result =
         asset.mediaType === 'image'
           ? await this.processImage(file, dir)
-          : await this.processAv(file, dir, asset.mediaType === 'video');
+          : asset.mediaType === 'model'
+            ? await this.withModelSlot(() => this.processModel(file, dir))
+            : await this.processAv(file, dir, asset.mediaType === 'video');
 
       // Storage keys start with a user id; derived files of an asset whose uploader left go under 'system'.
       const owner = asset.createdBy ?? 'system';
@@ -176,10 +224,14 @@ export class MediaProcessingService {
           durationMs: result.durationMs ?? null,
           fps: result.fps ?? null,
           hasAudio: result.hasAudio ?? null,
+          vertexCount: result.vertexCount ?? null,
+          triangleCount: result.triangleCount ?? null,
+          bbox: result.bbox ?? null,
+          modelInfo: result.modelInfo ?? null,
           thumbnailBlobId: thumb?.id ?? null,
           previewBlobId: preview?.id ?? null,
           status: 'ready',
-          error: null,
+          error: result.note ?? null,
           updatedAt: new Date(),
         })
         .where(eq(assets.pageId, pageId));
@@ -192,6 +244,71 @@ export class MediaProcessingService {
         .where(eq(assets.pageId, pageId));
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  private async processModel(file: string, dir: string): Promise<ProcessedMedia> {
+    const out = path.join(dir, 'render');
+    const blender = this.tools.blender || 'blender';
+    try {
+      await run(
+        blender,
+        [
+          '-b', '--factory-startup', '--disable-autoexec',
+          '-P', this.tools.blenderScript || DEFAULT_BLENDER_SCRIPT,
+          '--', file, out, '640',
+        ],
+        240_000
+      );
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        return { note: 'Stored without a preview: Blender is not installed on this server.' };
+      }
+      const stats = await this.readStats(out);
+      throw new Error(stats?.error ?? (error instanceof Error ? error.message : String(error)));
+    }
+    const stats = (await this.readStats(out)) ?? {};
+    const views = await Promise.all(['front', '34', 'side', 'back'].map((name) => fs.readFile(path.join(out, `${name}.png`))));
+    const meta = await sharp(views[0]).metadata();
+    const cellW = meta.width ?? 640;
+    const cellH = meta.height ?? 960;
+    const gap = 6;
+    const sheet = await sharp({
+      create: { width: cellW * 2 + gap, height: cellH * 2 + gap, channels: 3, background: '#9a968f' },
+    })
+      .composite(views.map((input, i) => ({ input, left: (i % 2) * (cellW + gap), top: Math.floor(i / 2) * (cellH + gap) })))
+      .png()
+      .toBuffer();
+    const [preview, thumbnail] = await Promise.all([
+      sharp(sheet).resize(AGENT_PREVIEW_PX, AGENT_PREVIEW_PX, { fit: 'inside' }).jpeg({ quality: 85 }).toBuffer(),
+      sharp(views[1]).resize(THUMBNAIL_PX, THUMBNAIL_PX, { fit: 'inside' }).webp({ quality: 80 }).toBuffer(),
+    ]);
+    const previewMeta = await sharp(preview).metadata();
+    return {
+      width: previewMeta.width ?? null,
+      height: previewMeta.height ?? null,
+      vertexCount: stats.vertices ?? null,
+      triangleCount: stats.triangles ?? null,
+      bbox: stats.bbox ?? null,
+      modelInfo: {
+        objects: stats.objects,
+        rigged: stats.rigged,
+        animations: stats.animations,
+        materials: stats.materials,
+      },
+      thumbnail,
+      thumbnailMime: 'image/webp',
+      preview,
+      previewMime: 'image/jpeg',
+    };
+  }
+
+  private async readStats(out: string): Promise<ModelStats | null> {
+    try {
+      return JSON.parse(await fs.readFile(path.join(out, 'stats.json'), 'utf8')) as ModelStats;
+    } catch {
+      return null;
     }
   }
 

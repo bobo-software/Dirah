@@ -259,7 +259,16 @@ export const env = {
     processingConcurrency: positiveInt(process.env.MEDIA_PROCESSING_CONCURRENCY, 2),
     ffmpegPath: (process.env.FFMPEG_PATH ?? 'ffmpeg').trim(),
     ffprobePath: (process.env.FFPROBE_PATH ?? 'ffprobe').trim(),
+    /** Renders 3D model turnarounds. Leave unset to use `blender` on PATH. */
+    blenderPath: (process.env.BLENDER_PATH ?? 'blender').trim(),
+    modelConcurrency: positiveInt(process.env.MEDIA_MODEL_CONCURRENCY, 1),
+    /** Largest file an agent can send inline (base64) through the MCP upload_asset tool. */
+    inlineMaxBytes: positiveInt(process.env.MEDIA_INLINE_MAX_BYTES, 10 * 1024 * 1024),
+    /** Lifetime of an MCP upload link (create_asset_upload), in seconds. */
+    uploadLinkTtlSeconds: positiveInt(process.env.MEDIA_UPLOAD_LINK_TTL_SECONDS, 15 * 60),
   },
+  /** Largest JSON body the /mcp endpoint accepts (inline uploads are base64, a third larger). */
+  mcpMaxBody: (process.env.MCP_MAX_BODY ?? '16mb').trim(),
   ai: {
     apiKey: process.env.AI_API_KEY ?? '',
     baseUrl: (process.env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, ''),

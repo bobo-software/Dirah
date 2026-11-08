@@ -91,7 +91,7 @@ export function createAssetController(assets: AssetService, blobs: BlobService, 
       const workspaceId = req.params.id;
       if (!workspaceId) return ResponseUtils.error(res, 'Workspace id is required', null, 400);
       const mediaType = stringParam(req.query.mediaType);
-      if (mediaType && !['image', 'video', 'audio'].includes(mediaType)) {
+      if (mediaType && !['image', 'video', 'audio', 'model'].includes(mediaType)) {
         return ResponseUtils.error(res, 'Invalid mediaType', null, 400);
       }
       const status = stringParam(req.query.status);
@@ -101,7 +101,7 @@ export function createAssetController(assets: AssetService, blobs: BlobService, 
       const parentId = stringParam(req.query.parentId);
       const result = await assets.search(req.user!.userId, workspaceId, {
         query: stringParam(req.query.q),
-        mediaType: mediaType as 'image' | 'video' | 'audio' | undefined,
+        mediaType: mediaType as 'image' | 'video' | 'audio' | 'model' | undefined,
         role: stringParam(req.query.role),
         tags: csv(req.query.tags),
         status,

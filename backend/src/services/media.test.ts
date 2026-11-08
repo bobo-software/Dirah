@@ -184,3 +184,56 @@ describe('asset helpers', () => {
     expect(contactSheetTimesMs(0)).toEqual([0]);
   });
 });
+
+describe('3D model detection', () => {
+  it('recognises GLB, binary FBX and .blend by their bytes', () => {
+    expect(sniffMedia(Buffer.from('glTF\x02\x00\x00\x00'))).toEqual({ mime: 'model/gltf-binary', mediaType: 'model', ext: 'glb' });
+    expect(sniffMedia(Buffer.from('Kaydara FBX Binary  \x00'))?.ext).toBe('fbx');
+    expect(sniffMedia(Buffer.from('BLENDER-v405RENDH'))?.ext).toBe('blend');
+  });
+
+  it('uses the file name only for formats without magic bytes', () => {
+    const obj = Buffer.from('# Blender OBJ\nmtllib cube.mtl\no Cube\nv 1.0 1.0 -1.0\nv 1.0 -1.0 -1.0\nvn 0 1 0\nf 1//1 2//1 3//1\n');
+    expect(sniffMedia(obj, 'cube.obj')?.mime).toBe('model/obj');
+    expect(sniffMedia(obj, 'cube.txt')).toBeNull();
+    expect(sniffMedia(obj)).toBeNull();
+    expect(sniffMedia(Buffer.from('; FBX 7.4.0 project file\n'), 'rig.fbx')?.ext).toBe('fbx');
+    expect(sniffMedia(Buffer.from([0x28, 0xb5, 0x2f, 0xfd, 0, 0]), 'scene.blend')?.ext).toBe('blend');
+    expect(sniffMedia(Buffer.from([0x28, 0xb5, 0x2f, 0xfd, 0, 0]), 'scene.zst')).toBeNull();
+  });
+
+  it('refuses a .obj name on binary or non-OBJ text', () => {
+    expect(sniffMedia(Buffer.from([0x00, 0x01, 0x02, 0x76, 0x20]), 'evil.obj')).toBeNull();
+    expect(sniffMedia(Buffer.from('<html><script>alert(1)</script>\n'), 'evil.obj')).toBeNull();
+  });
+});
+
+describe('upload links', () => {
+  const uploads = (now = 1_700_000_000_000) =>
+    new MediaUrlService({
+      publicOrigin: 'https://api.example.com',
+      secret: '',
+      fallbackSecret: 'test-jwt-secret',
+      defaultTtlSeconds: 3600,
+      maxTtlSeconds: 86_400,
+      now: () => now,
+    });
+  const intentId = '6f1c1c1e-6a0b-4f43-9a40-6b7d2c1f0a11';
+  const tokenOf = (url: string) => url.split('/api/uploads/')[1];
+
+  it('verifies its own token until it expires', () => {
+    const link = uploads().signUpload(intentId, 900);
+    expect(uploads().verifyUpload(tokenOf(link.url))).toBe(intentId);
+    expect(uploads(1_700_000_000_000 + 901_000).verifyUpload(tokenOf(link.url))).toBeNull();
+  });
+
+  it('cannot be forged from a media link signature or pointed at another intent', () => {
+    const exp = 1_700_000_000 + 900;
+    const media = new URL(uploads().sign(intentId, 900).url);
+    const mediaSig = media.searchParams.get('sig')!;
+    expect(uploads().verifyUpload(`${intentId}.${exp}.${mediaSig}`)).toBeNull();
+    const token = tokenOf(uploads().signUpload(intentId, 900).url);
+    expect(uploads().verifyUpload(token.replace(intentId, '00000000-0000-4000-8000-000000000000'))).toBeNull();
+    expect(uploads().verifyUpload('../../etc/passwd')).toBeNull();
+  });
+});

@@ -65,7 +65,34 @@ export class MediaUrlService {
     return remaining;
   }
 
+  /**
+   * A single-use upload link for an upload intent: `/api/uploads/<intentId>.<exp>.<sig>`.
+   * Signed in its own namespace, so a media link's signature never verifies as an upload.
+   */
+  signUpload(intentId: string, ttlSeconds: number): SignedMediaUrl {
+    const exp = Math.floor(this.now() / 1000) + Math.max(60, Math.floor(ttlSeconds));
+    const token = `${intentId}.${exp}.${this.uploadSignature(intentId, exp)}`;
+    return { url: `${this.origin}/api/uploads/${token}`, expiresAt: new Date(exp * 1000).toISOString() };
+  }
+
+  /** The intent id of a valid, unexpired upload token; null otherwise. */
+  verifyUpload(token: string): string | null {
+    const match = /^([0-9a-f-]{36})\.(\d{1,12})\.([A-Za-z0-9_-]{43})$/.exec(token);
+    if (!match) return null;
+    const [, intentId, expRaw, sig] = match;
+    const exp = Number(expRaw);
+    if (exp <= Math.floor(this.now() / 1000)) return null;
+    const expected = Buffer.from(this.uploadSignature(intentId, exp));
+    const given = Buffer.from(sig);
+    if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return null;
+    return intentId;
+  }
+
   private signature(blobId: string, exp: number): string {
     return crypto.createHmac('sha256', this.key).update(`${blobId}.${exp}`).digest('base64url');
+  }
+
+  private uploadSignature(intentId: string, exp: number): string {
+    return crypto.createHmac('sha256', this.key).update(`upload.${intentId}.${exp}`).digest('base64url');
   }
 }

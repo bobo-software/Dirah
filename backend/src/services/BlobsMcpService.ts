@@ -88,8 +88,8 @@ export class BlobsMcpService {
       throw error;
     }
     const reason = unavailableReason(found.meta);
-    if (reason && reason !== 'not_an_image' && this.assets) {
-      // A media asset already has a resized JPEG preview; show that instead of refusing.
+    if (reason && this.assets) {
+      // A media asset already has a resized preview (a turnaround for a 3D model); show that instead of refusing.
       const preview = await this.assetPreview(found.meta.id);
       if (preview) {
         return {
@@ -120,7 +120,7 @@ export class BlobsMcpService {
     if (!owner?.isMain) return null;
     try {
       const asset = await this.assets!.view(owner.pageId);
-      return asset.mediaType === 'image' ? await this.assets!.previewBytes(asset) : null;
+      return asset.mediaType === 'image' || asset.mediaType === 'model' ? await this.assets!.previewBytes(asset) : null;
     } catch {
       return null;
     }

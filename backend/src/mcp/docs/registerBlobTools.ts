@@ -20,7 +20,7 @@ function toContent(image: McpImage) {
     mimeType: image.mimeType,
     byteSize: image.byteSize,
     viewable,
-    ...(image.previewMimeType ? { preview: 'Shown as a resized JPEG preview of the original.' } : {}),
+    ...(image.previewMimeType ? { preview: 'Shown as a resized preview of the original (a 4-view turnaround for a 3D model).' } : {}),
     ...(image.reason ? { reason: image.reason, message: REASON_TEXT[image.reason] } : {}),
   };
   const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [

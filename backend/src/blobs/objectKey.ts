@@ -32,6 +32,9 @@ export function blobKindFolder(mime: string): string {
   if (type.startsWith('image/')) return 'images';
   if (type.startsWith('video/')) return 'videos';
   if (type.startsWith('audio/')) return 'audio';
+  if (type.startsWith('model/') || type === 'application/vnd.autodesk.fbx' || type === 'application/x-blender') {
+    return 'models';
+  }
   if (type.startsWith('text/')) return 'documents';
   if (DOCUMENT_MIMES.has(type) || type.startsWith('application/vnd.openxmlformats-officedocument.')) {
     return 'documents';
