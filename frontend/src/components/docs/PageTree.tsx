@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMo
 import type { PageKind, PublicPage } from '../../api/client';
 import { canHaveChildren, kindGlyph, pageKind } from './pageKind';
 import { categoryHue } from './categoryColor';
+import { draggedPageId, type PageNode } from './pageTree';
 import { Button } from '../buttons/Button';
 
 function ChevronIcon() {
@@ -42,35 +43,6 @@ function TrashIcon() {
       <path d="M13.8 11v6.2" />
     </svg>
   );
-}
-
-export type PageNode = {
-  page: PublicPage;
-  children: PageNode[];
-};
-
-export function buildPageTree(pages: PublicPage[]): PageNode[] {
-  const ids = new Set(pages.map((page) => page.id));
-  const byParent = new Map<string | null, PublicPage[]>();
-  for (const page of pages) {
-    const parentId = page.parentId && ids.has(page.parentId) ? page.parentId : null;
-    const list = byParent.get(parentId) ?? [];
-    list.push(page);
-    byParent.set(parentId, list);
-  }
-  for (const list of byParent.values()) {
-    list.sort((a, b) => a.position - b.position || a.title.localeCompare(b.title));
-  }
-  const nest = (parentId: string | null): PageNode[] =>
-    (byParent.get(parentId) ?? []).map((page) => ({
-      page,
-      children: nest(page.id),
-    }));
-  return nest(null);
-}
-
-export function draggedPageId(data: DataTransfer): string {
-  return data.getData('text/page-id') || data.getData('text/plain');
 }
 
 type PageTreeProps = {

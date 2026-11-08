@@ -16,8 +16,8 @@ export function ApiRequestsPanel({ accessToken }: { accessToken: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     void (async () => {
+      setLoading(true);
       try {
         const result = await fetchAdminRequestLogs(accessToken, page, PAGE_SIZE);
         if (!cancelled) {

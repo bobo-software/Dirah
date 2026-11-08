@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { confirmDelete } from '../layout/deleteDialogue';
+import { confirmDelete } from '../layout/confirmDelete';
 import { encryptWorkspace, isUnlocked, provisionAccount, syncMemberKeys, useEncryptionStore } from '../../crypto/workspaceCrypto';
 import { EMPTY_INVITES, EMPTY_MEMBERS, useAuthStore, useMarkdownContentStore, useMembersStore, useWorkspaceStore } from '../../stores/StoresIndex';
 import { Button } from '../buttons/Button';

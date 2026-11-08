@@ -16,8 +16,8 @@ export function AdminEmailsPage() {
   useEffect(() => {
     if (!accessToken) return;
     let cancelled = false;
-    setLoading(true);
     void (async () => {
+      setLoading(true);
       try {
         const result = await fetchAdminEmails(accessToken, page, PAGE_SIZE);
         if (!cancelled) {

@@ -31,8 +31,17 @@ import {
 } from '../stores/StoresIndex';
 import { Button } from '../components/buttons/Button';
 
+const AUTOSAVE_DELAY_MS = 700;
+
 export function MarkdownEditorPage() {
-  const { workspaceId, pageId } = useParams();
+  const { pageId } = useParams();
+  // Keying the editor by page id gives every page its own state, refs and
+  // timers, so a response for page A can never land in page B.
+  return <MarkdownEditor key={pageId ?? 'none'} pageId={pageId} />;
+}
+
+function MarkdownEditor({ pageId }: { pageId: string | undefined }) {
+  const { workspaceId } = useParams();
   const { role, pageTitle } = useOutletContext<WorkspaceOutlet>();
   const accessToken = useAuthStore((state) => state.accessToken);
   const pages = usePageStore((state) => state.byWorkspace[workspaceId ?? ''] ?? EMPTY_PAGES);
@@ -61,28 +70,65 @@ export function MarkdownEditorPage() {
   const timer = useRef<number | null>(null);
   const hashRef = useRef<string | undefined>(undefined);
   const contentRef = useRef(content);
-  contentRef.current = content;
+  const dirtyRef = useRef(dirty);
+  // Loads and saves are tagged so a late response can be discarded.
+  const loadSeq = useRef(0);
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const pendingSaves = useRef(0);
 
-  const load = useCallback(async () => {
-    if (!pageId) return;
-    const entry = await loadContent(pageId);
-    hashRef.current = entry.hash;
-    setHash(entry.hash);
-    setContent(entry.content);
-    setDirty(false);
-    setMessage(null);
-  }, [pageId, loadContent]);
+  // Refs mirror state so async callbacks and event handlers see the latest
+  // value without reading a ref during render.
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   useEffect(() => {
-    if (locking || (encrypted && !unlocked)) return;
-    void load().catch((error: unknown) => {
-      setMessage(error instanceof Error ? error.message : 'Could not load markdown');
-    });
-  }, [load, locking, encrypted, unlocked]);
+    dirtyRef.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!pageId || locking || (encrypted && !unlocked)) return;
+    const seq = ++loadSeq.current;
+    loadContent(pageId)
+      .then((entry) => {
+        if (seq !== loadSeq.current) return;
+        // The user started typing before the page arrived; keep their text.
+        if (dirtyRef.current) return;
+        hashRef.current = entry.hash;
+        contentRef.current = entry.content;
+        setHash(entry.hash);
+        setContent(entry.content);
+        setDirty(false);
+        setMessage(null);
+      })
+      .catch((error: unknown) => {
+        if (seq !== loadSeq.current) return;
+        setMessage(error instanceof Error ? error.message : 'Could not load markdown');
+      });
+  }, [pageId, loadContent, locking, encrypted, unlocked]);
 
   useEffect(() => {
     void fetchAiStatus();
   }, [fetchAiStatus]);
+
+  useEffect(
+    () => () => {
+      if (timer.current) window.clearTimeout(timer.current);
+      // Ignore anything still in flight once this page is gone.
+      loadSeq.current += 1;
+    },
+    []
+  );
+
+  useEffect(() => {
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
 
   async function onUnlock(event: FormEvent) {
     event.preventDefault();
@@ -99,30 +145,45 @@ export function MarkdownEditorPage() {
     }
   }
 
-  async function save(next = content) {
-    if (!pageId || !editable || locking) return;
-    setSaving(true);
-    try {
-      const entry = await saveContent(pageId, next, hashRef.current);
-      hashRef.current = entry.hash;
-      setHash(entry.hash);
-      setDirty(false);
-      setMessage(null);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not save markdown');
-    } finally {
-      setSaving(false);
-    }
-  }
+  // Saves run one after another, each reading the hash left by the previous
+  // one, so an autosave and a manual save cannot race the same version.
+  const save = useCallback(
+    (next: string = contentRef.current) => {
+      if (!pageId || !editable || locking) return Promise.resolve();
+      pendingSaves.current += 1;
+      setSaving(true);
+      const run = async () => {
+        try {
+          const entry = await saveContent(pageId, next, hashRef.current);
+          hashRef.current = entry.hash;
+          setHash(entry.hash);
+          setMessage(null);
+          // Only mark clean when nothing was typed while the request ran.
+          if (contentRef.current === next) setDirty(false);
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : 'Could not save markdown');
+        } finally {
+          pendingSaves.current -= 1;
+          if (pendingSaves.current === 0) setSaving(false);
+        }
+      };
+      saveChain.current = saveChain.current.then(run);
+      return saveChain.current;
+    },
+    [pageId, editable, locking, saveContent]
+  );
 
   function onChange(value: string) {
     setContent(value);
+    contentRef.current = value;
     setDirty(true);
+    dirtyRef.current = true;
     if (!editable || locking) return;
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
+      timer.current = null;
       void save(value);
-    }, 700);
+    }, AUTOSAVE_DELAY_MS);
   }
 
   function onDownload() {
@@ -139,7 +200,9 @@ export function MarkdownEditorPage() {
   function insertAsk(text: string): boolean {
     const next = `${contentRef.current.trimEnd()}\n\n${text}\n`;
     setContent(next);
+    contentRef.current = next;
     setDirty(true);
+    dirtyRef.current = true;
     void save(next);
     return true;
   }

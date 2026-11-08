@@ -1,6 +1,6 @@
 import { type CSSProperties, type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { categoryHue } from '../docs/categoryColor';
-import { confirmDelete } from '../layout/deleteDialogue';
+import { confirmDelete } from '../layout/confirmDelete';
 import { useWorkspaceStore } from '../../stores/StoresIndex';
 import type { PublicWorkspace } from '../../api/client';
 import { Button } from '../buttons/Button';
@@ -55,14 +55,22 @@ export default function WorkspacesModal({
   const [pending, setPending] = useState<null | 'create' | 'rename' | 'delete'>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Reset the modal whenever it opens; the state outlives an open/close cycle.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setQuery('');
+      setCreateName('');
+      setRenamingId(null);
+      setRenameValue('');
+      setPending(null);
+      setMessage(null);
+    }
+  }
+
   useEffect(() => {
     if (!open) return;
-    setQuery('');
-    setCreateName('');
-    setRenamingId(null);
-    setRenameValue('');
-    setPending(null);
-    setMessage(null);
     const timer = window.setTimeout(() => searchRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [open]);

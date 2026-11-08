@@ -7,7 +7,7 @@ import {
   type TicketStatusCategory,
 } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
-import { confirmDelete } from '../layout/deleteDialogue';
+import { confirmDelete } from '../layout/confirmDelete';
 import { ColorDot } from '../notes/table/ColorDot';
 import { SELECT_COLORS, type SelectColor } from '../notes/table/columnTypes';
 import { BOARD_KEY_RE, STATUS_CATEGORY_LABEL, suggestKey } from './ticketMeta';

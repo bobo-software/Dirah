@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { EMPTY_PAGES, usePageStore } from '../stores/StoresIndex';
 import type { PublicPage } from '../api/client';
-import { confirmDelete } from '../components/layout/deleteDialogue';
+import { confirmDelete } from '../components/layout/confirmDelete';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
 import { Button } from '../components/buttons/Button';
 

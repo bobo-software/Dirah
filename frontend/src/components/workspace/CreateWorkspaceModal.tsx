@@ -19,11 +19,19 @@ export default function CreateWorkspaceModal({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Reset the form whenever the modal opens; the state outlives an open/close cycle.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setName('');
+      setMessage(null);
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!open) return;
-    setName('');
-    setMessage(null);
-    setBusy(false);
     const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape' && !busy) onClose();

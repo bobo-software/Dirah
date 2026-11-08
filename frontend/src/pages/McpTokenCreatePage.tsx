@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { useMcpStore, useWorkspaceStore } from '../stores/StoresIndex';
 import { BackIcon, KeyIcon, TokenAccessFields, type TokenAccessValue } from '../components/ComponentsIndex';
@@ -20,7 +20,7 @@ export function McpTokenCreatePage() {
   const [defaultWorkspaceId, setDefaultWorkspaceId] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const seededWorkspace = useRef(false);
+  const [seeded, setSeeded] = useState(false);
 
   const backLink = workspaceId ? `/w/${workspaceId}/settings?tab=mcp` : '/settings';
   const detailPath = (tokenId: string) =>
@@ -30,14 +30,15 @@ export function McpTokenCreatePage() {
     void fetchWorkspaces().catch(() => undefined);
   }, [fetchWorkspaces]);
 
-  useEffect(() => {
-    if (!workspaceId || seededWorkspace.current) return;
+  // Seed access with the workspace in the URL once its permissions are known.
+  if (!seeded && workspaceId) {
     const workspace = workspaces.find((item) => item.id === workspaceId);
-    if (!workspace || workspace.encrypted) return;
-    seededWorkspace.current = true;
-    setAccess(new Map([[workspaceId, { allowlisted: true, canWrite: workspace.role !== 'viewer' }]]));
-    setDefaultWorkspaceId(workspaceId);
-  }, [workspaceId, workspaces]);
+    if (workspace && !workspace.encrypted) {
+      setSeeded(true);
+      setAccess(new Map([[workspaceId, { allowlisted: true, canWrite: workspace.role !== 'viewer' }]]));
+      setDefaultWorkspaceId(workspaceId);
+    }
+  }
 
   function onAccessChange(id: string, patch: Partial<TokenAccessValue>) {
     setAccess((prev) => {

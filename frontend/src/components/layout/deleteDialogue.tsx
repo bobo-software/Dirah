@@ -1,39 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../buttons/Button';
-
-type PendingDelete = {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  /** When set, the person must type this exactly before Delete enables. */
-  confirmText?: string;
-  resolve: (confirmed: boolean) => void;
-};
-
-let present: ((pending: PendingDelete) => void) | null = null;
-
-export function confirmDelete(request: {
-  title?: string;
-  message: string;
-  confirmLabel?: string;
-  confirmText?: string;
-}): Promise<boolean> {
-  return new Promise((resolve) => {
-    const pending: PendingDelete = {
-      title: request.title ?? 'Delete this?',
-      message: request.message,
-      confirmLabel: request.confirmLabel ?? 'Delete',
-      confirmText: request.confirmText,
-      resolve,
-    };
-    if (!present) {
-      resolve(false);
-      return;
-    }
-    present(pending);
-  });
-}
+import { registerDeletePresenter, type PendingDelete } from './confirmDelete';
 
 export function DeleteDialogue() {
   const [pending, setPending] = useState<PendingDelete | null>(null);
@@ -44,15 +12,15 @@ export function DeleteDialogue() {
   const [typed, setTyped] = useState('');
 
   useEffect(() => {
-    present = (next) => {
+    registerDeletePresenter((next) => {
       setPending((current) => {
         current?.resolve(false);
         return next;
       });
       setTyped('');
-    };
+    });
     return () => {
-      present = null;
+      registerDeletePresenter(null);
     };
   }, []);
 

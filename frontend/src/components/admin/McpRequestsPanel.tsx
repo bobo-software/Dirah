@@ -16,8 +16,8 @@ export function McpRequestsPanel({ accessToken }: { accessToken: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     void (async () => {
+      setLoading(true);
       try {
         const result = await fetchAdminMcpAudit(accessToken, page, PAGE_SIZE);
         if (!cancelled) {

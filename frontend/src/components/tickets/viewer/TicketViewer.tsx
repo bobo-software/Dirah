@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { PublicMember } from '../../../api/members';
 import type { Ticket, TicketBoardView, TicketPatch } from '../../../api/tickets';
 import { useTicketStore } from '../../../stores/StoresIndex';
-import { confirmDelete } from '../../layout/deleteDialogue';
+import { confirmDelete } from '../../layout/confirmDelete';
 import { TicketDescription, TicketProperties, TicketTitle } from './TicketFields';
 import { TicketUpdates } from './TicketUpdates';
 import { TicketViewerHeader } from './TicketViewerHeader';

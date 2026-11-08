@@ -19,7 +19,7 @@ import {
   UploadTray,
   useSidebarDrawer,
 } from '../components/ComponentsIndex';
-import { confirmDelete } from '../components/layout/deleteDialogue';
+import { confirmDelete } from '../components/layout/confirmDelete';
 import { canEdit, workspaceSection } from './workspaceContext';
 import { Button } from '../components/buttons/Button';
 

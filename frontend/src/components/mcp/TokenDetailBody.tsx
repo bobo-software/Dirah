@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PUBLIC_API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
 import { useMcpStore } from '../../stores/StoresIndex';
-import { confirmDelete } from '../layout/deleteDialogue';
+import { confirmDelete } from '../layout/confirmDelete';
 import { BackIcon } from '../layout/SectionIcons';
 import CopyTokenOnce from './CopyTokenOnce';
 import TokenAccessFields, { type TokenAccessValue } from './TokenAccessFields';

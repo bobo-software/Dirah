@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PUBLIC_API_URL } from '../../api/client';
 import type { McpToken, TokenAccessRow } from '../../api/mcp';
-import { confirmDelete } from '../layout/deleteDialogue';
+import { confirmDelete } from '../layout/confirmDelete';
 import { useMcpStore } from '../../stores/StoresIndex';
 import { Button } from '../buttons/Button';
 
