@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { NoteKind, PublicNote } from '../../api/client';
 import { EMPTY_NOTES, useNoteStore } from '../../stores/StoresIndex';
-import { confirmDelete } from '../layout/deleteDialogue';
+import { confirmDelete } from '../layout/confirmDelete';
 import type { DropZone } from './noteTreeModel';
 
 export function useNoteActions(workspaceId: string) {

@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClientIcon, type ClientIconName } from './ClientIcon';
+import { ClientIcon } from './ClientIcon';
+import { CLIENTS, type ClientId } from './clients';
 import { CopyField } from './CopyField';
 import { CLAUDE_CODE_COMMAND, CURSOR_CONFIG, CURSOR_INSTALL_URL, MCP_URL } from './mcpConnect';
 import { Button } from '../buttons/Button';
@@ -8,14 +9,6 @@ import { Button } from '../buttons/Button';
 const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 const press = { whileHover: { y: -1 }, whileTap: { scale: 0.97 } };
-
-export type ClientId = 'claude' | 'claude-code' | 'cursor';
-
-export const CLIENTS: { id: ClientId; name: string; where: string; icon: ClientIconName }[] = [
-  { id: 'claude', name: 'Claude', where: 'Web and desktop app', icon: 'claude' },
-  { id: 'claude-code', name: 'Claude Code', where: 'Terminal', icon: 'claude' },
-  { id: 'cursor', name: 'Cursor', where: 'Editor', icon: 'cursor' },
-];
 
 export function ClientSetup() {
   const [active, setActive] = useState<ClientId>('claude');

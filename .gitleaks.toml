@@ -1,0 +1,25 @@
+title = "Dira"
+
+[extend]
+useDefault = true
+
+# The default rules miss Dira's custom token formats. DIRA-39 tracks the two
+# values that were committed to history before these rules existed.
+[[rules]]
+id = "dirah-mcp-token"
+description = "Dirah MCP personal access token"
+regex = '''dirah_mcp_[A-Za-z0-9_-]{16,}'''
+keywords = ["dirah_mcp_"]
+
+[[rules]]
+id = "dirah-mcp-api-key"
+description = "Dirah Postgres MCP bearer key"
+regex = '''(?i)mcp_api_key["'\s:=]{1,6}[A-Za-z0-9]{32,}'''
+keywords = ["mcp_api_key"]
+
+[allowlist]
+description = "Documented example values, not live credentials"
+paths = [
+  '''backend/postman/.*''',
+  '''.*\.example\.[a-z]+''',
+]

@@ -30,19 +30,33 @@ export function ProfileSection() {
   const [ready, setReady] = useState(user?.hasPassword !== undefined);
   const hasPassword = user?.hasPassword === true;
 
+  // Keep the draft fields in step with the profile once it loads or changes.
+  const userFields = {
+    name: user?.name ?? '',
+    role: user?.role ?? '',
+    about: user?.about ?? '',
+    email: user?.email ?? '',
+  };
+  const [syncedUser, setSyncedUser] = useState(userFields);
+  if (
+    syncedUser.name !== userFields.name ||
+    syncedUser.role !== userFields.role ||
+    syncedUser.about !== userFields.about ||
+    syncedUser.email !== userFields.email
+  ) {
+    setSyncedUser(userFields);
+    setName(userFields.name);
+    setRole(userFields.role);
+    setAbout(userFields.about);
+    setEmail(userFields.email);
+  }
+
   useEffect(() => {
     void refreshUser()
       .catch(() => undefined)
       .finally(() => setReady(true));
     void fetchWorkspaces().catch(() => undefined);
   }, [refreshUser, fetchWorkspaces]);
-
-  useEffect(() => {
-    setName(user?.name ?? '');
-    setRole(user?.role ?? '');
-    setAbout(user?.about ?? '');
-    setEmail(user?.email ?? '');
-  }, [user?.name, user?.role, user?.about, user?.email]);
 
   const emailChanged = email.trim().toLowerCase() !== (user?.email ?? '').toLowerCase();
   const dirty =

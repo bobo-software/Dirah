@@ -1,24 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-
-export type ThemePreference = 'system' | 'light' | 'dark';
-type ResolvedTheme = 'light' | 'dark';
-
-export const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ThemeContext, type ResolvedTheme, type ThemePreference } from './ThemeContext';
 
 const STORAGE_KEY = 'dirah.theme';
-
-type ThemeState = {
-  preference: ThemePreference;
-  resolved: ResolvedTheme;
-  setPreference: (pref: ThemePreference) => void;
-  cycle: () => void;
-};
-
-const ThemeContext = createContext<ThemeState | null>(null);
 
 function readStoredPreference(): ThemePreference {
   try {
@@ -33,21 +16,15 @@ function systemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function resolveTheme(preference: ThemePreference): ResolvedTheme {
-  return preference === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : preference;
-}
-
-function applyTheme(preference: ThemePreference): ResolvedTheme {
+function applyTheme(preference: ThemePreference, resolved: ResolvedTheme): void {
   const root = document.documentElement;
   if (preference === 'system') {
     root.removeAttribute('data-theme');
   } else {
     root.setAttribute('data-theme', preference);
   }
-  const resolved = resolveTheme(preference);
   const meta = document.querySelector('meta[name="theme-color"]:not([media])');
   if (meta) meta.setAttribute('content', resolved === 'dark' ? '#17161b' : '#f4f2ef');
-  return resolved;
 }
 
 /**
@@ -58,7 +35,8 @@ function applyTheme(preference: ThemePreference): ResolvedTheme {
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<ThemePreference>(() => readStoredPreference());
-  const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(preference));
+  const [systemDark, setSystemDark] = useState(() => systemPrefersDark());
+  const resolved: ResolvedTheme = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
 
   const setPreference = useCallback((pref: ThemePreference) => {
     setPreferenceState(pref);
@@ -78,16 +56,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [preference, setPreference]);
 
   useEffect(() => {
-    setResolved(applyTheme(preference));
-  }, [preference]);
+    applyTheme(preference, resolved);
+  }, [preference, resolved]);
 
   useEffect(() => {
-    if (preference !== 'system') return;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => setResolved(applyTheme('system'));
+    const onChange = () => setSystemDark(media.matches);
     media.addEventListener('change', onChange);
     return () => media.removeEventListener('change', onChange);
-  }, [preference]);
+  }, []);
 
   const value = useMemo(
     () => ({ preference, resolved, setPreference, cycle }),
@@ -95,10 +72,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme(): ThemeState {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
-  return ctx;
 }

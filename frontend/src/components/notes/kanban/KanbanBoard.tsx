@@ -15,7 +15,7 @@ import {
   type KanbanCard,
   type KanbanColumn,
 } from '../../../api/notes';
-import { confirmDelete } from '../../layout/deleteDialogue';
+import { confirmDelete } from '../../layout/confirmDelete';
 import { EMPTY_NOTES, useAuthStore, useNoteStore } from '../../../stores/StoresIndex';
 import { NoteEditor } from '../NoteEditor';
 import { NoteGlyph } from '../NoteTree';
@@ -105,9 +105,9 @@ export function KanbanBoard({ workspaceId, noteId }: { workspaceId: string; note
 
   useEffect(() => {
     let cancelled = false;
-    setData(null);
-    setMessage(null);
     void (async () => {
+      setData(null);
+      setMessage(null);
       try {
         const [board] = await Promise.all([getKanbanBoard(token(), noteId), fetchNotes(workspaceId)]);
         if (cancelled) return;
@@ -515,13 +515,15 @@ function KanbanColumnView({
   onRemoveCard: (card: KanbanCard) => void;
 }) {
   const [title, setTitle] = useState(column.title);
+  const [syncedTitle, setSyncedTitle] = useState(column.title);
   const [adding, setAdding] = useState(false);
   const [cardTitle, setCardTitle] = useState('');
   const [picking, setPicking] = useState(false);
 
-  useEffect(() => {
+  if (syncedTitle !== column.title) {
+    setSyncedTitle(column.title);
     setTitle(column.title);
-  }, [column.title]);
+  }
 
   function commitColumn(event?: FormEvent) {
     event?.preventDefault();
@@ -754,11 +756,13 @@ function CardView({
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(card.note.title);
+  const [syncedTitle, setSyncedTitle] = useState(card.note.title);
   const href = `/w/${workspaceId}/n/${card.noteId}`;
 
-  useEffect(() => {
+  if (syncedTitle !== card.note.title) {
+    setSyncedTitle(card.note.title);
     setTitle(card.note.title);
-  }, [card.note.title]);
+  }
 
   function commit(event?: FormEvent) {
     event?.preventDefault();

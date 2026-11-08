@@ -2,7 +2,7 @@ import { useEffect, useId, useState, type DragEvent } from 'react';
 import type { PublicMember } from '../../api/members';
 import type { Ticket, TicketBoardView, TicketGroup, TicketPatch, TicketStatus } from '../../api/tickets';
 import { useTicketStore } from '../../stores/StoresIndex';
-import { confirmDelete } from '../layout/deleteDialogue';
+import { confirmDelete } from '../layout/confirmDelete';
 import { ColorDot } from '../notes/table/ColorDot';
 import type { SelectColor } from '../notes/table/columnTypes';
 import { AssigneeCell, DueCell, PriorityCell, StatusCell } from './TicketCells';

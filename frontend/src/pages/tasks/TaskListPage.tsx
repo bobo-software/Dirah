@@ -4,7 +4,7 @@ import { useTaskStore } from '../../stores/StoresIndex';
 import type { TaskItem } from '../../api/tasks';
 import { TaskProgress } from '../../components/tasks/TaskProgress';
 import { taskMode } from '../../components/tasks/runner/modes';
-import { confirmDelete } from '../../components/layout/deleteDialogue';
+import { confirmDelete } from '../../components/layout/confirmDelete';
 import { canEdit, type WorkspaceOutlet } from '../workspaceContext';
 import { Button } from '../../components/buttons/Button';
 

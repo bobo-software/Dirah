@@ -15,8 +15,8 @@ export function AnalyticsPanel({ accessToken }: { accessToken: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     void (async () => {
+      setLoading(true);
       try {
         const { analytics: next } = await fetchAdminRequestAnalytics(accessToken, 24);
         if (!cancelled) {

@@ -9,7 +9,7 @@ import {
 } from '../../../api/tickets';
 import { useAuthStore } from '../../../stores/StoresIndex';
 import { RichMarkdownInput } from '../../editor/RichMarkdownInput';
-import { confirmDelete } from '../../layout/deleteDialogue';
+import { confirmDelete } from '../../layout/confirmDelete';
 import { Avatar } from '../TicketMenus';
 import { TicketMarkdown } from '../TicketMarkdown';
 import { describeActivity, memberLabel, timeAgo } from '../ticketMeta';

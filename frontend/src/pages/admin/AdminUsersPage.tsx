@@ -16,8 +16,8 @@ export function AdminUsersPage() {
   useEffect(() => {
     if (!accessToken) return;
     let cancelled = false;
-    setLoading(true);
     void (async () => {
+      setLoading(true);
       try {
         const result = await fetchAdminUsers(accessToken, page, PAGE_SIZE);
         if (!cancelled) {

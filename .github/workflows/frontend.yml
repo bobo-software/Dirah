@@ -38,6 +38,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run lint --workspace frontend
       - run: npm run typecheck --workspace frontend
       - run: npm test --workspace frontend
       - run: npm run build --workspace frontend
