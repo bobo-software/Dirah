@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { Pool, QueryResult, QueryResultRow } from 'pg';
 import { getMcpConfig } from '../../config/mcp';
@@ -26,15 +27,34 @@ export interface McpToolResult<T = unknown> {
 export interface PgMcpServiceOptions {
   pool: Pool;
   database: string;
+  /**
+   * Called once per tool call. The sink must never throw into the tool path;
+   * the service logs and swallows audit failures.
+   */
+  audit?: (event: PgAuditEvent) => void | Promise<void>;
 }
+
+export type PgAuditEvent = {
+  tool: string;
+  database: string;
+  outcome: 'ok' | 'error';
+  durationMs: number;
+  rows?: number;
+  statementKind?: string;
+  /** SHA-256 of the executed SQL. The statement itself is never stored. */
+  sqlHash?: string;
+  errorCode?: string;
+};
 
 export class PgMcpService {
   private readonly pool: Pool;
   private readonly database: string;
+  private readonly audit?: (event: PgAuditEvent) => void | Promise<void>;
 
   constructor(options: PgMcpServiceOptions) {
     this.pool = options.pool;
     this.database = options.database;
+    this.audit = options.audit;
   }
 
   async listTables(): Promise<McpToolResult<{ tables: string[] }>> {
@@ -166,12 +186,14 @@ export class PgMcpService {
   > {
     return this.runTool(
       'pg_select',
-      async () => {
+      async (detail) => {
         const mcp = getMcpConfig();
         const guarded = guardSelect(sql, {
           defaultLimit: mcp.defaultSelectLimit,
           maxLimit: mcp.maxSelectLimit,
         });
+        detail.kind = 'select';
+        detail.sql = guarded.sql;
 
         const result = await this.queryWithTimeout(guarded.sql, params);
         const limitedRows = result.rows.slice(0, guarded.appliedLimit);
@@ -206,13 +228,15 @@ export class PgMcpService {
   > {
     return this.runTool(
       'pg_execute_write',
-      async () => {
+      async (detail) => {
         const mcp = getMcpConfig();
         const guarded = guardWrite(sql, {
           confirm: options.confirm,
           allowDestructive: options.allowDestructive === true,
           maxWriteLimit: mcp.maxWriteLimit,
         });
+        detail.kind = guarded.kind;
+        detail.sql = guarded.sql;
 
         const result = await this.queryWithTimeout(guarded.sql, options.params ?? []);
 
@@ -258,7 +282,8 @@ export class PgMcpService {
       durationMs: number;
     }>
   > {
-    return this.runTool('pg_run_migrations', async () => {
+    return this.runTool('pg_run_migrations', async (detail) => {
+      detail.kind = 'migrate';
       if (!options.confirm) {
         throw new SqlGuardError('Running migrations requires confirm: true');
       }
@@ -323,7 +348,7 @@ export class PgMcpService {
   > {
     return this.runTool(
       'pg_bulk_insert',
-      async () => {
+      async (detail) => {
         if (!options.confirm) {
           throw new SqlGuardError('Bulk insert requires confirm: true');
         }
@@ -354,6 +379,7 @@ export class PgMcpService {
 
         const chunkSize = options.chunkSize ?? 200;
         const upsert = options.upsert === true;
+        detail.kind = upsert ? 'upsert' : 'insert';
 
         const client = await this.pool.connect();
         let affectedRows = 0;
@@ -366,6 +392,7 @@ export class PgMcpService {
               upsert,
               conflictTarget: options.conflictTarget,
             });
+            if (!detail.sql) detail.sql = sql;
             const result = await client.query(toPgPlaceholders(sql), values);
             affectedRows += result.rowCount ?? 0;
             chunkCount += 1;
@@ -466,22 +493,34 @@ export class PgMcpService {
 
   private async runTool<T>(
     toolName: string,
-    fn: () => Promise<McpToolResult<T>>,
+    fn: (detail: { kind?: string; sql?: string }) => Promise<McpToolResult<T>>,
     rowsSelector?: (result: McpToolResult<T>) => number | undefined
   ): Promise<McpToolResult<T>> {
     const started = Date.now();
+    // Local to this call, so concurrent tool calls cannot overwrite each other.
+    const detail: { kind?: string; sql?: string } = {};
     try {
-      const result = await fn();
+      const result = await fn(detail);
       const durationMs = Date.now() - started;
+      const rows = rowsSelector?.(result);
       console.log(
         JSON.stringify({
           scope: 'mcp_pg',
           tool: toolName,
           success: result.success,
           durationMs,
-          rows: rowsSelector?.(result),
+          rows,
         })
       );
+      this.recordAudit({
+        tool: toolName,
+        database: this.database,
+        outcome: 'ok',
+        durationMs,
+        rows,
+        statementKind: detail.kind,
+        sqlHash: this.hashSql(detail.sql),
+      });
       return result;
     } catch (error) {
       const durationMs = Date.now() - started;
@@ -491,6 +530,7 @@ export class PgMcpService {
           : error instanceof Error
             ? error.message
             : 'Unknown MCP Postgres error';
+      const errorCode = error instanceof SqlGuardError ? 'SQL_GUARD' : 'EXECUTION';
 
       console.log(
         JSON.stringify({
@@ -498,15 +538,42 @@ export class PgMcpService {
           tool: toolName,
           success: false,
           durationMs,
-          error: error instanceof SqlGuardError ? 'SQL_GUARD' : 'EXECUTION',
+          error: errorCode,
         })
       );
+
+      this.recordAudit({
+        tool: toolName,
+        database: this.database,
+        outcome: 'error',
+        durationMs,
+        statementKind: detail.kind,
+        sqlHash: this.hashSql(detail.sql),
+        errorCode,
+      });
 
       return {
         success: false,
         message,
         error: error instanceof SqlGuardError ? 'SQL_GUARD_ERROR' : 'EXECUTION_ERROR',
       };
+    }
+  }
+
+  private hashSql(sql?: string): string | undefined {
+    if (!sql) return undefined;
+    return crypto.createHash('sha256').update(sql).digest('hex');
+  }
+
+  private recordAudit(event: PgAuditEvent): void {
+    if (!this.audit) return;
+    try {
+      void Promise.resolve(this.audit(event)).catch((error: unknown) => {
+        console.error('Failed to write MCP audit row', error);
+      });
+    } catch (error) {
+      // A broken audit sink must never break the tool call.
+      console.error('Failed to write MCP audit row', error);
     }
   }
 

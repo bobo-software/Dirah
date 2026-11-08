@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './config/env';
 import { db, livePool, pool } from './db';
+import { mcpAudit } from './db/schemas';
 import { createApiRouter } from './routes';
 import { getHealth } from './controllers/health.controller';
 import { errorHandler } from './middlewares/errorHandler';
@@ -10,7 +11,7 @@ import { notFound } from './middlewares/notFound';
 import { requestTiming } from './middlewares/requestTiming';
 import { mcpApiKeyMiddleware } from './middlewares/mcpApiKey';
 import { createDirahMcpExpressHandler } from './mcp/createDirahMcpExpressHandler';
-import { PgMcpService } from './services/mcp/PgMcpService';
+import { PgMcpService, type PgAuditEvent } from './services/mcp/PgMcpService';
 import { AuthService } from './services/AuthService';
 import { PageService } from './services/PageService';
 import { NoteService } from './services/NoteService';
@@ -209,17 +210,38 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   // the public paths here; the app itself is served as the static shell.
   app.use(createSeoRouter(shareService, new SeoRenderer()));
 
+  // Phase 1 of DIRA-2: record every Postgres MCP call. The static key has no
+  // identity, so the actor is the key label until per-user tokens land.
+  const recordPgAudit = (event: PgAuditEvent) => {
+    db.insert(mcpAudit)
+      .values({
+        tool: event.tool,
+        outcome: event.outcome,
+        actor: 'static-key',
+        statementKind: event.statementKind ?? null,
+        sqlHash: event.sqlHash ?? null,
+        rowCount: event.rows ?? null,
+        durationMs: event.durationMs,
+        errorCode: event.errorCode ?? null,
+      })
+      .catch((error) => {
+        console.error('Failed to write MCP audit row', error);
+      });
+  };
+
   const pgMcpService =
     options.pgMcpService ??
     new PgMcpService({
       pool,
       database: env.db.database,
+      audit: recordPgAudit,
     });
   const livePgMcpService =
     options.livePgMcpService ??
     new PgMcpService({
       pool: livePool,
       database: env.liveDb.database,
+      audit: recordPgAudit,
     });
 
   const mcpHandler = await createDirahMcpExpressHandler({

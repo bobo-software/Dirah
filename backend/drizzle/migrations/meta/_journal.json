@@ -253,6 +253,13 @@
       "when": 1756539500000,
       "tag": "0035_model_assets_and_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1756539600000,
+      "tag": "0036_mcp_audit_detail",
+      "breakpoints": true
     }
   ]
 }
