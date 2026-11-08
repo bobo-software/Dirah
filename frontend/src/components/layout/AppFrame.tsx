@@ -5,6 +5,7 @@ import { clearReturnTo, rememberReturnTo } from '../../utils/returnTo';
 import { ProfileMenu } from '../auth/ProfileMenu';
 import { BrandLink } from './Logo';
 import { TopbarSectionTabs, TopbarWorkspaceSwitcher } from './Topbar';
+import { APP_META, Seo } from '../../seo/index';
 
 export function RequireAuth() {
   const user = useAuthStore((state) => state.user);
@@ -34,6 +35,8 @@ export function AppFrame({ children }: { children?: ReactNode }) {
 
   return (
     <div className="app">
+      {/* Everything behind the sign-in wall is private: keep it out of the index. */}
+      <Seo {...APP_META} />
       <header className="topbar">
         <BrandLink />
         <TopbarWorkspaceSwitcher />

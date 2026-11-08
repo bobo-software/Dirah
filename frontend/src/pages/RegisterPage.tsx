@@ -5,6 +5,7 @@ import { readReturnTo } from '../utils/returnTo';
 import { BrandLink, NewAccountFields, OAuthButtons, ThemeToggle } from '../components/ComponentsIndex';
 import { emptyNewAccount, fullName, newAccountProblem, passwordsDiffer } from '../utils/newAccount';
 import { Button } from '../components/buttons/Button';
+import { ROUTE_META, Seo } from '../seo/index';
 
 export function RegisterPage() {
   const user = useAuthStore((state) => state.user);
@@ -41,6 +42,7 @@ export function RegisterPage() {
 
   return (
     <main className="auth-card">
+      <Seo {...ROUTE_META['/register']} />
       <div className="auth-card-corner">
         <ThemeToggle />
       </div>

@@ -87,6 +87,8 @@ type PageTreeProps = {
   onTrash: (page: PublicPage) => void;
   onFavorite: (page: PublicPage) => void;
   onMove: (pageId: string, parentId: string | null) => void;
+  /** Upload media into a folder: opens a file picker without files, or stores dropped files. */
+  onUploadInto?: (parent: PublicPage, files?: File[]) => void;
   expandedIds: Set<string>;
   onToggleExpand: (pageId: string) => void;
   ancestorIds?: string[];
@@ -117,6 +119,7 @@ function PageTreeItem({
   onTrash,
   onFavorite,
   onMove,
+  onUploadInto,
   expandedIds,
   onToggleExpand,
   ancestorIds = [],
@@ -201,6 +204,10 @@ function PageTreeItem({
     event.preventDefault();
     event.stopPropagation();
     setOver(false);
+    if (event.dataTransfer.files.length > 0) {
+      if (editable && nestable && onUploadInto) onUploadInto(page, Array.from(event.dataTransfer.files));
+      return;
+    }
     const dragged = draggedPageId(event.dataTransfer);
     if (!canAccept(dragged)) return;
     onMove(dragged, page.id);
@@ -248,7 +255,7 @@ function PageTreeItem({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
           onClick={onRowClick}
-          title={nestable && editable ? 'Drop a file here to move it into this folder' : undefined}
+          title={nestable && editable ? 'Drop a page here to move it, or media files to upload them, into this folder' : undefined}
         >
           <span className="row-toggle">
             {nestable && hasChildren ? (
@@ -273,8 +280,8 @@ function PageTreeItem({
               style={{ background: `hsl(${categoryHue(page.id)} 55% 50%)` }}
             />
           ) : (
-            <span className="kind-glyph" title={kind}>
-              {kindGlyph(kind)}
+            <span className={kind === 'asset' ? 'kind-glyph asset' : 'kind-glyph'} title={kind}>
+              {kindGlyph(kind, page)}
             </span>
           )}
           {nestable ? (
@@ -293,7 +300,7 @@ function PageTreeItem({
           >
             {page.favorited ? '★' : '☆'}
           </Button>
-          {editable && kind === 'markdown' ? (
+          {editable && kind !== 'folder' ? (
             <span className="page-row-actions">
               <Button variant="link" type="button" aria-label="Rename" title="Rename" onClick={() => onStartRename(page)}>
                 <RenameIcon />
@@ -303,7 +310,7 @@ function PageTreeItem({
               </Button>
             </span>
           ) : null}
-          {editable && kind !== 'markdown' ? (
+          {editable && kind === 'folder' ? (
             <span className={menuOpen ? 'page-row-menu open' : 'page-row-menu'} ref={menuRef}>
               <Button variant="link"
                 type="button"
@@ -341,6 +348,19 @@ function PageTreeItem({
                       >
                         New subfolder
                       </Button>
+                      {onUploadInto ? (
+                        <Button variant="plain"
+                          type="button"
+                          role="menuitem"
+                          className="page-row-dropdown-item"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            onUploadInto(page);
+                          }}
+                        >
+                          Upload media
+                        </Button>
+                      ) : null}
                     </>
                   ) : null}
                   <Button variant="plain"
@@ -386,6 +406,7 @@ function PageTreeItem({
           onTrash={onTrash}
           onFavorite={onFavorite}
           onMove={onMove}
+          onUploadInto={onUploadInto}
           expandedIds={expandedIds}
           onToggleExpand={onToggleExpand}
           ancestorIds={[...ancestorIds, page.id]}

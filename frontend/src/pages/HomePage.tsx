@@ -18,6 +18,20 @@ import {
 } from '../components/ComponentsIndex';
 import { useAuthStore } from '../stores/StoresIndex';
 import { trackSpotlight } from '../utils/spotlight';
+import { ROUTE_META, SITE_DESCRIPTION, SITE_NAME, Seo, absoluteUrl } from '../seo/index';
+
+const HOME_META = ROUTE_META['/'];
+
+const HOME_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: SITE_NAME,
+  description: SITE_DESCRIPTION,
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  url: absoluteUrl('/'),
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'ZAR' },
+};
 
 export function HomeGate() {
   const user = useAuthStore((state) => state.user);
@@ -83,6 +97,7 @@ function HomePage() {
 
   return (
     <MotionConfig reducedMotion="user">
+      <Seo {...HOME_META} jsonLd={HOME_JSON_LD} />
       <div className="home">
         <header className="home-bar">
           <BrandLink size="sm" />

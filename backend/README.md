@@ -20,7 +20,7 @@ Docker builds use Node 26. Locally, Node 22 or newer matches `tsconfig` (`@tscon
 src/
   server.ts          process entry; listens and logs what is enabled
   app.ts             Express app, services, routes, both MCP handlers
-  routes/            HTTP routers under /api
+  routes/            HTTP routers under /api, plus the pages rendered for crawlers
   controllers/       request handlers
   services/          workspace, page, auth, share, crypto, AI, MCP
   db/schemas/        Drizzle tables
@@ -85,6 +85,7 @@ Copy [`../.env.example`](../.env.example) to `.env` at the repo root. Groups:
 | Group | Variables | Notes |
 | --- | --- | --- |
 | Server | `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `APP_PUBLIC_URL`, `API_PUBLIC_URL`, `ALLOW_INSECURE_HTTP` | `APP_PUBLIC_URL` is the web origin used in invite links. `API_PUBLIC_URL` is this API, used in OAuth callbacks and MCP metadata. `ALLOW_INSECURE_HTTP=true` is for a self-hosted localhost/LAN install over plain HTTP only. |
+| Web app | `WEB_INTERNAL_URL` | Where this API fetches the built web app from when it renders a page for a crawler. Unset means `APP_PUBLIC_URL`. In a Docker install, point it at the web container: `http://web:83`. |
 | Auth | `JWT_SECRET`, `JWT_REFRESH_SECRET` | Dev defaults exist. Production refuses to boot unless both are unique and at least 32 characters. |
 | System admin | `SYSTEM_ADMIN_EMAIL`, `SYSTEM_ADMIN_PASSWORD` | Creates the first row in `system_admins` when that table is empty. Leave blank to skip. |
 | Postgres | `DB_*`, `DB_SSL`, `DB_SSL_CA` | `DB_*` is used in every environment. `DB_SSL` is `disable` or `verify-full`. `DB_SSL_CA` is a PEM or a path to one. |
@@ -137,6 +138,21 @@ Refresh cookies are httpOnly, `SameSite=Lax`, and `Secure` when the API public U
 | `POST /api/admin/auth/login` and `/metrics`, `/users`, `/emails`, `/request-logs`, `/mcp-audit` | System admin. Separate session from users. |
 
 Workspace roles are `owner`, `editor`, and `viewer`. Editors change pages. Only owners manage members and workspace settings.
+
+## Pages for crawlers
+
+A link pasted into a chat is fetched by a crawler that never runs JavaScript, so the tags of a page have to be in the HTML itself. These routes render the built web app with the head tags of the page they point at:
+
+| Route | What it renders |
+| --- | --- |
+| `GET /` | The home page: title, description, canonical link, social preview image and structured data |
+| `GET /login`, `/register` | The sign-in pages, kept out of the index |
+| `GET /privacy`, `/terms`, `/cookies` | The legal pages, each with its own title and description |
+| `GET /s/:token` | A shared page, with the title and the text of the document. A link that is gone answers `404` and is kept out of the index. |
+| `GET /robots.txt` | Points at the sitemap and keeps the app out of the way |
+| `GET /sitemap.xml` | The public pages, built from the request origin |
+
+nginx sends those paths here (`frontend/nginx.conf`); the app behind the sign-in wall is served as the static shell. The shell is the built `index.html`, fetched from `WEB_INTERNAL_URL` and cached for a minute, so the asset names always match the running build. The wording lives in `src/services/SeoService.ts` and mirrors `frontend/src/seo/copy.ts`: keep the two in step.
 
 ## Data model
 

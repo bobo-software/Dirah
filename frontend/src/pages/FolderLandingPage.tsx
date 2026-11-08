@@ -2,7 +2,8 @@ import { useOutletContext, useParams, useNavigate } from 'react-router-dom';
 import type { ChangeEvent } from 'react';
 import { EMPTY_PAGES, usePageStore, useMarkdownContentStore } from '../stores/StoresIndex';
 import { canEdit, type WorkspaceOutlet } from './workspaceContext';
-import { pageKind } from '../components/ComponentsIndex';
+import { AssetGallery } from '../components/assets/AssetGallery';
+import { kindGlyph, pageKind } from '../components/ComponentsIndex';
 import { Button } from '../components/buttons/Button';
 
 export function FolderLandingPage({
@@ -12,13 +13,15 @@ export function FolderLandingPage({
 }) {
   const { workspaceId, pageId } = useParams();
   const navigate = useNavigate();
-  const { role } = useOutletContext<WorkspaceOutlet>();
+  const { role, onUploadFiles } = useOutletContext<WorkspaceOutlet>();
   const pages = usePageStore((state) => state.byWorkspace[workspaceId ?? ''] ?? EMPTY_PAGES);
   const createPage = usePageStore((state) => state.createPage);
   const saveContent = useMarkdownContentStore((state) => state.saveContent);
   const editable = canEdit(role);
   const folder = pages.find((page) => page.id === pageId);
   const children = pages.filter((page) => page.parentId === pageId);
+  const assetIds = children.filter((page) => pageKind(page) === 'asset').map((page) => page.id);
+  const otherChildren = children.filter((page) => pageKind(page) !== 'asset');
 
   async function onImport(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -51,21 +54,33 @@ export function FolderLandingPage({
           <Button type="button" onClick={() => onCreate('folder', pageId ?? null)}>
             New folder
           </Button>
+          <Button type="button" onClick={() => onUploadFiles(pageId ?? null)}>
+            Upload media
+          </Button>
           <label className="linkish import-md">
             Import .md
             <input type="file" accept=".md,text/markdown,text/plain" onChange={(e) => void onImport(e)} hidden />
           </label>
         </div>
       ) : null}
-      {children.length > 0 ? (
+      {workspaceId ? (
+        <AssetGallery
+          workspaceId={workspaceId}
+          parentId={pageId ?? null}
+          assetIds={assetIds}
+          editable={editable}
+          onDropFiles={(files) => onUploadFiles(pageId ?? null, files)}
+        />
+      ) : null}
+      {otherChildren.length > 0 ? (
         <ul className="folder-children">
-          {children.map((child) => (
+          {otherChildren.map((child) => (
             <li key={child.id}>
               <Button variant="link"
                 type="button"
                 onClick={() => navigate(`/w/${workspaceId}/p/${child.id}`)}
               >
-                {pageKind(child) === 'folder' ? '📁' : 'MD'} {child.title}
+                {kindGlyph(pageKind(child), child)} {child.title}
               </Button>
             </li>
           ))}

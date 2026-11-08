@@ -42,7 +42,9 @@ export type PublicWorkspace = {
   mcpEnabled?: boolean;
 };
 
-export type PageKind = 'folder' | 'markdown';
+export type PageKind = 'folder' | 'markdown' | 'asset';
+/** Kinds a person creates directly; assets come from uploads. */
+export type CreatablePageKind = 'folder' | 'markdown';
 
 export type PublicPage = {
   id: string;

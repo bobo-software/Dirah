@@ -16,9 +16,13 @@ COPY frontend/ ./frontend/
 # its own origin and nginx proxies /api. VITE_API_URL is an optional override.
 ARG VITE_PUBLIC_API_URL
 ARG VITE_API_URL
+# The public address of the web app, used for the canonical link and the
+# social preview image in the generated head. Unset keeps those relative.
+ARG VITE_SITE_URL
 
 ENV VITE_PUBLIC_API_URL=$VITE_PUBLIC_API_URL
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_SITE_URL=$VITE_SITE_URL
 
 WORKDIR /app/frontend
 

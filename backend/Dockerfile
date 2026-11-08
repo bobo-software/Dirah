@@ -23,7 +23,8 @@ RUN npm prune --omit=dev --workspace backend && mkdir -p backend/node_modules
 FROM node:26-alpine
 
 # curl is what the Coolify/Docker healthcheck runs inside the container.
-RUN apk add --no-cache curl
+# ffmpeg makes video/audio previews for media assets.
+RUN apk add --no-cache curl ffmpeg
 
 WORKDIR /app/backend
 

@@ -239,6 +239,13 @@
       "when": 1756539300000,
       "tag": "0033_member_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1756539400000,
+      "tag": "0034_media_assets",
+      "breakpoints": true
     }
   ]
 }

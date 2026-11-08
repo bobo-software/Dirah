@@ -28,6 +28,10 @@ import { McpTokenService } from './services/McpTokenService';
 import { DocsMcpService } from './services/DocsMcpService';
 import { NotesMcpService } from './services/NotesMcpService';
 import { BlobsMcpService } from './services/BlobsMcpService';
+import { AssetService } from './services/AssetService';
+import { AssetsMcpService } from './services/AssetsMcpService';
+import { MediaProcessingService } from './services/MediaProcessingService';
+import { MediaUrlService } from './services/MediaUrlService';
 import { createDocsMcpExpressHandler } from './mcp/docs/createDocsMcpExpressHandler';
 import { createDocsMcpAuthMiddleware } from './middlewares/docsMcpAuth';
 import { docsMcpRateLimit } from './middlewares/docsMcpRateLimit';
@@ -35,6 +39,8 @@ import { McpOAuthService } from './services/McpOAuthService';
 import { SystemAdminAuthService } from './services/SystemAdminAuthService';
 import { AdminService } from './services/AdminService';
 import { createMcpOAuthPublicRouter, MCP_OAUTH_PUBLIC_PATHS } from './routes/mcpOAuth.routes';
+import { createSeoRouter } from './routes/seo.routes';
+import { SeoRenderer } from './services/SeoService';
 import { defaultOAuthExchanger, type OAuthExchanger } from './oauth/providers';
 import { convertBlockPagesIfNeeded } from './convert/convertBlockPages';
 
@@ -114,7 +120,33 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   const ticketsMcpService = new TicketsMcpService(ticketService, docsMcpService, {
     appPublicUrl: env.appPublicUrl,
   });
-  const blobsMcpService = new BlobsMcpService(blobService, docsMcpService);
+  const mediaUrlService = new MediaUrlService({
+    publicOrigin: env.apiPublicUrl,
+    secret: env.media.urlSecret,
+    fallbackSecret: env.jwtSecret,
+    defaultTtlSeconds: env.media.urlTtlSeconds,
+    maxTtlSeconds: env.media.urlMaxTtlSeconds,
+  });
+  const mediaProcessingService = new MediaProcessingService(
+    db,
+    blobService,
+    { ffmpeg: env.media.ffmpegPath, ffprobe: env.media.ffprobePath },
+    env.media.processingConcurrency
+  );
+  const assetService = new AssetService(
+    db,
+    authService,
+    pageService,
+    blobService,
+    mediaProcessingService,
+    mediaUrlService,
+    { maxBytes: env.media.maxBytes }
+  );
+  const blobsMcpService = new BlobsMcpService(blobService, docsMcpService, assetService);
+  const assetsMcpService = new AssetsMcpService(assetService, docsMcpService);
+  if (env.nodeEnv !== 'test') {
+    void mediaProcessingService.resumePending().catch((error) => console.warn('Media processing resume skipped', error));
+  }
   const apiPublicUrl = env.apiPublicUrl;
   const mcpOAuthService = new McpOAuthService(db, apiPublicUrl, env.appPublicUrl, mcpTokenService);
   const shareService = new ShareService(db, authService, pageService);
@@ -154,11 +186,16 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
       adminService,
       noteService,
       taskListService,
-      ticketService
+      ticketService,
+      { assets: assetService, urls: mediaUrlService }
     )
   );
 
   app.use(createMcpOAuthPublicRouter(mcpOAuthService));
+
+  // The public pages, rendered with the head tags a crawler reads. nginx sends
+  // the public paths here; the app itself is served as the static shell.
+  app.use(createSeoRouter(shareService, new SeoRenderer()));
 
   const pgMcpService =
     options.pgMcpService ??
@@ -183,7 +220,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
     docsMcpService,
     notesMcpService,
     ticketsMcpService,
-    blobsMcpService
+    blobsMcpService,
+    assetsMcpService
   );
   app.all(
     '/mcp',

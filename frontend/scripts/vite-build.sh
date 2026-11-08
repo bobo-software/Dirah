@@ -21,4 +21,15 @@ if [ -n "${VITE_API_URL:-}" ]; then
   export VITE_API_URL
 fi
 
+# Optional. The public address of the web app, used for the canonical link and
+# the social preview image in the generated head. Leave unset for a self-hosted
+# install: the app then uses the origin the browser is on.
+if [ -n "${VITE_SITE_URL:-}" ]; then
+  case "$VITE_SITE_URL" in
+    http://*|https://*) ;;
+    *) VITE_SITE_URL="https://${VITE_SITE_URL}" ;;
+  esac
+  export VITE_SITE_URL
+fi
+
 npm run build

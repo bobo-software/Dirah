@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 export type BlobStoreKind = 'disk' | 's3';
 
@@ -8,8 +11,15 @@ export type BlobStore = {
   kind: BlobStoreKind;
   put(key: string, body: Buffer, mime: string): Promise<void>;
   get(key: string): Promise<Buffer>;
+  /** Writes a stream without holding it in memory (multipart on S3). */
+  putStream(key: string, body: Readable, mime: string): Promise<void>;
+  /** Reads all of an object, or the inclusive byte range given, as a stream. */
+  getStream(key: string, range?: ByteRange): Promise<Readable>;
   remove(key: string): Promise<void>;
 };
+
+/** Inclusive byte range, as in an HTTP Range header. */
+export type ByteRange = { start: number; end: number };
 
 export type S3BlobConfig = {
   endpoint: string;
@@ -20,8 +30,19 @@ export type S3BlobConfig = {
 };
 
 type S3ClientInstance = {
-  send: (command: unknown) => Promise<{ Body?: { transformToByteArray: () => Promise<Uint8Array> } }>;
+  send: (command: unknown) => Promise<{ Body?: { transformToByteArray: () => Promise<Uint8Array> } & Partial<Readable> }>;
 };
+
+type AwsUpload = {
+  Upload: new (input: { client: unknown; params: Record<string, unknown>; queueSize?: number; partSize?: number }) => {
+    done: () => Promise<unknown>;
+  };
+};
+
+function loadAwsUpload(): AwsUpload {
+  const require = createRequire(__filename);
+  return require('@aws-sdk/lib-storage') as AwsUpload;
+}
 
 type AwsS3 = {
   S3Client: new (config: Record<string, unknown>) => S3ClientInstance;
@@ -47,6 +68,23 @@ export function createDiskBlobStore(rootDir: string): BlobStore {
     },
     async get(key) {
       return fs.readFile(path.join(rootDir, key));
+    },
+    async putStream(key, body) {
+      const abs = path.join(rootDir, key);
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      const partial = `${abs}.partial`;
+      try {
+        await pipeline(body, createWriteStream(partial));
+        await fs.rename(partial, abs);
+      } catch (error) {
+        await fs.unlink(partial).catch(() => undefined);
+        throw error;
+      }
+    },
+    async getStream(key, range) {
+      const abs = path.join(rootDir, key);
+      await fs.access(abs);
+      return createReadStream(abs, range ? { start: range.start, end: range.end } : undefined);
     },
     async remove(key) {
       await fs.unlink(path.join(rootDir, key)).catch(() => undefined);
@@ -108,6 +146,29 @@ export function createS3BlobStore(config: S3BlobConfig): BlobStore {
         throw new Error('empty object');
       }
       return Buffer.from(bytes);
+    },
+    async putStream(key, body, mime) {
+      await ensureBucket();
+      const { Upload } = loadAwsUpload();
+      await new Upload({
+        client,
+        params: { Bucket: bucket, Key: key, Body: body, ContentType: mime },
+        queueSize: 4,
+        partSize: 8 * 1024 * 1024,
+      }).done();
+    },
+    async getStream(key, range) {
+      const out = await client.send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}),
+        })
+      );
+      if (!out.Body || typeof (out.Body as Readable).pipe !== 'function') {
+        throw new Error('empty object');
+      }
+      return out.Body as unknown as Readable;
     },
     async remove(key) {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => undefined);

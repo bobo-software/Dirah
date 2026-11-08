@@ -57,12 +57,27 @@ export interface DocsGuide {
 const AGENT_INDEX_FALLBACK_CHAIN = ['readme.md', 'docs/agents.md', 'agents.md'];
 
 function isDocsKind(kind: PageKind): boolean {
-  return kind === 'folder' || kind === 'markdown';
+  return kind === 'folder' || kind === 'markdown' || kind === 'asset';
 }
 
 function segmentFor(page: PublicPage): string {
   const slug = page.slug || slugify(page.title);
+  // An asset's slug already ends in its file extension (hero.png).
   return page.kind === 'markdown' ? `${slug}.md` : slug;
+}
+
+/** The asset slug a path segment like "Hero Shot.PNG" names (hero-shot.png), or null without an extension. */
+function assetSlugFromSegment(segment: string): string | null {
+  const match = /^(.+)\.([a-z0-9]{1,5})$/i.exec(segment);
+  if (!match || match[2].toLowerCase() === 'md') return null;
+  return `${slugify(match[1])}.${match[2].toLowerCase()}`;
+}
+
+function kindMismatch(page: PublicPage): HttpError {
+  if (page.kind === 'asset') {
+    return new HttpError('This path is a media asset; use get_asset to read it', 400, 'IS_ASSET');
+  }
+  return new HttpError('Docs node kind mismatch', 400, 'INVALID_KIND');
 }
 
 function normalizePrefix(prefix?: string): string {
@@ -313,7 +328,7 @@ export class DocsMcpService {
       slug: page.slug,
       path,
       parentId: page.parentId,
-      url: page.kind === 'markdown' ? this.pageUrl(workspaceId, page.id) : undefined,
+      url: page.kind !== 'folder' ? this.pageUrl(workspaceId, page.id) : undefined,
     };
   }
 
@@ -585,6 +600,26 @@ export class DocsMcpService {
     return boostAgentIndexHits(hits);
   }
 
+  /** Every docs node (folders, markdown, assets) with its path. Checks the allowlist. */
+  treeNodes(userId: string, tokenId: string | null, workspaceId: string): Promise<DocsTreeNode[]> {
+    return this.loadTree(userId, tokenId, workspaceId);
+  }
+
+  /** A node by path or id, optionally of one kind. The caller has checked the allowlist. */
+  resolveNode(
+    userId: string,
+    workspaceId: string,
+    input: { path?: string; nodeId?: string },
+    expected?: PageKind
+  ): Promise<PublicPage> {
+    return this.resolveDocsNode(userId, workspaceId, input, expected);
+  }
+
+  /** The folder at `path`, creating missing folders when `create`. Null for the root. */
+  folderAt(userId: string, workspaceId: string, path: string | undefined, create: boolean): Promise<string | null> {
+    return this.ensureFolders(userId, workspaceId, parseDocsPath(path ?? ''), create);
+  }
+
   recordAudit(entry: Parameters<McpTokenService['recordAudit']>[0]): Promise<void> {
     return this.tokens.recordAudit(entry);
   }
@@ -633,7 +668,7 @@ export class DocsMcpService {
         throw new HttpError('Docs node not found', 404, 'DOCS_NOT_FOUND');
       }
       if (expected && page.kind !== expected) {
-        throw new HttpError('Docs node kind mismatch', 400, 'INVALID_KIND');
+        throw kindMismatch(page);
       }
       return page;
     }
@@ -654,7 +689,10 @@ export class DocsMcpService {
               ? 'markdown'
               : 'folder';
       const slug = last && kind === 'markdown' ? markdownSlugFromSegment(segments[i]) : slugify(segments[i]);
-      const found = await this.findChild(userId, workspaceId, parentId, slug, last ? undefined : 'folder');
+      const assetSlug = last && expected !== 'folder' ? assetSlugFromSegment(segments[i]) : null;
+      const found: PublicPage | null =
+        (assetSlug ? await this.findChild(userId, workspaceId, parentId, assetSlug, 'asset') : null) ??
+        (await this.findChild(userId, workspaceId, parentId, slug, last ? undefined : 'folder'));
       if (!found) {
         throw new HttpError(`Not found: ${segments.slice(0, i + 1).join('/')}`, 404, 'DOCS_NOT_FOUND');
       }
@@ -665,7 +703,7 @@ export class DocsMcpService {
       throw new HttpError('Docs node not found', 404, 'DOCS_NOT_FOUND');
     }
     if (expected && page.kind !== expected) {
-      throw new HttpError('Docs node kind mismatch', 400, 'INVALID_KIND');
+      throw kindMismatch(page);
     }
     return page;
   }

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
-import { EMPTY_PAGES, usePageStore, useWorkspaceStore } from '../stores/StoresIndex';
+import { EMPTY_PAGES, useAssetUploadStore, usePageStore, useWorkspaceStore } from '../stores/StoresIndex';
 import { ApiError, type PageKind, type PublicPage } from '../api/client';
+import { ASSET_ACCEPT } from '../api/assets';
 import {
   EmptyEditorPane,
   HomeIcon,
@@ -13,7 +14,9 @@ import {
   buildPageTree,
   clearLastWorkspaceId,
   draggedPageId,
+  dragHasFiles,
   setLastWorkspaceId,
+  UploadTray,
   useSidebarDrawer,
 } from '../components/ComponentsIndex';
 import { confirmDelete } from '../components/layout/deleteDialogue';
@@ -49,6 +52,9 @@ export function WorkspaceShellPage() {
   const [renameValue, setRenameValue] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [rootOver, setRootOver] = useState(false);
+  const uploadFiles = useAssetUploadStore((state) => state.uploadFiles);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadParentRef = useRef<string | null>(null);
   const { open: sidebarOpen, setOpen: setSidebarOpen, narrow } = useSidebarDrawer();
 
   useEffect(() => {
@@ -94,6 +100,18 @@ export function WorkspaceShellPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Uploads files into `parentId`, or opens the file picker for it when no files are given. */
+  function onUploadFiles(parentId: string | null, files?: File[]) {
+    if (!workspaceId) return;
+    if (files?.length) {
+      if (parentId) setExpandedIds((current) => new Set(current).add(parentId));
+      void uploadFiles(workspaceId, parentId, files);
+      return;
+    }
+    uploadParentRef.current = parentId;
+    fileInputRef.current?.click();
   }
 
   async function commitRename(page: PublicPage) {
@@ -196,6 +214,7 @@ export function WorkspaceShellPage() {
     onTrash: (page: PublicPage) => void onTrash(page),
     onFavorite: (page: PublicPage) => void onFavorite(page),
     onMove,
+    onUploadInto: (parent: PublicPage, files?: File[]) => onUploadFiles(parent.id, files),
     expandedIds,
     onToggleExpand,
   };
@@ -253,6 +272,10 @@ export function WorkspaceShellPage() {
                 if (!editable) return;
                 event.preventDefault();
                 setRootOver(false);
+                if (dragHasFiles(event.dataTransfer) && event.dataTransfer.files.length) {
+                  onUploadFiles(null, Array.from(event.dataTransfer.files));
+                  return;
+                }
                 const dragged = draggedPageId(event.dataTransfer);
                 if (dragged) void onMove(dragged, null);
               }}
@@ -274,9 +297,29 @@ export function WorkspaceShellPage() {
                   >
                     Folder
                   </Button>
+                  <Button variant="link"
+                    type="button"
+                    title="Upload images, video or audio"
+                    onClick={() => onUploadFiles(null)}
+                  >
+                    Media
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ASSET_ACCEPT}
+                    multiple
+                    hidden
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      event.target.value = '';
+                      if (files.length) onUploadFiles(uploadParentRef.current, files);
+                    }}
+                  />
                 </span>
               ) : null}
             </div>
+            <UploadTray workspaceId={workspaceId} />
             {pages.length === 0 ? (
               <p className="muted">{searching ? 'No matching pages.' : 'No pages yet.'}</p>
             ) : (
@@ -331,6 +374,7 @@ export function WorkspaceShellPage() {
               pageTitle: currentTitle,
               workspaceId,
               onCreateNode: (kind: PageKind, parentId?: string | null) => void onCreateNode(kind, parentId),
+              onUploadFiles,
             }}
           />
         ) : (

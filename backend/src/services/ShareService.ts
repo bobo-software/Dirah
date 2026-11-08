@@ -92,6 +92,7 @@ export class ShareService {
         kind: pages.kind,
         slug: pages.slug,
         createdAt: pages.createdAt,
+        updatedAt: pages.updatedAt,
         searchText: pages.searchText,
       })
       .from(pages)
@@ -132,6 +133,24 @@ export class ShareService {
       throw new HttpError('Markdown body not found', 404, 'MARKDOWN_NOT_FOUND');
     }
     return { page, ...body };
+  }
+
+  /** Title and preview text of a shared page, for the head tags a crawler reads
+      when the link is pasted into a chat. Throws when the link is gone. */
+  async getPublicMetadata(token: string): Promise<{
+    title: string;
+    excerpt: string;
+    updatedAt: Date | null;
+  }> {
+    const page = await this.requireActive(token);
+    if (await this.pages.isWorkspaceEncrypted(page.workspaceId)) {
+      throw new HttpError(
+        'Sharing is unavailable because this workspace is encrypted',
+        409,
+        'WORKSPACE_ENCRYPTED'
+      );
+    }
+    return { title: page.title, excerpt: page.excerpt, updatedAt: page.updatedAt ?? null };
   }
 
   async requireWorkspace(token: string, workspaceId: string): Promise<PublicPage & { token: string }> {

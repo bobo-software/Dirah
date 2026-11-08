@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getPublicMarkdown } from '../api/share';
 import { BrandLink, ThemeToggle } from '../components/ComponentsIndex';
+import { SITE_NAME, Seo, absoluteUrl, excerptFromMarkdown } from '../seo/index';
 
 export function PublicSharePage() {
   const { token } = useParams();
   const [title, setTitle] = useState('Shared document');
   const [content, setContent] = useState('');
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,6 +22,7 @@ export function PublicSharePage() {
         if (cancelled) return;
         setTitle(body.page.title);
         setContent(body.content);
+        setUpdatedAt(body.updatedAt);
         setError(null);
       } catch (caught: unknown) {
         if (!cancelled) {
@@ -32,9 +35,28 @@ export function PublicSharePage() {
     };
   }, [token]);
 
+  const description = useMemo(() => excerptFromMarkdown(content), [content]);
+  const canonical = token ? `/s/${token}` : '/';
+
+  const jsonLd = useMemo(() => {
+    if (error || !token) return undefined;
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: title,
+      description,
+      mainEntityOfPage: absoluteUrl(canonical),
+      dateModified: updatedAt ?? undefined,
+      author: { '@type': 'Organization', name: SITE_NAME },
+      publisher: { '@type': 'Organization', name: SITE_NAME },
+      articleBody: excerptFromMarkdown(content, 20000),
+    };
+  }, [error, token, title, description, canonical, updatedAt, content]);
+
   if (error) {
     return (
       <div className="public-share">
+        <Seo title="Link not found" description="This share link is not available." canonical={canonical} noIndex />
         <header className="topbar">
           <BrandLink />
           <div className="topbar-user">
@@ -57,6 +79,7 @@ export function PublicSharePage() {
 
   return (
     <div className="public-share">
+      <Seo title={title} description={description} canonical={canonical} type="article" modifiedTime={updatedAt ?? undefined} jsonLd={jsonLd} />
       <header className="topbar">
         <BrandLink />
         <div className="topbar-user">

@@ -2,6 +2,7 @@ import { HttpError } from '../utils/HttpError';
 import { isValidBlobId } from '../utils/blobRefs';
 import type { BlobService, PublicBlob } from './BlobService';
 import type { DocsMcpService } from './DocsMcpService';
+import type { AssetService } from './AssetService';
 
 /** Largest image returned inline; base64 adds a third on top of this. */
 export const MAX_MCP_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -20,6 +21,8 @@ export interface McpImage {
   /** Bytes when the image can be shown to the agent; null with a reason otherwise. */
   body: Buffer | null;
   reason: ImageUnavailableReason | null;
+  /** Set when `body` is a resized preview of the original (too large or HEIC), with the preview's type. */
+  previewMimeType?: string;
 }
 
 const BLOB_PATH = /^(?:https?:\/\/[^/]+)?\/api\/blobs\/([^/?#]+)(?:[?#].*)?$/;
@@ -54,7 +57,8 @@ function unavailableReason(meta: PublicBlob): ImageUnavailableReason | null {
 export class BlobsMcpService {
   constructor(
     private readonly blobs: BlobService,
-    private readonly docs: DocsMcpService
+    private readonly docs: DocsMcpService,
+    private readonly assets?: AssetService
   ) {}
 
   recordAudit(entry: Parameters<DocsMcpService['recordAudit']>[0]): Promise<void> {
@@ -84,6 +88,22 @@ export class BlobsMcpService {
       throw error;
     }
     const reason = unavailableReason(found.meta);
+    if (reason && reason !== 'not_an_image' && this.assets) {
+      // A media asset already has a resized JPEG preview; show that instead of refusing.
+      const preview = await this.assetPreview(found.meta.id);
+      if (preview) {
+        return {
+          blobId: found.meta.id,
+          workspaceId: found.meta.workspaceId,
+          mimeType: found.meta.mime,
+          byteSize: found.meta.byteSize,
+          url: blobUrl(found.meta.id),
+          body: preview.body,
+          reason: null,
+          previewMimeType: preview.mime,
+        };
+      }
+    }
     return {
       blobId: found.meta.id,
       workspaceId: found.meta.workspaceId,
@@ -93,5 +113,16 @@ export class BlobsMcpService {
       body: reason ? null : found.body,
       reason,
     };
+  }
+
+  private async assetPreview(blobId: string): Promise<{ body: Buffer; mime: string } | null> {
+    const owner = await this.assets!.findServableByBlob(blobId);
+    if (!owner?.isMain) return null;
+    try {
+      const asset = await this.assets!.view(owner.pageId);
+      return asset.mediaType === 'image' ? await this.assets!.previewBytes(asset) : null;
+    } catch {
+      return null;
+    }
   }
 }

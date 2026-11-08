@@ -57,6 +57,9 @@ applies pending migrations before the API starts. Upgrades are
 
 - One hostname is enough: nginx proxies `/api`, `/mcp` and the OAuth discovery
   paths to `backend:4006`. The MCP URL is `http://localhost:8080/mcp`.
+- The public pages, shared links, `robots.txt` and `sitemap.xml` are rendered
+  by the API, so a link pasted into a chat shows the page it points at. nginx
+  falls back to the static shell when the API is down.
 - Plain HTTP is allowed only with `ALLOW_INSECURE_HTTP=true` (localhost/LAN).
   For a public install, put Caddy/Traefik in front, set `APP_PUBLIC_URL`,
   `API_PUBLIC_URL` and `CORS_ORIGIN` to the `https://` origin, and set

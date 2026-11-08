@@ -2,6 +2,10 @@ import type { Request, Response } from 'express';
 import { BlobService } from '../services/BlobService';
 import ResponseUtils from '../utils/ResponseUtils';
 import { asyncHandler } from '../utils/asyncHandler';
+import { sendBlob } from '../utils/sendBlob';
+
+/** Blob bytes never change for an id; access can, so caches stay private. */
+const BLOB_CACHE_CONTROL = 'private, max-age=86400';
 
 export function createBlobController(blobs: BlobService) {
   return {
@@ -37,10 +41,8 @@ export function createBlobController(blobs: BlobService) {
       if (!blobId) {
         return ResponseUtils.error(res, 'Blob id is required', null, 400);
       }
-      const { meta, body } = await blobs.get(req.user!.userId, blobId);
-      res.setHeader('Content-Type', meta.mime);
-      res.setHeader('Content-Length', String(body.length));
-      return res.send(body);
+      const info = await blobs.info(req.user!.userId, blobId);
+      await sendBlob(req, res, blobs, info, { cacheControl: BLOB_CACHE_CONTROL });
     }),
 
     downloadInWorkspace: asyncHandler(async (req: Request, res: Response) => {
@@ -49,13 +51,11 @@ export function createBlobController(blobs: BlobService) {
       if (!workspaceId || !blobId) {
         return ResponseUtils.error(res, 'Workspace id and blob id are required', null, 400);
       }
-      const { meta, body } = await blobs.get(req.user!.userId, blobId);
-      if (meta.workspaceId !== workspaceId) {
+      const info = await blobs.info(req.user!.userId, blobId);
+      if (info.meta.workspaceId !== workspaceId) {
         return ResponseUtils.error(res, 'Blob not found', null, 404);
       }
-      res.setHeader('Content-Type', meta.mime);
-      res.setHeader('Content-Length', String(body.length));
-      return res.send(body);
+      await sendBlob(req, res, blobs, info, { cacheControl: BLOB_CACHE_CONTROL });
     }),
 
     remove: asyncHandler(async (req: Request, res: Response) => {

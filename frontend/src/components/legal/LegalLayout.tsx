@@ -4,6 +4,7 @@ import { BrandLink } from '../layout/Logo';
 import ThemeToggle from '../layout/ThemeToggle';
 import { SiteFooter } from '../layout/SiteFooter';
 import { LEGAL } from '../../legal/legalInfo';
+import { ROUTE_META, SITE_DESCRIPTION, Seo } from '../../seo/index';
 
 export type LegalSection = { id: string; title: string; body: ReactNode };
 
@@ -29,15 +30,9 @@ export function LegalLayout({
     if (!window.location.hash) window.scrollTo(0, 0);
   }, [current]);
 
-  useEffect(() => {
-    document.title = `${title} · Dirah`;
-    return () => {
-      document.title = 'Dirah';
-    };
-  }, [title]);
-
   return (
     <div className="home legal">
+      <Seo {...(ROUTE_META[current] ?? { title, description: SITE_DESCRIPTION, canonical: current })} />
       <header className="home-bar">
         <BrandLink size="sm" />
         <div className="home-bar-actions">
