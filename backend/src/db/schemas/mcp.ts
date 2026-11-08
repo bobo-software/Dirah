@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { users } from './users';
 import { workspaces } from './workspaces';
 
@@ -59,6 +59,15 @@ export const mcpAudit = pgTable('mcp_audit', {
   tool: text('tool').notNull(),
   nodeId: uuid('node_id'),
   outcome: text('outcome').notNull(),
+  /** Who called it: a token prefix, or 'static-key' for the shared MCP_API_KEY. */
+  actor: text('actor'),
+  /** SELECT / INSERT / UPDATE / DELETE / DDL / MIGRATE, when the tool ran SQL. */
+  statementKind: text('statement_kind'),
+  /** SHA-256 of the executed SQL; the statement itself is never stored. */
+  sqlHash: text('sql_hash'),
+  rowCount: integer('row_count'),
+  durationMs: integer('duration_ms'),
+  errorCode: text('error_code'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
