@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore, useWorkspaceStore } from '../stores/StoresIndex';
-import { answerOAuthRequest, getOAuthClient, type OAuthClientInfo } from '../api/mcp';
-import { TokenAccessFields, type TokenAccessValue } from '../components/ComponentsIndex';
+import {
+  answerOAuthRequest,
+  getOAuthClient,
+  type McpWorkspaceScope,
+  type OAuthClientInfo,
+} from '../api/mcp';
+import {
+  TokenAccessFields,
+  WorkspaceScopeFields,
+  type TokenAccessValue,
+} from '../components/ComponentsIndex';
 import { Button } from '../components/buttons/Button';
 
 export function McpOAuthConsentPage() {
@@ -17,6 +26,7 @@ export function McpOAuthConsentPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [workspaceScope, setWorkspaceScope] = useState<McpWorkspaceScope>('selected');
   // Only what the user changed; everything else falls back to the read-only default below.
   const [overrides, setOverrides] = useState<Map<string, TokenAccessValue>>(new Map());
 
@@ -71,7 +81,8 @@ export function McpOAuthConsentPage() {
         resource: params.get('resource') ?? undefined,
         scope: params.get('scope') ?? undefined,
         deny,
-        workspaces: deny ? undefined : chosen,
+        workspaceScope,
+        workspaces: deny ? undefined : workspaceScope === 'selected' ? chosen : [],
       });
       window.location.assign(redirectTo);
     } catch (error) {
@@ -115,23 +126,32 @@ export function McpOAuthConsentPage() {
         </p>
       ) : null}
 
-      <div className="mcp-field">
-        <span className="mcp-field-label">Workspace access</span>
-        <span className="mcp-field-hint">
-          Pick "Read &amp; write" only if you want {client.clientName} to create and edit pages for you.
-        </span>
-        {grantable.length === 0 ? (
-          <p className="muted">You don't have any workspaces that can be shared with AI apps.</p>
-        ) : (
-          <TokenAccessFields workspaces={grantable} value={access} onChange={onAccessChange} />
-        )}
-        {encryptedCount > 0 ? (
+      <WorkspaceScopeFields
+        value={workspaceScope}
+        onChange={setWorkspaceScope}
+        workspaces={grantable}
+        groupName="oauth-workspace-scope"
+      />
+
+      {workspaceScope === 'selected' ? (
+        <div className="mcp-field">
+          <span className="mcp-field-label">Workspace access</span>
           <span className="mcp-field-hint">
-            {encryptedCount} end-to-end encrypted workspace{encryptedCount === 1 ? '' : 's'} can't be shared with AI
-            apps.
+            Pick "Read &amp; write" only if you want {client.clientName} to create and edit pages for you.
           </span>
-        ) : null}
-      </div>
+          {grantable.length === 0 ? (
+            <p className="muted">You don't have any workspaces that can be shared with AI apps.</p>
+          ) : (
+            <TokenAccessFields workspaces={grantable} value={access} onChange={onAccessChange} />
+          )}
+        </div>
+      ) : null}
+      {encryptedCount > 0 ? (
+        <span className="mcp-field-hint">
+          {encryptedCount} end-to-end encrypted workspace{encryptedCount === 1 ? '' : 's'} can't be shared with AI
+          apps.
+        </span>
+      ) : null}
 
       <p className="mcp-field-hint">
         After you allow access, you'll go back to <strong>{client.redirectHost}</strong>.
@@ -142,7 +162,7 @@ export function McpOAuthConsentPage() {
           type="button"
           className="mcp-create-submit"
           onClick={() => void respond(false)}
-          disabled={busy || chosen.length === 0}
+          disabled={busy || (workspaceScope === 'selected' && chosen.length === 0)}
         >
           {busy ? 'Connecting…' : 'Allow access'}
         </Button>

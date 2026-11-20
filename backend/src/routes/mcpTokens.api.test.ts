@@ -11,6 +11,37 @@ const ownerEmail = `phase6-pat-owner-${stamp}@example.com`;
 const viewerEmail = `phase6-pat-viewer-${stamp}@example.com`;
 const password = 'password12';
 
+function parseMcpBody(body: unknown): Record<string, unknown> {
+  if (typeof body === 'object' && body !== null) {
+    return body as Record<string, unknown>;
+  }
+  if (typeof body === 'string') {
+    const dataLine = body.split('\n').find((line) => line.startsWith('data: '));
+    if (dataLine) {
+      return JSON.parse(dataLine.slice('data: '.length)) as Record<string, unknown>;
+    }
+    return JSON.parse(body) as Record<string, unknown>;
+  }
+  throw new Error(`Unexpected MCP body type: ${typeof body}`);
+}
+
+function mcpPost(app: Express, secret: string, payload: Record<string, unknown>) {
+  return request(app)
+    .post('/mcp')
+    .set('Content-Type', 'application/json')
+    .set('Accept', 'application/json, text/event-stream')
+    .set('Authorization', `Bearer ${secret}`)
+    .send(payload);
+}
+
+function toolResult(res: request.Response): Record<string, unknown> {
+  const body = parseMcpBody(res.body?.result ? res.body : res.text);
+  const result = (body.result ?? body) as { content?: Array<{ text?: string }> };
+  const text = result.content?.[0]?.text;
+  if (!text) return body;
+  return JSON.parse(text) as Record<string, unknown>;
+}
+
 describe('MCP PAT and allowlist API', () => {
   let app: Express;
   let dbReady = false;
@@ -339,6 +370,174 @@ describe('MCP PAT and allowlist API', () => {
     const t2B = token2Access.body.data.workspaces.find((w: { workspaceId: string }) => w.workspaceId === wsB);
     expect(t2A.allowlisted).toBe(false);
     expect(t2B.allowlisted).toBe(true);
+  });
+
+  it('an all-workspaces token reaches every membership, including workspaces created later', async () => {
+    if (!dbReady) return;
+    const email = `phase-scope-all-${Date.now()}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const firstWorkspaceId = owner.body.data.workspace.id as string;
+
+    const created = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'admin-agent', workspaceScope: 'all', defaultWorkspaceId: firstWorkspaceId });
+    expect(created.status).toBe(201);
+    expect(created.body.data.token.workspaceScope).toBe('all');
+    const secret = created.body.data.token.secret as string;
+    const tokenId = created.body.data.token.id as string;
+    expect(created.body.data.token.defaultWorkspaceId).toBe(firstWorkspaceId);
+    const firstRow = created.body.data.token.access.find(
+      (row: { workspaceId: string }) => row.workspaceId === firstWorkspaceId
+    );
+    expect(firstRow.allowlisted).toBe(true);
+    expect(firstRow.canWrite).toBe(true);
+    expect(firstRow.source).toBe('all');
+
+    const second = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Joined Later' });
+    const secondWorkspaceId = second.body.data.workspace.id as string;
+
+    // No PUT /tokens/:id/access call anywhere: the new workspace is covered.
+    const access = await request(app)
+      .get(`/api/mcp/tokens/${tokenId}/access`)
+      .set('Authorization', `Bearer ${jwt}`);
+    const secondRow = access.body.data.workspaces.find(
+      (row: { workspaceId: string }) => row.workspaceId === secondWorkspaceId
+    );
+    expect(secondRow.allowlisted).toBe(true);
+    expect(secondRow.canWrite).toBe(true);
+    expect(secondRow.source).toBe('all');
+
+    const list = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'list_workspaces', arguments: {} },
+    });
+    const rows = toolResult(list).data as Array<{ workspaceId: string; default: boolean }>;
+    expect(rows.map((row) => row.workspaceId)).toEqual(
+      expect.arrayContaining([firstWorkspaceId, secondWorkspaceId])
+    );
+    expect(rows.find((row) => row.workspaceId === firstWorkspaceId)?.default).toBe(true);
+
+    const written = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId: secondWorkspaceId, path: 'agent.md', content: '# Agent\n' },
+      },
+    });
+    expect(toolResult(written).success).toBe(true);
+  });
+
+  it('all_read_only blocks writes, and switching back to selected restores grants', async () => {
+    if (!dbReady) return;
+    const email = `phase-scope-switch-${Date.now()}@example.com`;
+    const owner = await request(app).post('/api/auth/register').send({ email, password });
+    const jwt = owner.body.data.tokens.accessToken as string;
+    const grantedWorkspaceId = owner.body.data.workspace.id as string;
+
+    const other = await request(app)
+      .post('/api/workspaces')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ name: 'Not Granted' });
+    const ungrantedWorkspaceId = other.body.data.workspace.id as string;
+
+    const created = await request(app)
+      .post('/api/mcp/tokens')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({
+        name: 'scoped-agent',
+        defaultWorkspaceId: grantedWorkspaceId,
+        workspaceAccess: [{ workspaceId: grantedWorkspaceId, canWrite: true }],
+      });
+    const secret = created.body.data.token.secret as string;
+    const tokenId = created.body.data.token.id as string;
+
+    const readOnly = await request(app)
+      .patch(`/api/mcp/tokens/${tokenId}`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaceScope: 'all_read_only' });
+    expect(readOnly.status).toBe(200);
+    expect(readOnly.body.data.token.workspaceScope).toBe('all_read_only');
+
+    const access = await request(app)
+      .get(`/api/mcp/tokens/${tokenId}/access`)
+      .set('Authorization', `Bearer ${jwt}`);
+    const ungrantedRow = access.body.data.workspaces.find(
+      (row: { workspaceId: string }) => row.workspaceId === ungrantedWorkspaceId
+    );
+    expect(ungrantedRow.allowlisted).toBe(true);
+    expect(ungrantedRow.canWrite).toBe(false);
+
+    const blocked = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId: ungrantedWorkspaceId, path: 'blocked.md', content: 'x' },
+      },
+    });
+    expect(toolResult(blocked).success).toBe(false);
+    expect(toolResult(blocked).error).toBe('MCP_READ_ONLY');
+
+    const writable = await request(app)
+      .patch(`/api/mcp/tokens/${tokenId}`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaceScope: 'all', defaultWorkspaceId: ungrantedWorkspaceId });
+    expect(writable.status).toBe(200);
+    expect(writable.body.data.token.workspaceScope).toBe('all');
+
+    const written = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId: ungrantedWorkspaceId, path: 'allowed.md', content: '# Ok\n' },
+      },
+    });
+    expect(toolResult(written).success).toBe(true);
+
+    // The ungranted default cannot survive a switch back to explicit grants.
+    const backToSelected = await request(app)
+      .patch(`/api/mcp/tokens/${tokenId}`)
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ workspaceScope: 'selected' });
+    expect(backToSelected.status).toBe(200);
+    expect(backToSelected.body.data.token.workspaceScope).toBe('selected');
+    expect(backToSelected.body.data.token.defaultWorkspaceId).toBeNull();
+
+    const scoped = await request(app)
+      .get(`/api/mcp/tokens/${tokenId}/access`)
+      .set('Authorization', `Bearer ${jwt}`);
+    const restored = scoped.body.data.workspaces.find(
+      (row: { workspaceId: string }) => row.workspaceId === grantedWorkspaceId
+    );
+    const dropped = scoped.body.data.workspaces.find(
+      (row: { workspaceId: string }) => row.workspaceId === ungrantedWorkspaceId
+    );
+    expect(restored.allowlisted).toBe(true);
+    expect(restored.canWrite).toBe(true);
+    expect(dropped.allowlisted).toBe(false);
+
+    const denied = await mcpPost(app, secret, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'write_file',
+        arguments: { workspaceId: ungrantedWorkspaceId, path: 'denied.md', content: 'x' },
+      },
+    });
+    expect(toolResult(denied).error).toBe('MCP_NOT_ALLOWLISTED');
   });
 
   it('rejects access reads/writes for a token id that is not owned by the requester', async () => {

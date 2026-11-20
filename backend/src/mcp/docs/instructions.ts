@@ -18,14 +18,25 @@ export const DIRA_DOCS_INSTRUCTIONS = `Dirah is the team's markdown knowledge ba
 - write_file may warn when a new path is not linked from the workspace index (startAt). Add a link yourself; the tool does not edit the index.
 - Use list_tree prefix/depth instead of dumping the whole tree. Use read_file startLine/maxLines for large notes.`;
 
+const MAX_GUIDE_WORKSPACES = 20;
+
 export function buildDynamicInstructions(guide: DocsGuide): string {
   if (!guide.workspaces.length) {
-    return `${DIRA_DOCS_INSTRUCTIONS}\n\nNo workspaces are allowlisted for this token yet — ask an owner to grant access in Dirah settings.`;
+    return `${DIRA_DOCS_INSTRUCTIONS}\n\nNo workspaces are reachable for this token yet — check Settings → MCP.`;
   }
-  const lines = guide.workspaces.map((ws) => {
+  const all = guide.workspaceScope !== 'selected';
+  const shown = guide.workspaces.slice(0, MAX_GUIDE_WORKSPACES);
+  const lines = shown.map((ws) => {
     const marker = ws.default ? ' (default)' : '';
     const startAt = ws.startAt ? ` — start at ${ws.startAt}` : '';
     return `- ${ws.slug}${marker}${startAt}`;
   });
-  return `${DIRA_DOCS_INSTRUCTIONS}\n\nWorkspaces allowlisted for this token:\n${lines.join('\n')}`;
+  const hidden = guide.workspaces.length - shown.length;
+  if (hidden > 0) {
+    lines.push(`- …and ${hidden} more (call list_workspaces for the full list)`);
+  }
+  const header = all
+    ? `This token can reach every workspace its user can access (${guide.workspaces.length}), including workspaces they join later. Encrypted workspaces and workspaces with MCP switched off stay excluded.`
+    : 'Workspaces allowlisted for this token:';
+  return `${DIRA_DOCS_INSTRUCTIONS}\n\n${header}\n${lines.join('\n')}`;
 }

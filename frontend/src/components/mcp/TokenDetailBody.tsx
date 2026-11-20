@@ -1,12 +1,13 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PUBLIC_API_URL } from '../../api/client';
-import type { McpToken, TokenAccessRow } from '../../api/mcp';
+import type { McpToken, McpWorkspaceScope, TokenAccessRow } from '../../api/mcp';
 import { useMcpStore } from '../../stores/StoresIndex';
 import { confirmDelete } from '../layout/confirmDelete';
 import { BackIcon } from '../layout/SectionIcons';
 import CopyTokenOnce from './CopyTokenOnce';
 import TokenAccessFields, { type TokenAccessValue } from './TokenAccessFields';
+import WorkspaceScopeFields from './WorkspaceScopeFields';
 import { Button } from '../buttons/Button';
 
 function rowsToValue(rows: TokenAccessRow[]): Map<string, TokenAccessValue> {
@@ -30,6 +31,7 @@ export function TokenDetailBody({
   const tokenAccess = useMcpStore((state) => state.tokenAccess);
   const tokenAccessLoading = useMcpStore((state) => state.tokenAccessLoading);
   const updateToken = useMcpStore((state) => state.updateToken);
+  const fetchTokenAccess = useMcpStore((state) => state.fetchTokenAccess);
   const rotateToken = useMcpStore((state) => state.rotateToken);
   const revokeToken = useMcpStore((state) => state.revokeToken);
   const setTokenAccess = useMcpStore((state) => state.setTokenAccess);
@@ -37,6 +39,7 @@ export function TokenDetailBody({
   const isOAuth = Boolean(token.oauthClientId);
 
   const [name, setName] = useState(token.name);
+  const [scope, setScope] = useState<McpWorkspaceScope>(token.workspaceScope ?? 'selected');
   const [message, setMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [shownSecret, setShownSecret] = useState<string | null>(secretFromCreation);
@@ -80,6 +83,7 @@ export function TokenDetailBody({
       mcpEnabled: existing?.mcpEnabled ?? true,
       allowlisted: existing?.allowlisted ?? false,
       canWrite: existing?.canWrite ?? false,
+      source: existing?.source ?? 'grant',
       ...patch,
     });
     const next = Array.from(byId.values());
@@ -100,6 +104,24 @@ export function TokenDetailBody({
       setMessage(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not update default workspace');
+    }
+  }
+
+  async function onScopeChange(next: McpWorkspaceScope) {
+    if (next === scope) return;
+    if (next !== 'selected') {
+      const confirmed = window.confirm(
+        'This token will reach every workspace you can access, including ones you join later. Continue?',
+      );
+      if (!confirmed) return;
+    }
+    try {
+      await updateToken(token.id, { workspaceScope: next });
+      await fetchTokenAccess(token.id);
+      setScope(next);
+      setMessage(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not update workspace access');
     }
   }
 
@@ -185,22 +207,43 @@ export function TokenDetailBody({
 
       <div className="settings-section">
         <h2>Workspace access</h2>
-        {tokenAccessLoading[token.id] && !rows ? (
-          <p className="muted">Loading workspace access…</p>
+        <WorkspaceScopeFields
+          value={scope}
+          onChange={(next) => void onScopeChange(next)}
+          workspaces={(rows ?? []).map((row) => ({
+            id: row.workspaceId,
+            name: row.name,
+            mcpEnabled: row.mcpEnabled,
+          }))}
+          defaultWorkspaceId={token.defaultWorkspaceId}
+          onDefaultChange={(workspaceId) => void onDefaultChange(workspaceId)}
+          groupName={`token-workspace-scope-${token.id}`}
+        />
+        {scope === 'selected' ? (
+          tokenAccessLoading[token.id] && !rows ? (
+            <p className="muted">Loading workspace access…</p>
+          ) : (
+            <TokenAccessFields
+              workspaces={(rows ?? []).map((row) => ({
+                id: row.workspaceId,
+                name: row.name,
+                role: row.role,
+                mcpEnabled: row.mcpEnabled,
+              }))}
+              value={rowsToValue(rows ?? [])}
+              defaultWorkspaceId={token.defaultWorkspaceId}
+              groupName={`token-default-workspace-${token.id}`}
+              onChange={(workspaceId, patch) => void onAccessChange(workspaceId, patch)}
+              onDefaultChange={(workspaceId) => void onDefaultChange(workspaceId)}
+            />
+          )
+        ) : rows ? (
+          <p className="muted mcp-scope-summary">
+            {allowlisted.length} workspace{allowlisted.length === 1 ? '' : 's'} reachable
+            {scope === 'all_read_only' ? ' · read only' : ' · read & write where your role allows'}
+          </p>
         ) : (
-          <TokenAccessFields
-            workspaces={(rows ?? []).map((row) => ({
-              id: row.workspaceId,
-              name: row.name,
-              role: row.role,
-              mcpEnabled: row.mcpEnabled,
-            }))}
-            value={rowsToValue(rows ?? [])}
-            defaultWorkspaceId={token.defaultWorkspaceId}
-            groupName={`token-default-workspace-${token.id}`}
-            onChange={(workspaceId, patch) => void onAccessChange(workspaceId, patch)}
-            onDefaultChange={(workspaceId) => void onDefaultChange(workspaceId)}
-          />
+          <p className="muted">Loading workspace access…</p>
         )}
       </div>
 

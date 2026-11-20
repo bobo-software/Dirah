@@ -260,6 +260,13 @@
       "when": 1756539600000,
       "tag": "0036_mcp_audit_detail",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1756539700000,
+      "tag": "0037_mcp_token_workspace_scope",
+      "breakpoints": true
     }
   ]
 }

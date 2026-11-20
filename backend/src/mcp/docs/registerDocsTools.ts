@@ -110,7 +110,11 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
       run('dirah_guide', async () => {
         const auth = currentDocsAuth();
         const guide = await serviceRef!.buildGuide(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
-        return { instructions: buildDynamicInstructions(guide), workspaces: guide.workspaces };
+        return {
+          instructions: buildDynamicInstructions(guide),
+          workspaceScope: guide.workspaceScope,
+          workspaces: guide.workspaces,
+        };
       })) as never
   );
 
@@ -118,13 +122,15 @@ export function registerDocsTools(server: PgMcpServerHost, service: DocsMcpServi
     'list_workspaces',
     {
       title: 'List Dirah workspaces',
-      description: 'List workspaces allowlisted for this MCP token. Includes slug (use as workspace) and default when only one is allowlisted.',
+      description:
+        'List workspaces this MCP token can reach. Includes slug (use as workspace) and default. An all-workspaces token lists every workspace its user can access.',
       inputSchema: z.object({}),
     },
     (async () =>
-      run('list_workspaces', () =>
-        service.listWorkspaces(currentDocsAuth().userId, currentDocsAuth().tokenId)
-      )) as never
+      run('list_workspaces', () => {
+        const auth = currentDocsAuth();
+        return service.listWorkspaces(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
+      })) as never
   );
 
   server.registerTool(

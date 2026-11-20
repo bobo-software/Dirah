@@ -9,6 +9,7 @@ import { extractMarkdownLinks } from '../utils/markdownLinks';
 import { attachmentsIn } from '../utils/blobRefs';
 import type { PageKind, PageService, PublicPage } from './PageService';
 import type { McpTokenService } from './McpTokenService';
+import type { McpWorkspaceScope } from '../db/schemas';
 import { applyMarkdownEdit, type EditPatch } from './mcp/markdownPatch';
 
 const UUID_RE =
@@ -49,6 +50,8 @@ export interface GuideWorkspace {
 }
 
 export interface DocsGuide {
+  /** `all`/`all_read_only` means the token follows every membership, not just explicit grants. */
+  workspaceScope: McpWorkspaceScope;
   workspaces: GuideWorkspace[];
 }
 
@@ -145,7 +148,11 @@ export class DocsMcpService {
     return `${origin}/w/${workspaceId}/p/${pageId}`;
   }
 
-  async listWorkspaces(userId: string, tokenId: string | null) {
+  async listWorkspaces(
+    userId: string,
+    tokenId: string | null,
+    tokenDefaultWorkspaceId?: string | null
+  ) {
     const rows = await this.allowlisted(userId, tokenId);
     const only = rows.length === 1;
     return rows.map((row) => ({
@@ -154,7 +161,7 @@ export class DocsMcpService {
       slug: row.slug,
       role: row.role,
       canWrite: row.canWrite,
-      default: only,
+      default: only || row.workspaceId === tokenDefaultWorkspaceId,
     }));
   }
 
@@ -165,11 +172,28 @@ export class DocsMcpService {
   ): Promise<DocsGuide> {
     const rows = await this.allowlisted(userId, tokenId);
     const only = rows.length === 1;
-    const agentIndexPaths = await this.tokens.getAgentIndexPaths(rows.map((row) => row.workspaceId));
+    const workspaceScope = tokenId ? await this.tokens.getWorkspaceScope(tokenId) : 'selected';
+    // An all-workspaces token can carry dozens of memberships. Loading every
+    // tree on connect just to find an agent index is not worth the fan-out:
+    // resolve startAt for the default workspace (or the only one) and leave
+    // the rest to list_tree on demand. Explicitly granted tokens keep the
+    // startAt of every workspace.
+    const all = workspaceScope !== 'selected';
+    const startAtIds = new Set(
+      only || !all
+        ? rows.map((row) => row.workspaceId)
+        : tokenDefaultWorkspaceId
+          ? [tokenDefaultWorkspaceId]
+          : []
+    );
+    const agentIndexPaths = await this.tokens.getAgentIndexPaths([...startAtIds]);
     const workspaces = await Promise.all(
       rows.map(async (row) => {
-        const tree = await this.loadTree(userId, tokenId, row.workspaceId);
-        const startAt = this.resolveAgentIndexPath(tree, agentIndexPaths.get(row.workspaceId));
+        let startAt: string | null = null;
+        if (startAtIds.has(row.workspaceId)) {
+          const tree = await this.loadTree(userId, tokenId, row.workspaceId);
+          startAt = this.resolveAgentIndexPath(tree, agentIndexPaths.get(row.workspaceId));
+        }
         return {
           workspaceId: row.workspaceId,
           slug: row.slug,
@@ -180,7 +204,7 @@ export class DocsMcpService {
         };
       })
     );
-    return { workspaces };
+    return { workspaceScope, workspaces };
   }
 
   async resolveWorkspace(

@@ -5492,6 +5492,96 @@ button.kanban-picker-option:hover:not(:disabled),
   font-size: 0.78rem;
 }
 
+.mcp-scope-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.mcp-scope-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mcp-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mcp-scope-option.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mcp-scope-option input {
+  margin-top: 0.15rem;
+}
+
+.mcp-scope-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.mcp-scope-option-text strong {
+  font-size: 0.86rem;
+}
+
+.mcp-scope-option-text .muted {
+  font-size: 0.78rem;
+}
+
+.mcp-scope-warning {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--warning);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  font-size: 0.78rem;
+}
+
+.mcp-scope-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.8rem;
+}
+
+.mcp-scope-confirm input {
+  margin-top: 0.15rem;
+}
+
+.mcp-scope-summary {
+  margin-top: 0.6rem;
+}
+
+.token-scope-badge {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 600;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.token-scope-badge.read-only {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
 .mcp-create-submit {
   display: inline-flex;
   align-items: center;

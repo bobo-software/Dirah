@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { useMcpStore, useWorkspaceStore } from '../stores/StoresIndex';
-import { BackIcon, KeyIcon, TokenAccessFields, type TokenAccessValue } from '../components/ComponentsIndex';
+import {
+  BackIcon,
+  KeyIcon,
+  TokenAccessFields,
+  WorkspaceScopeFields,
+  type TokenAccessValue,
+} from '../components/ComponentsIndex';
+import type { McpWorkspaceScope } from '../api/mcp';
 import type { WorkspaceOutlet } from './workspaceContext';
 import { Button } from '../components/buttons/Button';
 
@@ -16,8 +23,10 @@ export function McpTokenCreatePage() {
   const encryptedCount = workspaces.length - grantableWorkspaces.length;
 
   const [name, setName] = useState('Cursor');
+  const [workspaceScope, setWorkspaceScope] = useState<McpWorkspaceScope>('selected');
   const [access, setAccess] = useState<Map<string, TokenAccessValue>>(new Map());
   const [defaultWorkspaceId, setDefaultWorkspaceId] = useState<string | undefined>(undefined);
+  const [scopeConfirmed, setScopeConfirmed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [seeded, setSeeded] = useState(false);
@@ -53,14 +62,31 @@ export function McpTokenCreatePage() {
     });
   }
 
+  function onScopeChange(scope: McpWorkspaceScope) {
+    setWorkspaceScope(scope);
+    setScopeConfirmed(false);
+    if (scope === 'selected' && defaultWorkspaceId) {
+      const granted = access.get(defaultWorkspaceId)?.allowlisted;
+      if (!granted) setDefaultWorkspaceId(undefined);
+    }
+  }
+
   async function onCreate(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     try {
-      const workspaceAccess = Array.from(access.entries())
-        .filter(([, v]) => v.allowlisted)
-        .map(([id, v]) => ({ workspaceId: id, canWrite: v.canWrite }));
-      const token = await createToken(name, defaultWorkspaceId, workspaceAccess);
+      const selected = workspaceScope === 'selected';
+      const workspaceAccess = selected
+        ? Array.from(access.entries())
+            .filter(([, v]) => v.allowlisted)
+            .map(([id, v]) => ({ workspaceId: id, canWrite: v.canWrite }))
+        : undefined;
+      const token = await createToken({
+        name,
+        workspaceScope,
+        defaultWorkspaceId,
+        workspaceAccess,
+      });
       navigate(detailPath(token.id), { state: { secret: token.secret } });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not create token');
@@ -91,28 +117,56 @@ export function McpTokenCreatePage() {
           <span className="mcp-field-hint">Helps you recognize it later — try Cursor, Claude Code, or CI.</span>
         </label>
 
-        <div className="mcp-field">
-          <span className="mcp-field-label">Workspace access</span>
-          <span className="mcp-field-hint">Choose which workspaces this token can reach, and whether it can write to them.</span>
-          {grantableWorkspaces.length === 0 ? (
-            <p className="muted">No workspaces available to grant access to.</p>
-          ) : (
-            <TokenAccessFields
-              workspaces={grantableWorkspaces}
-              value={access}
-              defaultWorkspaceId={defaultWorkspaceId}
-              onChange={onAccessChange}
-              onDefaultChange={setDefaultWorkspaceId}
-            />
-          )}
-          {encryptedCount > 0 ? (
-            <span className="mcp-field-hint">
-              {encryptedCount} encrypted workspace{encryptedCount === 1 ? '' : 's'} can't be reached by MCP tokens yet.
-            </span>
-          ) : null}
-        </div>
+        <WorkspaceScopeFields
+          value={workspaceScope}
+          onChange={onScopeChange}
+          workspaces={grantableWorkspaces}
+          defaultWorkspaceId={defaultWorkspaceId}
+          onDefaultChange={setDefaultWorkspaceId}
+        />
 
-        <Button variant="plain" type="submit" className="mcp-create-submit" disabled={busy || !name.trim()}>
+        {workspaceScope !== 'selected' ? (
+          <label className="mcp-scope-confirm">
+            <input
+              type="checkbox"
+              checked={scopeConfirmed}
+              onChange={(event) => setScopeConfirmed(event.target.checked)}
+            />
+            <span>
+              I understand this token can reach every workspace I have access to, including ones I join later.
+            </span>
+          </label>
+        ) : (
+          <div className="mcp-field">
+            <span className="mcp-field-label">Workspace access</span>
+            <span className="mcp-field-hint">
+              Choose which workspaces this token can reach, and whether it can write to them.
+            </span>
+            {grantableWorkspaces.length === 0 ? (
+              <p className="muted">No workspaces available to grant access to.</p>
+            ) : (
+              <TokenAccessFields
+                workspaces={grantableWorkspaces}
+                value={access}
+                defaultWorkspaceId={defaultWorkspaceId}
+                onChange={onAccessChange}
+                onDefaultChange={setDefaultWorkspaceId}
+              />
+            )}
+          </div>
+        )}
+        {encryptedCount > 0 ? (
+          <span className="mcp-field-hint">
+            {encryptedCount} encrypted workspace{encryptedCount === 1 ? '' : 's'} can't be reached by MCP tokens yet.
+          </span>
+        ) : null}
+
+        <Button
+          variant="plain"
+          type="submit"
+          className="mcp-create-submit"
+          disabled={busy || !name.trim() || (workspaceScope !== 'selected' && !scopeConfirmed)}
+        >
           <KeyIcon />
           {busy ? 'Creating…' : 'Create token'}
         </Button>

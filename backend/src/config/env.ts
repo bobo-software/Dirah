@@ -269,6 +269,13 @@ export const env = {
   },
   /** Largest JSON body the /mcp endpoint accepts (inline uploads are base64, a third larger). */
   mcpMaxBody: (process.env.MCP_MAX_BODY ?? '16mb').trim(),
+  mcp: {
+    /** Off blocks creating or switching a token to an all-workspaces scope; existing tokens keep working. */
+    allowAdminTokens:
+      (process.env.MCP_ALLOW_ADMIN_TOKENS ?? '').trim() === ''
+        ? true
+        : bool(process.env.MCP_ALLOW_ADMIN_TOKENS),
+  },
   ai: {
     apiKey: process.env.AI_API_KEY ?? '',
     baseUrl: (process.env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, ''),

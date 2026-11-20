@@ -22,12 +22,14 @@ export { shareLinks } from './shareLinks';
 export { workspaceInvites } from './invites';
 export { oauthAccounts, oauthMobileCodes } from './oauth';
 export {
+  MCP_WORKSPACE_SCOPES,
   mcpTokens,
   mcpTokenWorkspaceAccess,
   mcpAudit,
   mcpOauthClients,
   mcpOauthCodes,
   mcpOauthRefreshTokens,
+  type McpWorkspaceScope,
 } from './mcp';
 export { systemAdmins, systemAdminRefreshTokens } from './systemAdmins';
 export { requestLogs } from './requestLogs';

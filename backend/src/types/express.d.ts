@@ -5,7 +5,12 @@ declare global {
     interface Request {
       user?: JwtPayload;
       systemAdmin?: { adminId: string };
-      mcpAuth?: { userId: string; tokenId: string | null; defaultWorkspaceId: string | null };
+      mcpAuth?: {
+        userId: string;
+        tokenId: string | null;
+        workspaceScope: 'selected' | 'all' | 'all_read_only';
+        defaultWorkspaceId: string | null;
+      };
       startTime?: number;
     }
   }

@@ -117,6 +117,7 @@ const approveSchema = z.object({
   resource: z.string().optional(),
   scope: z.string().optional(),
   deny: z.boolean().optional(),
+  workspaceScope: z.enum(['selected', 'all', 'all_read_only']).optional(),
   workspaces: z
     .array(z.object({ workspaceId: z.string().uuid(), canWrite: z.boolean().optional() }))
     .optional(),

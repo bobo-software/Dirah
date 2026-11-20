@@ -14,7 +14,7 @@ export function registerDocsResources(
   server.registerResource(
     'dirah-guide',
     'dirah://guide',
-    { title: 'Dirah usage guide', description: 'Search-first guidance and this token\'s allowlisted workspaces.', mimeType: 'text/plain' },
+    { title: 'Dirah usage guide', description: 'Search-first guidance and the workspaces this token can reach.', mimeType: 'text/plain' },
     (async (uri: URL) => {
       const auth = currentDocsAuth();
       const guide = await service.buildGuide(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
@@ -27,7 +27,7 @@ export function registerDocsResources(
     new ResourceTemplate('dirah://{workspace}/{+path}', {
       list: async () => {
         const auth = currentDocsAuth();
-        const rows = await service.listWorkspaces(auth.userId, auth.tokenId);
+        const rows = await service.listWorkspaces(auth.userId, auth.tokenId, auth.defaultWorkspaceId);
         return {
           resources: rows.map((row) => ({
             uri: `dirah://${row.slug}/readme.md`,

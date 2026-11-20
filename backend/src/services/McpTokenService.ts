@@ -1,7 +1,15 @@
 import crypto from 'node:crypto';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { mcpAudit, mcpOauthRefreshTokens, mcpTokens, mcpTokenWorkspaceAccess, workspaces } from '../db/schemas';
+import {
+  mcpAudit,
+  mcpOauthRefreshTokens,
+  mcpTokens,
+  mcpTokenWorkspaceAccess,
+  workspaces,
+  type McpWorkspaceScope,
+} from '../db/schemas';
 import { canEdit } from '../authz/roles';
+import { env } from '../config/env';
 import { HttpError } from '../utils/HttpError';
 import { slugify } from '../utils/slugify';
 import { type AuthService, type Database, type PublicWorkspace } from './AuthService';
@@ -12,6 +20,8 @@ export interface PublicMcpToken {
   id: string;
   name: string;
   tokenPrefix: string;
+  /** `all` follows every membership; `all_read_only` follows them without writes. */
+  workspaceScope: McpWorkspaceScope;
   defaultWorkspaceId: string | null;
   /** Set when the token backs an OAuth connection (Claude, ChatGPT, …) rather than a pasted PAT. */
   oauthClientId: string | null;
@@ -28,12 +38,19 @@ export interface TokenAccessRow {
   mcpEnabled: boolean;
   allowlisted: boolean;
   canWrite: boolean;
+  /** Why the workspace is allowlisted: an explicit grant, or the token's all-workspaces scope. */
+  source: 'grant' | 'all';
 }
 
 export interface ResolvedMcpAuth {
   userId: string;
   tokenId: string | null;
+  workspaceScope: McpWorkspaceScope;
   defaultWorkspaceId: string | null;
+}
+
+export function isAllWorkspacesScope(scope: McpWorkspaceScope): boolean {
+  return scope === 'all' || scope === 'all_read_only';
 }
 
 function hashToken(secret: string): string {
@@ -52,6 +69,7 @@ export class McpTokenService {
         id: mcpTokens.id,
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
+        workspaceScope: mcpTokens.workspaceScope,
         defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
         oauthClientId: mcpTokens.oauthClientId,
         createdAt: mcpTokens.createdAt,
@@ -64,29 +82,43 @@ export class McpTokenService {
 
   private buildAccessRows(
     memberships: PublicWorkspace[],
-    grantByWs: Map<string, { workspaceId: string; canWrite: boolean }>
+    grantByWs: Map<string, { workspaceId: string; canWrite: boolean }>,
+    scope: McpWorkspaceScope = 'selected'
   ): TokenAccessRow[] {
+    const all = isAllWorkspacesScope(scope);
     return memberships
       .filter((ws) => !ws.encrypted)
       .map((ws) => {
         const grant = grantByWs.get(ws.id);
+        const allowlisted = all || Boolean(grant);
         return {
           workspaceId: ws.id,
           name: ws.name,
           slug: slugify(ws.name),
           role: ws.role,
           mcpEnabled: ws.mcpEnabled !== false,
-          allowlisted: Boolean(grant),
-          canWrite: Boolean(grant?.canWrite) && canEdit(ws.role),
+          allowlisted,
+          canWrite:
+            allowlisted && canEdit(ws.role) && (all ? scope === 'all' : Boolean(grant?.canWrite)),
+          source: all ? 'all' : 'grant',
         };
       });
   }
 
-  private async assertDefaultWithinGrants(
+  private async assertDefaultReachable(
+    userId: string,
     tokenId: string,
     workspaceId: string,
+    scope: McpWorkspaceScope,
     grantedIds?: Set<string>
   ): Promise<void> {
+    if (isAllWorkspacesScope(scope)) {
+      const workspace = await this.auth.requireMember(userId, workspaceId);
+      if (workspace.encrypted) {
+        throw new HttpError('Encrypted workspaces cannot be exposed to MCP', 409, 'E2E_NO_MCP');
+      }
+      return;
+    }
     let ids = grantedIds;
     if (!ids) {
       const rows = await this.database
@@ -104,25 +136,38 @@ export class McpTokenService {
     }
   }
 
-  private async requireOwnedToken(userId: string, tokenId: string): Promise<void> {
+  private async requireOwnedToken(
+    userId: string,
+    tokenId: string
+  ): Promise<{ workspaceScope: McpWorkspaceScope }> {
     const [row] = await this.database
-      .select({ id: mcpTokens.id })
+      .select({ id: mcpTokens.id, workspaceScope: mcpTokens.workspaceScope })
       .from(mcpTokens)
       .where(and(eq(mcpTokens.id, tokenId), eq(mcpTokens.userId, userId)))
       .limit(1);
     if (!row) {
       throw new HttpError('Token not found', 404, 'TOKEN_NOT_FOUND');
     }
+    return { workspaceScope: row.workspaceScope };
   }
 
   async createToken(
     userId: string,
     nameRaw: string,
     options: {
+      workspaceScope?: McpWorkspaceScope;
       defaultWorkspaceId?: string;
       workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>;
     } = {}
   ): Promise<PublicMcpToken & { secret: string; access: TokenAccessRow[] }> {
+    const scope = options.workspaceScope ?? 'selected';
+    if (isAllWorkspacesScope(scope) && !env.mcp.allowAdminTokens) {
+      throw new HttpError(
+        'All-workspace MCP tokens are disabled on this server',
+        403,
+        'MCP_ADMIN_TOKENS_DISABLED'
+      );
+    }
     const name = nameRaw.trim() || 'MCP token';
     const secret = TOKEN_PREFIX + crypto.randomBytes(24).toString('base64url');
     const tokenHash = hashToken(secret);
@@ -157,12 +202,14 @@ export class McpTokenService {
           name,
           tokenHash,
           tokenPrefix,
+          workspaceScope: scope,
           defaultWorkspaceId: options.defaultWorkspaceId ?? null,
         })
         .returning({
           id: mcpTokens.id,
           name: mcpTokens.name,
           tokenPrefix: mcpTokens.tokenPrefix,
+          workspaceScope: mcpTokens.workspaceScope,
           defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
           oauthClientId: mcpTokens.oauthClientId,
           createdAt: mcpTokens.createdAt,
@@ -181,36 +228,79 @@ export class McpTokenService {
       }
 
       if (options.defaultWorkspaceId) {
-        await this.assertDefaultWithinGrants(inserted.id, options.defaultWorkspaceId, grantedIds);
+        await this.assertDefaultReachable(
+          userId,
+          inserted.id,
+          options.defaultWorkspaceId,
+          scope,
+          grantedIds
+        );
       }
 
       return inserted;
     });
 
     const grantByWs = new Map(grants.map((g) => [g.workspaceId, g]));
-    const access = this.buildAccessRows(memberships, grantByWs);
+    const access = this.buildAccessRows(memberships, grantByWs, scope);
     return { ...row, secret, access };
   }
 
   async updateToken(
     userId: string,
     tokenId: string,
-    input: { name?: string; defaultWorkspaceId?: string | null }
+    input: {
+      name?: string;
+      workspaceScope?: McpWorkspaceScope;
+      defaultWorkspaceId?: string | null;
+    }
   ): Promise<PublicMcpToken> {
     const [existing] = await this.database
-      .select({ id: mcpTokens.id })
+      .select({ id: mcpTokens.id, workspaceScope: mcpTokens.workspaceScope })
       .from(mcpTokens)
       .where(and(eq(mcpTokens.id, tokenId), eq(mcpTokens.userId, userId)))
       .limit(1);
     if (!existing) {
       throw new HttpError('Token not found', 404, 'TOKEN_NOT_FOUND');
     }
-    if (input.defaultWorkspaceId) {
-      await this.assertDefaultWithinGrants(tokenId, input.defaultWorkspaceId, undefined);
+    const scope = input.workspaceScope ?? existing.workspaceScope;
+    if (
+      input.workspaceScope &&
+      isAllWorkspacesScope(input.workspaceScope) &&
+      !isAllWorkspacesScope(existing.workspaceScope) &&
+      !env.mcp.allowAdminTokens
+    ) {
+      throw new HttpError(
+        'All-workspace MCP tokens are disabled on this server',
+        403,
+        'MCP_ADMIN_TOKENS_DISABLED'
+      );
     }
-    const patch: { name?: string; defaultWorkspaceId?: string | null } = {};
+    if (input.defaultWorkspaceId) {
+      await this.assertDefaultReachable(userId, tokenId, input.defaultWorkspaceId, scope, undefined);
+    }
+    const patch: {
+      name?: string;
+      workspaceScope?: McpWorkspaceScope;
+      defaultWorkspaceId?: string | null;
+    } = {};
     if (input.name !== undefined) patch.name = input.name.trim() || 'MCP token';
+    if (input.workspaceScope !== undefined) patch.workspaceScope = input.workspaceScope;
     if (input.defaultWorkspaceId !== undefined) patch.defaultWorkspaceId = input.defaultWorkspaceId;
+    // Dropping back to explicit grants can leave the stored default unreachable.
+    if (
+      input.workspaceScope === 'selected' &&
+      input.workspaceScope !== existing.workspaceScope &&
+      input.defaultWorkspaceId === undefined
+    ) {
+      const [token] = await this.database
+        .select({ defaultWorkspaceId: mcpTokens.defaultWorkspaceId })
+        .from(mcpTokens)
+        .where(eq(mcpTokens.id, tokenId))
+        .limit(1);
+      if (token?.defaultWorkspaceId && !(await this.hasGrant(tokenId, token.defaultWorkspaceId))) {
+        patch.defaultWorkspaceId = null;
+      }
+    }
     const [row] = await this.database
       .update(mcpTokens)
       .set(patch)
@@ -219,6 +309,7 @@ export class McpTokenService {
         id: mcpTokens.id,
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
+        workspaceScope: mcpTokens.workspaceScope,
         defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
         oauthClientId: mcpTokens.oauthClientId,
         createdAt: mcpTokens.createdAt,
@@ -226,6 +317,20 @@ export class McpTokenService {
         revokedAt: mcpTokens.revokedAt,
       });
     return row;
+  }
+
+  private async hasGrant(tokenId: string, workspaceId: string): Promise<boolean> {
+    const [row] = await this.database
+      .select({ workspaceId: mcpTokenWorkspaceAccess.workspaceId })
+      .from(mcpTokenWorkspaceAccess)
+      .where(
+        and(
+          eq(mcpTokenWorkspaceAccess.tokenId, tokenId),
+          eq(mcpTokenWorkspaceAccess.workspaceId, workspaceId)
+        )
+      )
+      .limit(1);
+    return Boolean(row);
   }
 
   async rotateToken(userId: string, tokenId: string): Promise<PublicMcpToken & { secret: string }> {
@@ -258,6 +363,7 @@ export class McpTokenService {
         id: mcpTokens.id,
         name: mcpTokens.name,
         tokenPrefix: mcpTokens.tokenPrefix,
+        workspaceScope: mcpTokens.workspaceScope,
         defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
         oauthClientId: mcpTokens.oauthClientId,
         createdAt: mcpTokens.createdAt,
@@ -291,6 +397,7 @@ export class McpTokenService {
       .select({
         id: mcpTokens.id,
         userId: mcpTokens.userId,
+        workspaceScope: mcpTokens.workspaceScope,
         defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
         revokedAt: mcpTokens.revokedAt,
       })
@@ -302,16 +409,26 @@ export class McpTokenService {
       .update(mcpTokens)
       .set({ lastUsedAt: new Date() })
       .where(eq(mcpTokens.id, row.id));
-    return { userId: row.userId, tokenId: row.id, defaultWorkspaceId: row.defaultWorkspaceId };
+    return {
+      userId: row.userId,
+      tokenId: row.id,
+      workspaceScope: row.workspaceScope,
+      defaultWorkspaceId: row.defaultWorkspaceId,
+    };
   }
 
   /** Null when revoked or missing; otherwise stamps last use (OAuth access/refresh) in the same query. */
-  async isTokenUsable(tokenId: string): Promise<{ defaultWorkspaceId: string | null } | null> {
+  async isTokenUsable(
+    tokenId: string
+  ): Promise<{ workspaceScope: McpWorkspaceScope; defaultWorkspaceId: string | null } | null> {
     const [row] = await this.database
       .update(mcpTokens)
       .set({ lastUsedAt: new Date() })
       .where(and(eq(mcpTokens.id, tokenId), isNull(mcpTokens.revokedAt)))
-      .returning({ defaultWorkspaceId: mcpTokens.defaultWorkspaceId });
+      .returning({
+        workspaceScope: mcpTokens.workspaceScope,
+        defaultWorkspaceId: mcpTokens.defaultWorkspaceId,
+      });
     return row ?? null;
   }
 
@@ -349,15 +466,24 @@ export class McpTokenService {
     return inserted;
   }
 
+  async getWorkspaceScope(tokenId: string): Promise<McpWorkspaceScope> {
+    const [row] = await this.database
+      .select({ workspaceScope: mcpTokens.workspaceScope })
+      .from(mcpTokens)
+      .where(eq(mcpTokens.id, tokenId))
+      .limit(1);
+    return row?.workspaceScope ?? 'selected';
+  }
+
   async listTokenAccess(userId: string, tokenId: string): Promise<TokenAccessRow[]> {
-    await this.requireOwnedToken(userId, tokenId);
+    const { workspaceScope } = await this.requireOwnedToken(userId, tokenId);
     const memberships = await this.auth.listWorkspaces(userId);
     const grants = await this.database
       .select()
       .from(mcpTokenWorkspaceAccess)
       .where(eq(mcpTokenWorkspaceAccess.tokenId, tokenId));
     const grantByWs = new Map(grants.map((g) => [g.workspaceId, g]));
-    return this.buildAccessRows(memberships, grantByWs);
+    return this.buildAccessRows(memberships, grantByWs, workspaceScope);
   }
 
   async setTokenAccess(
@@ -412,20 +538,26 @@ export class McpTokenService {
     if (!tokenId) {
       throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
     }
-    const [grant] = await this.database
-      .select()
-      .from(mcpTokenWorkspaceAccess)
-      .where(
+    const [row] = await this.database
+      .select({
+        scope: mcpTokens.workspaceScope,
+        grantCanWrite: mcpTokenWorkspaceAccess.canWrite,
+      })
+      .from(mcpTokens)
+      .leftJoin(
+        mcpTokenWorkspaceAccess,
         and(
-          eq(mcpTokenWorkspaceAccess.tokenId, tokenId),
+          eq(mcpTokenWorkspaceAccess.tokenId, mcpTokens.id),
           eq(mcpTokenWorkspaceAccess.workspaceId, workspaceId)
         )
       )
+      .where(eq(mcpTokens.id, tokenId))
       .limit(1);
-    if (!grant) {
+    const all = row ? isAllWorkspacesScope(row.scope) : false;
+    if (!row || (!all && row.grantCanWrite === null)) {
       throw new HttpError('Workspace is not allowlisted for MCP', 403, 'MCP_NOT_ALLOWLISTED');
     }
-    const canWrite = grant.canWrite && canEdit(workspace.role);
+    const canWrite = (all ? row.scope === 'all' : Boolean(row.grantCanWrite)) && canEdit(workspace.role);
     if (write && !canWrite) {
       throw new HttpError('MCP write is not allowed for this workspace', 403, 'MCP_READ_ONLY');
     }

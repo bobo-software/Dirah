@@ -1,9 +1,18 @@
 import { apiRequest } from './client';
 
+export type McpWorkspaceScope = 'selected' | 'all' | 'all_read_only';
+
+export const MCP_WORKSPACE_SCOPE_LABELS: Record<McpWorkspaceScope, string> = {
+  selected: 'Selected workspaces',
+  all: 'All workspaces (read & write)',
+  all_read_only: 'All workspaces (read only)',
+};
+
 export type McpToken = {
   id: string;
   name: string;
   tokenPrefix: string;
+  workspaceScope: McpWorkspaceScope;
   defaultWorkspaceId: string | null;
   /** Set when an AI app (Claude, ChatGPT, …) connected via OAuth instead of a pasted token. */
   oauthClientId?: string | null;
@@ -21,6 +30,7 @@ export type TokenAccessRow = {
   mcpEnabled: boolean;
   allowlisted: boolean;
   canWrite: boolean;
+  source: 'grant' | 'all';
 };
 
 export async function listMcpTokens(accessToken: string): Promise<McpToken[]> {
@@ -30,16 +40,19 @@ export async function listMcpTokens(accessToken: string): Promise<McpToken[]> {
 
 export async function createMcpToken(
   accessToken: string,
-  name: string,
-  defaultWorkspaceId?: string,
-  workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>
+  input: {
+    name: string;
+    workspaceScope?: McpWorkspaceScope;
+    defaultWorkspaceId?: string;
+    workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>;
+  }
 ): Promise<McpToken & { secret: string; access: TokenAccessRow[] }> {
   const data = await apiRequest<{ token: McpToken & { secret: string; access: TokenAccessRow[] } }>(
     '/api/mcp/tokens',
     {
       method: 'POST',
       accessToken,
-      body: JSON.stringify({ name, defaultWorkspaceId, workspaceAccess }),
+      body: JSON.stringify(input),
     }
   );
   return data.token;
@@ -48,7 +61,11 @@ export async function createMcpToken(
 export async function updateMcpToken(
   accessToken: string,
   id: string,
-  input: { name?: string; defaultWorkspaceId?: string | null }
+  input: {
+    name?: string;
+    workspaceScope?: McpWorkspaceScope;
+    defaultWorkspaceId?: string | null;
+  }
 ): Promise<McpToken> {
   const data = await apiRequest<{ token: McpToken }>(`/api/mcp/tokens/${id}`, {
     method: 'PATCH',
@@ -131,6 +148,7 @@ export async function answerOAuthRequest(
     resource?: string;
     scope?: string;
     deny?: boolean;
+    workspaceScope?: McpWorkspaceScope;
     workspaces?: Array<{ workspaceId: string; canWrite: boolean }>;
   }
 ): Promise<{ redirectTo: string }> {

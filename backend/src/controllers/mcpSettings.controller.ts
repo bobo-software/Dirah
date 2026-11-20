@@ -4,8 +4,11 @@ import type { McpTokenService } from '../services/McpTokenService';
 import ResponseUtils from '../utils/ResponseUtils';
 import { asyncHandler } from '../utils/asyncHandler';
 
+const workspaceScopeSchema = z.enum(['selected', 'all', 'all_read_only']);
+
 const createSchema = z.object({
   name: z.string().max(80).optional(),
+  workspaceScope: workspaceScopeSchema.optional(),
   defaultWorkspaceId: z.uuid().optional(),
   workspaceAccess: z
     .array(
@@ -19,6 +22,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   name: z.string().max(80).optional(),
+  workspaceScope: workspaceScopeSchema.optional(),
   defaultWorkspaceId: z.uuid().nullable().optional(),
 });
 
@@ -46,6 +50,7 @@ export function createMcpSettingsController(tokens: McpTokenService) {
         return ResponseUtils.error(res, 'Invalid token payload', parsed.error.flatten(), 400);
       }
       const token = await tokens.createToken(req.user!.userId, parsed.data.name ?? 'MCP token', {
+        workspaceScope: parsed.data.workspaceScope,
         defaultWorkspaceId: parsed.data.defaultWorkspaceId,
         workspaceAccess: parsed.data.workspaceAccess,
       });

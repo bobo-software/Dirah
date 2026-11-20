@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
-import { mcpOauthClients, mcpOauthCodes, mcpOauthRefreshTokens } from '../db/schemas';
+import {
+  mcpOauthClients,
+  mcpOauthCodes,
+  mcpOauthRefreshTokens,
+  type McpWorkspaceScope,
+} from '../db/schemas';
 import { HttpError } from '../utils/HttpError';
 import { MCP_ACCESS_TOKEN_TTL_SECONDS, signMcpAccessToken } from '../utils/jwt';
 import { type Database } from './AuthService';
@@ -234,6 +239,7 @@ export class McpOAuthService {
       resource?: string;
       scope?: string;
       deny?: boolean;
+      workspaceScope?: McpWorkspaceScope;
       workspaces?: Array<{ workspaceId: string; canWrite?: boolean }>;
     }
   ): Promise<{ redirectTo: string }> {
@@ -250,12 +256,17 @@ export class McpOAuthService {
       throw oauthError('invalid_request', 'code_challenge is required');
     }
     this.checkResource(input.resource);
-    if (!input.workspaces?.length) {
+    const allWorkspaces =
+      input.workspaceScope === 'all' || input.workspaceScope === 'all_read_only';
+    if (!allWorkspaces && !input.workspaces?.length) {
       throw oauthError('invalid_request', 'Choose at least one workspace to share');
     }
 
     const token = await this.tokens.findOrCreateOauthToken(userId, client.id, client.clientName);
-    await this.tokens.setTokenAccess(userId, token.id, input.workspaces);
+    await this.tokens.setTokenAccess(userId, token.id, input.workspaces ?? []);
+    if (input.workspaceScope) {
+      await this.tokens.updateToken(userId, token.id, { workspaceScope: input.workspaceScope });
+    }
 
     const code = crypto.randomBytes(24).toString('base64url');
     await this.database.insert(mcpOauthCodes).values({

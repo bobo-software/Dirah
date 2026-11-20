@@ -71,6 +71,7 @@ export { PreferencesSection } from './settings/PreferencesSection';
 export { default as CopyTokenOnce } from './mcp/CopyTokenOnce';
 export { McpTokensSection } from './mcp/McpTokensSection';
 export { default as TokenAccessFields } from './mcp/TokenAccessFields';
+export { default as WorkspaceScopeFields } from './mcp/WorkspaceScopeFields';
 export { TokenDetailBody } from './mcp/TokenDetailBody';
 export type { TokenAccessFieldsWorkspace, TokenAccessValue } from './mcp/TokenAccessFields';
 

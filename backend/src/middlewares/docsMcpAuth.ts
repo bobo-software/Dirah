@@ -64,12 +64,18 @@ export function createDocsMcpAuthMiddleware(options: {
           req.mcpAuth = {
             userId: payload.userId,
             tokenId: payload.tokenId,
+            workspaceScope: usable.workspaceScope,
             defaultWorkspaceId: usable.defaultWorkspaceId,
           };
           next();
           return;
         }
-        req.mcpAuth = { userId: payload.userId, tokenId: null, defaultWorkspaceId: null };
+        req.mcpAuth = {
+          userId: payload.userId,
+          tokenId: null,
+          workspaceScope: 'selected',
+          defaultWorkspaceId: null,
+        };
         next();
         return;
       }

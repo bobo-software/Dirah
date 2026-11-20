@@ -134,7 +134,7 @@ Refresh cookies are httpOnly, `SameSite=Lax`, and `Secure` when the API public U
 | `GET /api/public/pages/:token` | Unauthenticated read of a shared page, its markdown, and blobs |
 | `GET/POST /api/invites/:token` | Preview and accept an invite |
 | `GET /api/ai/status`, `POST /api/ai/pages/:id` | Copilot |
-| `GET/POST/PATCH/DELETE /api/mcp/tokens` | Personal MCP tokens, rotate, and workspace allowlist |
+| `GET/POST/PATCH/DELETE /api/mcp/tokens` | Personal MCP tokens, rotate, and workspace access (explicit grants or an all-workspaces scope) |
 | `POST /api/admin/auth/login` and `/metrics`, `/users`, `/emails`, `/request-logs`, `/mcp-audit` | System admin. Separate session from users. |
 
 Workspace roles are `owner`, `editor`, and `viewer`. Editors change pages. Only owners manage members and workspace settings.
@@ -165,7 +165,7 @@ Drizzle schemas are in `src/db/schemas/`. Main tables:
 
 Blob bytes are stored at `userId/workspaceId/kind/blobId` on disk and in the MinIO bucket. The kind folder is `images`, `videos`, `audio`, `documents`, `archives`, or `files`, chosen from the content type.
 - `user_crypto`, `workspace_member_keys` (optional encryption)
-- `mcp_tokens` and allowlist, audit, OAuth clients and codes
+- `mcp_tokens` (workspace grants or `workspace_scope`), audit, OAuth clients and codes
 - `system_admins`, `request_logs`, `email_logs`
 
 A workspace can be marked encrypted. The server stores a wrapped data key per member and a wrapped user private key. Page bodies for those workspaces are ciphertext the client decrypts. See `src/services/CryptoService.ts` and the web `src/crypto/workspaceCrypto.ts`.
@@ -176,7 +176,7 @@ Schema changes: edit the Drizzle tables, run `npm run db:generate`, commit the S
 
 `POST`/`GET` (Streamable HTTP) at `/mcp`.
 
-Agents authenticate with a Bearer token, either a personal token created in settings (`/api/mcp/tokens`) or an OAuth access token. Tokens are allowlisted to specific workspaces. Calls are rate-limited (`MCP_DOCS_RATE_LIMIT`) and written to the MCP audit log.
+Agents authenticate with a Bearer token, either a personal token created in settings (`/api/mcp/tokens`) or an OAuth access token. A token is either allowlisted to specific workspaces (`workspaceScope: selected`, the default) or follows every workspace its user can access (`all`, or `all_read_only`). Encrypted workspaces and the per-workspace `mcpEnabled` switch still win. `MCP_ALLOW_ADMIN_TOKENS=false` blocks creating or switching to an all-workspaces scope. Calls are rate-limited (`MCP_DOCS_RATE_LIMIT`) and written to the MCP audit log.
 
 ### OAuth (Claude, ChatGPT, and other AI apps)
 
@@ -184,7 +184,7 @@ Customers add `<API_PUBLIC_URL>/mcp` as a custom connector and sign in. Nothing 
 
 - Discovery: `/.well-known/oauth-protected-resource` (also `/.well-known/oauth-protected-resource/mcp`), `/.well-known/oauth-authorization-server` (also `/.well-known/openid-configuration`). Open CORS on these and `/mcp/oauth/*`.
 - Dynamic client registration at `POST /mcp/oauth/register`. Public clients only (`token_endpoint_auth_method: none`). Redirect URIs must be https, http loopback, or a private-use scheme.
-- `GET /mcp/oauth/authorize` checks the client and redirect URI, then sends the user to the web consent page (`/settings/mcp-oauth`). The user picks workspaces and read/write per workspace there.
+- `GET /mcp/oauth/authorize` checks the client and redirect URI, then sends the user to the web consent page (`/settings/mcp-oauth`). The user picks workspaces and read/write per workspace there, or an all-workspaces scope.
 - `POST /mcp/oauth/token` supports `authorization_code` (PKCE S256 required) and `refresh_token`. Access tokens are 1h JWTs with `aud` = `<API_PUBLIC_URL>/mcp` (RFC 8707 `resource`). Refresh tokens last 30 days and rotate on every use. Reusing an old refresh token revokes the chain.
 - `POST /mcp/oauth/revoke` (RFC 7009).
 - Each connected app is an `mcp_tokens` row with `oauth_client_id` set. "Disconnect app" in settings revokes it, along with its refresh tokens.
@@ -193,7 +193,7 @@ Tools: `dirah_guide`, `list_workspaces`, `list_tree`, `read_file`, `write_file`,
 
 Resources: `dirah://guide` and `dirah://{workspace}/{path}`.
 
-Prefer paths such as `docs/api/auth.md` over page UUIDs. Pass the `hash` from `read_file` into `edit_file` and `write_file`. Omit `workspace` when the token has a single allowlisted workspace.
+Prefer paths such as `docs/api/auth.md` over page UUIDs. Pass the `hash` from `read_file` into `edit_file` and `write_file`. Omit `workspace` when the token has a single reachable workspace.
 
 ## Postgres MCP
 

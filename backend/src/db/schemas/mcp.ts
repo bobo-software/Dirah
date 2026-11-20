@@ -3,6 +3,10 @@ import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIn
 import { users } from './users';
 import { workspaces } from './workspaces';
 
+export const MCP_WORKSPACE_SCOPES = ['selected', 'all', 'all_read_only'] as const;
+/** `all` follows every membership, with writes where the role allows; `all_read_only` never writes. */
+export type McpWorkspaceScope = (typeof MCP_WORKSPACE_SCOPES)[number];
+
 export const mcpTokens = pgTable(
   'mcp_tokens',
   {
@@ -13,6 +17,10 @@ export const mcpTokens = pgTable(
     name: text('name').notNull(),
     tokenHash: text('token_hash').notNull(),
     tokenPrefix: text('token_prefix').notNull(),
+    workspaceScope: text('workspace_scope')
+      .$type<McpWorkspaceScope>()
+      .notNull()
+      .default('selected'),
     defaultWorkspaceId: uuid('default_workspace_id').references(() => workspaces.id, {
       onDelete: 'set null',
     }),

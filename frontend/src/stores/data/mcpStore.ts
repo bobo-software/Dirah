@@ -9,6 +9,7 @@ import {
   setTokenAccess,
   setWorkspaceMcpEnabled,
   type McpToken,
+  type McpWorkspaceScope,
   type TokenAccessRow,
 } from '../../api/mcp';
 import { useAuthStore } from './authStore';
@@ -21,12 +22,16 @@ type McpState = {
   loading: boolean;
   error: string | null;
   fetchAll: () => Promise<void>;
-  createToken: (
-    name: string,
-    defaultWorkspaceId?: string,
-    workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>
-  ) => Promise<McpToken>;
-  updateToken: (id: string, input: { name?: string; defaultWorkspaceId?: string | null }) => Promise<void>;
+  createToken: (input: {
+    name: string;
+    workspaceScope?: McpWorkspaceScope;
+    defaultWorkspaceId?: string;
+    workspaceAccess?: Array<{ workspaceId: string; canWrite?: boolean }>;
+  }) => Promise<McpToken>;
+  updateToken: (
+    id: string,
+    input: { name?: string; workspaceScope?: McpWorkspaceScope; defaultWorkspaceId?: string | null }
+  ) => Promise<void>;
   rotateToken: (id: string) => Promise<McpToken & { secret: string }>;
   revokeToken: (id: string) => Promise<void>;
   fetchTokenAccess: (tokenId: string) => Promise<void>;
@@ -59,8 +64,8 @@ export const useMcpStore = create<McpState>((set, get) => ({
     }
   },
 
-  createToken: async (name, defaultWorkspaceId, workspaceAccess) => {
-    const created = await createMcpToken(token(), name, defaultWorkspaceId, workspaceAccess);
+  createToken: async (input) => {
+    const created = await createMcpToken(token(), input);
     set((state) => ({
       tokens: [...state.tokens, created],
       tokenAccess: { ...state.tokenAccess, [created.id]: created.access },
@@ -70,6 +75,15 @@ export const useMcpStore = create<McpState>((set, get) => ({
 
   updateToken: async (id, input) => {
     await updateMcpToken(token(), id, input);
+    // Only the scope changes which workspaces are allowlisted; a rename or a
+    // default change leaves the cached access rows valid.
+    if (input.workspaceScope !== undefined) {
+      set((state) => {
+        const tokenAccess = { ...state.tokenAccess };
+        delete tokenAccess[id];
+        return { tokenAccess };
+      });
+    }
     await get().fetchAll();
   },
 

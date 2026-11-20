@@ -71,8 +71,14 @@ describe('MCP OAuth 2.1', () => {
   }
 
   /** Full browser-side dance: approve on the consent page, then exchange the code (form-encoded). */
-  async function connect(userJwt: string, clientId: string, workspaceId: string) {
+  async function connect(
+    userJwt: string,
+    clientId: string,
+    workspaceId: string,
+    options: { workspaceScope?: 'selected' | 'all' | 'all_read_only' } = {}
+  ) {
     const { verifier, challenge } = pkce();
+    const all = options.workspaceScope === 'all' || options.workspaceScope === 'all_read_only';
     const approve = await request(app)
       .post('/api/mcp/oauth/approve')
       .set('Authorization', `Bearer ${userJwt}`)
@@ -82,7 +88,8 @@ describe('MCP OAuth 2.1', () => {
         codeChallenge: challenge,
         state: 'abc',
         resource,
-        workspaces: [{ workspaceId, canWrite: false }],
+        workspaceScope: options.workspaceScope,
+        workspaces: all ? [] : [{ workspaceId, canWrite: false }],
       });
     expect(approve.status).toBe(200);
     const redirectTo = new URL(approve.body.data.redirectTo as string);
@@ -179,6 +186,33 @@ describe('MCP OAuth 2.1', () => {
     const stale = await refreshWith(clientId, refresh);
     expect(stale.body.error).toBe('invalid_grant');
     expect((await refreshWith(clientId, nextRefresh)).status).toBe(200);
+  });
+
+  it('connects an all-workspaces client without choosing workspaces', async () => {
+    if (!dbReady) return;
+    const user = await registerUser('all-scope');
+    const clientId = await registerClient('ChatGPT');
+    const { access } = await connect(user.jwt, clientId, user.workspaceId, {
+      workspaceScope: 'all_read_only',
+    });
+
+    const tokens = await request(app).get('/api/mcp/tokens').set('Authorization', `Bearer ${user.jwt}`);
+    const oauthToken = (
+      tokens.body.data.tokens as Array<{ id: string; oauthClientId: string | null; workspaceScope: string }>
+    ).find((token) => token.oauthClientId === clientId);
+    expect(oauthToken?.workspaceScope).toBe('all_read_only');
+
+    const accessRows = await request(app)
+      .get(`/api/mcp/tokens/${oauthToken!.id}/access`)
+      .set('Authorization', `Bearer ${user.jwt}`);
+    const row = (
+      accessRows.body.data.workspaces as Array<{ workspaceId: string; allowlisted: boolean; canWrite: boolean; source: string }>
+    ).find((item) => item.workspaceId === user.workspaceId);
+    expect(row).toMatchObject({ allowlisted: true, canWrite: false, source: 'all' });
+
+    const listed = await callMcp(app, access);
+    expect(listed.status).toBe(200);
+    expect(listed.text).toContain(user.workspaceId);
   });
 
   it('survives concurrent refreshes of the same token', async () => {

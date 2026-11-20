@@ -129,7 +129,21 @@ function TokenRow({
         }
       }}
     >
-      <td className="mcp-table-name">{token.name}</td>
+      <td className="mcp-table-name">
+        {token.name}
+        {token.workspaceScope === 'all' || token.workspaceScope === 'all_read_only' ? (
+          <span
+            className={`token-scope-badge${token.workspaceScope === 'all_read_only' ? ' read-only' : ''}`}
+            title={
+              token.workspaceScope === 'all_read_only'
+                ? 'Reaches every workspace its user can access, read only'
+                : 'Reaches every workspace its user can access, including future ones'
+            }
+          >
+            {token.workspaceScope === 'all_read_only' ? 'All workspaces · read only' : 'All workspaces'}
+          </span>
+        ) : null}
+      </td>
       <td>
         {token.oauthClientId ? (
           <span className="muted">Connected app</span>
