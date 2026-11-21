@@ -86,6 +86,9 @@ existing Coolify-managed services.
   lands on `master`.
 - Add the domains with the internal port suffix: `https://dirah.co.za:83` on
   service `web` and `https://api.dirah.co.za:4006` on service `backend`.
+- The backend healthcheck calls `/health/ready` (Postgres + object storage), so
+  Coolify shows the API unhealthy while either dependency is unreachable.
+  `/health` stays a dependency-free liveness check for the image.
 - Leave **Compose deployment** at the default (not **Raw**), so Coolify can add
   the proxy labels for those domains.
 - Put every key from [`.env.example`](.env.example) in Environment Variables
