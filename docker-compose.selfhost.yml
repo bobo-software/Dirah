@@ -26,12 +26,21 @@ x-backend: &backend
     # Where the API fetches the built web app from when it renders a public
     # page for a crawler. The web container answers on port 83.
     WEB_INTERNAL_URL: http://web:83
+  # Readiness: unhealthy while Postgres or object storage is unreachable.
+  healthcheck:
+    test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:4006/health/ready']
+    interval: 30s
+    timeout: 5s
+    start_period: 40s
+    retries: 3
 
 services:
   migrate:
     <<: *backend
     command: ['node', 'dist/migrate.js']
     restart: on-failure:5
+    healthcheck:
+      disable: true
 
   backend:
     <<: *backend
@@ -64,3 +73,9 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:83/health']
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

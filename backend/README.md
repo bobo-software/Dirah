@@ -62,7 +62,12 @@ Both run from the repo root (`--workspace backend`). `npm run dev` uses nodemon 
 
 The API, Drizzle, migrations, and both Postgres MCP targets use `DB_*` in every environment, including development. Set `DB_SSL=disable` for a local database and `verify-full` for the remote one. `DB_LOCAL_*` are no longer read.
 
-Health check: `GET http://localhost:4006/health` (or whatever `PORT` you set). The same payload is on `GET /api/health`.
+Health checks:
+
+- `GET /health` — liveness. Returns 200 while the process is up and does no database or network I/O. The same payload is on `GET /api/health`. The image healthcheck uses this, so a dependency outage does not restart the API.
+- `GET /health/ready` — readiness. Probes Postgres (`SELECT 1`) and blob storage (S3 `HeadBucket`, or a write check on the disk store), each with a 2s timeout. Returns 200 when both are up, 503 otherwise, with a per-check `status`, `latencyMs` and a stable `error` code (`probe_failed`, `timeout`). The compose stacks use this for the container healthcheck, so Coolify shows the API as unhealthy while its dependencies are down.
+
+Neither handler writes a `request_logs` row: a 30s probe would add roughly 2 900 rows a day.
 
 ## Scripts
 
@@ -234,7 +239,7 @@ docker build -f backend/Dockerfile -t dirah-backend .
 
 The image is a two-stage build. The runtime image is plain Node and starts `node dist/server.js`.
 
-- `EXPOSE 4006` is the image metadata. The process listens on `PORT` (4006 in the root compose file), and the healthcheck calls `http://127.0.0.1:${PORT:-4006}/health`.
+- `EXPOSE 4006` is the image metadata. The process listens on `PORT` (4006 in the root compose file). The image healthcheck calls `/health` (liveness); the compose stacks override it with `/health/ready` so the container reports unhealthy when Postgres or object storage is unreachable.
 - Pass configuration as normal environment variables: `docker run --env-file .env`, or the Coolify environment. Nothing is fetched at build or start time.
 
 The root [docker-compose.yml](../docker-compose.yml) starts Postgres (`5433`), MinIO (`9000`, console `9001`), the API (`4006`) and the web app (`8080`).

@@ -5,8 +5,8 @@ import { getMcpConfig } from '../config/mcp';
 import { postgresSslOptions } from './postgresSsl';
 import * as schema from './schemas';
 
-function createPool(database: typeof env.db): Pool {
-  return new Pool({
+function createPool(database: typeof env.db, label: string): Pool {
+  const pool = new Pool({
     host: database.host,
     port: database.port,
     user: database.user,
@@ -16,10 +16,19 @@ function createPool(database: typeof env.db): Pool {
     connectionTimeoutMillis: 5_000,
     ssl: database.sslMode === 'disable' ? false : postgresSslOptions(database.host, database.sslCa),
   });
+
+  // pg emits 'error' for an idle client whose connection drops (Postgres
+  // restart, failover, network blip). An EventEmitter 'error' with no listener
+  // is uncaught, so without this the whole API exits on a database blip.
+  pool.on('error', (error) => {
+    console.warn(`Postgres pool error (${label})`, error.message);
+  });
+
+  return pool;
 }
 
-export const pool = createPool(env.db);
-export const livePool = createPool(env.liveDb);
+export const pool = createPool(env.db, 'app');
+export const livePool = createPool(env.liveDb, 'live');
 
 export const db = drizzle(pool, { schema });
 export { schema };

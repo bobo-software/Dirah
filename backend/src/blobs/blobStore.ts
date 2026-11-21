@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { constants, createReadStream, createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
@@ -16,6 +16,8 @@ export type BlobStore = {
   /** Reads all of an object, or the inclusive byte range given, as a stream. */
   getStream(key: string, range?: ByteRange): Promise<Readable>;
   remove(key: string): Promise<void>;
+  /** Reachability and write access for the backing store, used by /health/ready. */
+  probe(): Promise<void>;
 };
 
 /** Inclusive byte range, as in an HTTP Range header. */
@@ -88,6 +90,10 @@ export function createDiskBlobStore(rootDir: string): BlobStore {
     },
     async remove(key) {
       await fs.unlink(path.join(rootDir, key)).catch(() => undefined);
+    },
+    async probe() {
+      await fs.mkdir(rootDir, { recursive: true });
+      await fs.access(rootDir, constants.W_OK);
     },
   };
 }
@@ -172,6 +178,11 @@ export function createS3BlobStore(config: S3BlobConfig): BlobStore {
     },
     async remove(key) {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => undefined);
+    },
+    async probe() {
+      // HeadBucket proves the endpoint, credentials and bucket in one call.
+      await ensureBucket();
+      await client.send(new HeadBucketCommand({ Bucket: bucket }));
     },
   };
 }
