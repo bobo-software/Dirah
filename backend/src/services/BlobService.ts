@@ -36,6 +36,11 @@ export class BlobService {
     return this.store.kind;
   }
 
+  /** Used by the readiness probe; never exposes the store's configuration. */
+  async probeStorage(): Promise<void> {
+    await this.store.probe();
+  }
+
   async upload(
     userId: string,
     workspaceId: string,

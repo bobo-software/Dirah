@@ -5,7 +5,7 @@ import { env } from './config/env';
 import { db, livePool, pool } from './db';
 import { mcpAudit } from './db/schemas';
 import { createApiRouter } from './routes';
-import { getHealth } from './controllers/health.controller';
+import { getHealth, createReadinessHandler } from './controllers/health.controller';
 import { errorHandler } from './middlewares/errorHandler';
 import { notFound } from './middlewares/notFound';
 import { requestTiming } from './middlewares/requestTiming';
@@ -182,6 +182,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Express
   }
 
   app.get('/health', getHealth);
+  app.get(
+    '/health/ready',
+    createReadinessHandler({
+      database: () => pool.query('SELECT 1'),
+      storage: () => blobService.probeStorage(),
+    })
+  );
   app.use(
     '/api',
     createApiRouter(
